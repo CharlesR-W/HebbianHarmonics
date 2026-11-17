@@ -14,7 +14,7 @@
   <div class="fig-title">A resistor network and one neuron's harmonic embedding</div>
   <div class="fig-sub">Click a neuron to show its embedding. Drag a synapse up or down (or select it and use the slider) to change its conductance.</div>
   <div data-slot="network"><p class="mute">loading…</p></div>
-  <figcaption><b>Plotted:</b> left, a hand-made network: squares are the clamped inputs $g_1, g_2, g_3$, circles the interior neurons A–E, ink line width $\propto \sqrt{w_{ij}}$; each interior neuron is filled with the $h_i$-weighted mix of the input colours (the input's own colour when $h_i = e_b$, grey at the centroid); the ringed neuron is the selected one. Right: the selected neuron's harmonic embedding $h_i$ (row $i$ of $H = L_{II}^{-1}W_{IB}$, computed in the browser), one bar per input, in the input's colour. <b>Values:</b> conductances 0.05–5 in arbitrary units; starting weights are listed by hovering a synapse.</figcaption>
+  <figcaption><b>Plotted:</b> left, a hand-made network: squares are the clamped inputs $g_1, g_2, g_3$, circles the interior neurons A–E, ink line width $\propto \sqrt{w_{ij}}$; each interior neuron is filled with the $h_i$-weighted mix of the input colours (the input's own colour when $h_i = e_b$, grey at the centroid); the ringed neuron is the selected one. Right (below, on narrow screens): the selected neuron's harmonic embedding $h_i$ (row $i$ of $H = L_{II}^{-1}W_{IB}$, computed in the browser), one bar per input, in the input's colour. <b>Values:</b> conductances 0.05–5 in arbitrary units; starting weights are listed by hovering a synapse.</figcaption>
 </figure>
 
 <h2 id="rule">Hebb's rule becomes a closed system</h2>
@@ -27,13 +27,13 @@
 
 <p>The note's rule, with a regulariser that depends on the weight only, $\rho(w) = w_0 - \lambda w$, then reads</p>
 
-<div class="eq" id="eq-rule" data-num="3">$$\boxed{\begin{aligned}\frac{dw_{ij}}{dt} &= w_0 - \lambda w_{ij} + \eta\, h_i^\top \Sigma_g h_j \\ &= \eta\, h_i^\top\!\big(\Sigma_g - \theta\,\mathbf 1\mathbf 1^\top\big) h_j - \lambda w_{ij}, \qquad w_{ij} \ge w_{\min}\end{aligned}}$$</div>
+<div class="eq" id="eq-rule" data-num="3">$$\boxed{\begin{aligned}\frac{dw_{ij}}{dt} &= w_0 - \lambda w_{ij} + \eta\, h_i^\top \Sigma_g h_j \\ &= \eta\, h_i^\top\!\big(\Sigma_g - \theta\,\mathbf 1\mathbf 1^\top\big) h_j - \lambda w_{ij}\end{aligned}}$$</div>
 
-<p class="mute" style="font-size:16px">where $\theta = -w_0/\eta$ is a pruning threshold in covariance units, $\lambda$ a decay, $w_{\min}$ a hard floor, and lateral (interior–interior) synapses use $\eta_{II} = \gamma\eta$. The second form uses $\mathbf 1^\top h = 1$: a constant drift is the same thing as a constant subtracted from $\Sigma_g$.</p>
+<p class="mute" style="font-size:16px">where $\theta = -w_0/\eta$ is a pruning threshold in covariance units, $\lambda$ a decay, $w_{\min}$ a hard floor ($w_{ij}$ is clipped at $w_{ij} \ge w_{\min}$), and lateral (interior–interior) synapses use $\eta_{II} = \gamma\eta$. The second form uses $\mathbf 1^\top h = 1$: a constant drift is the same thing as a constant subtracted from $\Sigma_g$.</p>
 
-<p>The embeddings are functions of the weights, so this is an autonomous ODE on the weights, driven only by $\Sigma_g$. Read in words: a synapse grows when its two neurons' embeddings align (in the $\Sigma_g$ geometry) by more than $\theta$, and is pruned to the floor when they do not. A synapse that survives to a fixed point stores one number about the inputs:</p>
+<p>The embeddings are functions of the weights, so this is an autonomous ODE on the weights, driven only by $\Sigma_g$. Read in words: a synapse grows when its two neurons' embeddings align (in the $\Sigma_g$ geometry) by more than $\theta$, and is pruned to the floor when they do not. A synapse that survives to a fixed point stores one number about the inputs; on every surviving synapse,</p>
 
-<div class="eq" id="eq-fp" data-num="4">$$\boxed{\,h_i^\top \Sigma_g h_j = \theta + \tfrac{\lambda}{\eta}\, w_{ij}\quad\text{on every surviving synapse}\,}$$</div>
+<div class="eq" id="eq-fp" data-num="4">$$\boxed{\,h_i^\top \Sigma_g h_j = \theta + \tfrac{\lambda}{\eta}\, w_{ij}\,}$$</div>
 
 <p class="mute" style="font-size:16px">(with $\gamma$ on the left for lateral synapses, and "$\le$" with $w_{ij} = w_{\min}$ for pruned ones).</p>
 

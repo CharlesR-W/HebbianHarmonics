@@ -4,7 +4,7 @@
 
 <p>Defaults throughout unless a chapter says otherwise: $\lambda = \eta = 1$, $\gamma = 1$, $w_{\min} = 10^{-4}$, $W_{IB} \sim \mathrm{Exp}(0.2)$, $W_{II} \sim U(0, 0.03)$, mean-field, run until the residual $\max|dw/dt| &lt; 10^{-5}$.</p>
 
-<div class="table-scroll"><table class="data" style="min-width:720px">
+<div class="fig wide" id="tab-decisions"><div class="table-scroll" style="margin:0"><table class="data" style="min-width:760px;font-size:13.5px">
   <thead><tr><th style="width:17%">Decision</th><th style="width:20%">Default</th><th style="width:22%">Alternative</th><th>How the alternative would change the picture</th></tr></thead>
   <tbody>
     <tr id="row-symmetric"><td>Synapse symmetry</td><td>Symmetric conductances $w_{ij} = w_{ji}$; undirected Laplacian.</td><td>Directed weights and a directed Laplacian, as the note suggests for real neurons.</td><td>Under this rule, nothing. Both directions get the same drift $\eta\,\mathrm{Cov}(u_i,u_j) + w_0$, so $\tfrac{d}{dt}(w_{ij} - w_{ji}) = -\lambda(w_{ij} - w_{ji})$ and any asymmetry decays at rate $\lambda$. Directed graphs matter only with a rule that is itself asymmetric (spike timing), which is a different model.</td></tr>
@@ -17,13 +17,13 @@
     <tr id="row-centred"><td>Hebbian term</td><td>Centred covariance $\mathrm{Cov}(u_i,u_j)$.</td><td>Raw second moment $\mathbb E[u_i u_j]$, the literal "fire together".</td><td>$\mathbb E[u_iu_j] = h_i^\top(\Sigma_g + \mu\mu^\top)h_j$ with $\mu = \mathbb E g$. If every input has the same mean $m$, this is just $\theta \to \theta - m^2$ (the θ-shift identity). Otherwise it adds a rank-one non-negative term that favours the mean direction.</td></tr>
     <tr id="row-cluster"><td>What a cluster is</td><td>Live: single linkage on embeddings in $L_1$, cut at the largest multiplicative gap among merge heights $\ge 0.05$ (engine <code>clustersAuto</code>). Sweeps: average linkage in $L_1$ cut at 0.1; dead clusters and clusters under $\max(2, 2\%N)$ excluded.</td><td>Other linkages, cuts 0.05 or 0.2, the leader algorithm, components of the lateral synapse graph.</td><td>At a dense fixed point members agree to $10^{-5}$ or better and clusters are $O(1)$ apart, so any sensible definition gives the same count. Cuts 0.05 and 0.2 differed only within one grid step of a transition. The definition matters mid-transient and for sparse nets, whose sub-structure sits at $L_1 \approx 0.05$–$0.4$.</td></tr>
     <tr id="row-energy"><td>"Energy" of a mode</td><td>The top eigenvalue of $\Sigma_g$ on the part's support, $\lambda_k = \lambda_{\max}(\Sigma_{S_kS_k})$; in planted families, the controlled block variance or size.</td><td>An eigenvalue of $\Sigma_g$ (parts are not eigenvectors); the learned cluster's $h^\top\Sigma_g h$.</td><td>$\lambda_k$ is what controls allocation: at equal $\lambda_k$, block size hardly matters ($\beta = -0.2$). $h^\top\Sigma_g h$ is an outcome of learning, so using it as the input of a filter would be circular.</td></tr>
-    <tr id="row-readout"><td>Readout assumptions</td><td>Equilibrium (stated residual); a synapse is active iff $w &gt; 1.5\,w_{\min}$; $\lambda/\eta$, $\gamma$ known; masked least squares over symmetric $C$ on all active edges, input and lateral; also the parts-sum $\theta\mathbf 1\mathbf 1^\top + \sum_k c_k h_kh_k^\top/\lVert h_k\rVert^2$.</td><td>The note's $C = H^+RH^{+\top}$ (lateral edges only); a readout using the known $dw/dt$ away from equilibrium.</td><td>The note's formula needs the diagonal of $HCH^\top$, which no synapse observes (no self-edges), and ignores input synapses, which observe $HC$ directly. Scale and $\theta$ are not identifiable: $\theta$ is a constant added to $\Sigma_g$.</td></tr>
+    <tr id="row-readout"><td>Readout assumptions</td><td>Equilibrium (stated residual); a synapse is active iff $w &gt; 1.5\,w_{\min}$; $\lambda/\eta$, $\gamma$ known; masked least squares over symmetric $C$ on all active edges, input and lateral; also the parts-sum $\theta\mathbf 1\mathbf 1^\top + \sum_k c_k h_kh_k^\top/\lVert h_k\rVert^2$.</td><td>The note's $C = H^+RH^{+\top}$ (lateral edges only); a readout using the known $dw/dt$ away from equilibrium.</td><td>The note's formula needs the diagonal of $HCH^\top$, which no synapse observes (no self-edges), and ignores input synapses, which observe $HC$ directly. The scale $\lambda/\eta$ is never identifiable, and with $\gamma = 1$ neither is $\theta$, a constant added to $\Sigma_g$ (with $\gamma \ne 1$ the two edge families shift differently and $\theta$ can be fitted, unreliably).</td></tr>
     <tr id="row-scores"><td>Scoring settings</td><td>Three kept apart: <b>known</b> (parameters known, full covariance, scale fixed); <b>scale</b> (best scale fitted); <b>contrast</b> ($\theta$ unknown: score $PCP$ with $P = I - \mathbf 1\mathbf 1^\top/B$, scale fitted).</td><td>One number.</td><td>Mixing them hides what was assumed. The contrast score also discards $\mathbf 1a^\top + a\mathbf 1^\top$ terms, and has a high floor: the identity scores 0.79 and the untrained net 0.77 on the block covariance.</td></tr>
     <tr id="row-bw"><td>Metrics</td><td>Frobenius cosine, top-$k$ subspace overlap and Bures–Wasserstein, always side by side; negative eigenvalues of $\hat C$ clipped before BW, clipped mass reported.</td><td>BW alone (the natural PSD metric).</td><td>BW needs a PSD argument, and it punishes rank deficiency hard: the rank-3 truncation of the <em>true</em> block covariance scores 0.52, the identity 0.12. Since equilibrium weights store a rank-$K$ sketch, BW alone would call every equilibrium readout worse than guessing the identity.</td></tr>
     <tr id="row-lift"><td>Kernel lift (MNIST)</td><td><!-- TODO-FILL: the lifts actually used, from docs/mnist.md (pixels at what resolution; random Fourier features: kernel width, D) -->Pixels (linear kernel) and random Fourier features of a Gaussian kernel; details pending.</td><td>Other kernels; learned features.</td><td>See <a href="#method/lift">what recovering $\Sigma_g$ says about $p(\text{stimulus})$</a> below. <!-- TODO-FILL: how the lift choice changed the MNIST result, from docs/mnist.md --></td></tr>
     <tr id="row-relu"><td>Rectification (rectified chapter)</td><td>Linear circuit; plasticity sees rates $r_i = \mathrm{relu}(u_i - \mathbb E u_i)$, thresholded at the neuron's own mean voltage. <!-- TODO-FILL: exact threshold (tau / offset) and gain, from docs/nonlin.md --></td><td>A threshold built into $\rho(w)$, or none.</td><td>The per-neuron threshold is intrinsic-excitability homeostasis: a state of the neuron, not a function of one weight, so it lies outside the note's $\rho(w)$. Without it a rectifier does nothing (see <a href="#method/nonlinearity">nonlinearity</a>). <!-- TODO-FILL: what moving the threshold does, from docs/nonlin.md --></td></tr>
   </tbody>
-</table></div>
+</table></div></div>
 
 <h2 id="lift">What recovering $\Sigma_g$ says about $p(\text{stimulus})$</h2>
 
@@ -57,7 +57,7 @@
 <h2 id="caveats">Caveats, and what was not done</h2>
 
 <ul>
-  <li><b>A tiny residual does not certify stability.</b> An exactly symmetric state can sit on an unstable fixed point with residual near zero (the hierarchical "half" part persisted well past where it is unstable). Private jitter of about $10^{-3}$ per step exposes this; the sweeps that rely on it say so.</li>
+  <li><b>A tiny residual does not certify stability.</b> An exactly symmetric state can sit on an unstable fixed point with residual near zero (the hierarchical "half" part persisted well past where it is unstable). Private multiplicative jitter of about $10^{-3}$ per step exposes it; with jitter, the $\gamma = 0$ hysteresis loops nearly close, while the $\gamma = 1$ memory survives.</li>
   <li>The dependence of the extinction threshold on $\omega = Nw_{\min}$ is empirical; I have no derivation.</li>
   <li>The coarse-to-fine gating rule $\theta_c = \gamma\kappa_0$ is a heuristic. It predicts every tested transition on block and hierarchical covariances within 0.03–0.08, but was not tested quantitatively on power-law spectra.</li>
   <li>Allocation under <em>private</em> per-neuron noise was not measured, only shared minibatch noise. <!-- TODO-FILL: replace with the result from docs/findings_private_noise.md if it exists --></li>
@@ -69,7 +69,7 @@
 <h2 id="reproduce">Reproducing everything</h2>
 
 <p>Run from the repository root.</p>
-<div class="table-scroll"><table class="data">
+<div class="fig wide"><div class="table-scroll" style="margin:0"><table class="data" style="min-width:640px">
   <thead><tr><th>What</th><th>Where</th><th>Command</th></tr></thead>
   <tbody>
     <tr><td>Canonical model, analysis, readout (Python)</td><td><code>hebb/core.py</code></td><td>imported by everything below</td></tr>
@@ -79,5 +79,5 @@
     <tr><td>Rectified output</td><td><code>hebb/nonlin/</code> → <code>site/data/nonlin/</code></td><td><code>PYTHONPATH=. python -m hebb.nonlin.synth</code>; tests: <code>PYTHONPATH=. pytest -q hebb/nonlin/test_nonlin.py</code>; MNIST runs via <code>hebb/nonlin/modal_job.py</code></td></tr>
     <tr><td>This page</td><td><code>site/</code></td><td><code>python3 -m http.server 8765 --bind 127.0.0.1 -d site</code></td></tr>
   </tbody>
-</table></div>
+</table></div></div>
 <p>The findings these chapters rely on, with the script and JSON behind each claim, are in <code>docs/findings.md</code>.</p>

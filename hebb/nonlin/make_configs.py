@@ -13,7 +13,9 @@ import numpy as np
 from hebb.nonlin import dual
 from hebb.nonlin.model import Data
 
-QS = [0.92, 0.95, 0.97, 0.98, 0.99]
+QS = [0.92, 0.95, 0.97, 0.98, 0.99]          # v1 grid (omega = N wmin ~ 1: one cluster -> extinction; superseded)
+THETA_LIN = [0.3, 0.45, 0.6, 0.75, 0.9]      # v2: the sibling's pixel theta grid (hebb/mnist/configs/final.json)
+OMEGA, II_TOTAL = 0.5, 102.4                 # sibling convention: N * wmin = 0.5, N * ii_scale = 102.4
 OUT = Path(__file__).resolve().parent / "configs"
 
 
@@ -22,10 +24,14 @@ def offq(S, qs):
     return [float(np.quantile(S[iu], q)) for q in qs]
 
 
-def tables(res=14):
+def tables(res=14, qs=None):
     D = Data(res)
     g = D.Gtr.double().numpy()
-    tab = {"res": res, "q": QS, "linear": {"theta": offq(D.Sigma, QS), "c": 1.0}}
+    if qs is None:   # v2: q = quantile rank of the sibling's linear theta values in Sigma_g
+        iu = np.triu_indices(len(D.Sigma), 1); v = np.sort(D.Sigma[iu])
+        qs = [float(np.searchsorted(v, t) / len(v)) for t in THETA_LIN]
+    QS_ = qs
+    tab = {"res": res, "q": QS_, "linear": {"theta": offq(D.Sigma, QS_), "c": 1.0}}
     for tau in (0.0, 0.5, 1.0):
         s = np.maximum(g - D.mu - tau * D.sd, 0)
         Ss = np.cov(s.T, bias=True)
@@ -33,19 +39,20 @@ def tables(res=14):
         sd = D.sd; den = np.outer(sd, sd)
         rho = np.divide(D.Sigma, den, out=np.zeros_like(den), where=den > 0)
         Sg = den * dual.k(rho, tau)                       # Gaussian surrogate's boundary rate cov
-        tab[f"rect_t{tau:g}"] = {"theta": offq(c * c * Ss, QS), "c": c,
-                                 "gauss_own_theta": offq(c * c * Sg, QS),
+        tab[f"rect_t{tau:g}"] = {"theta": offq(c * c * Ss, QS_), "c": c,
+                                 "gauss_own_theta": offq(c * c * Sg, QS_),
                                  "gauss_mean_rate_var": float(c * c * np.diag(Sg).mean())}
     return tab
 
 
 def main():
+    """v2 grid (14x14): N = 980, wmin = OMEGA/N, ii_scale = II_TOTAL/N (sibling's conventions)."""
     OUT.mkdir(exist_ok=True)
     t14 = tables(14)
     (OUT / "theta_table14.json").write_text(json.dumps(t14, indent=1))
     units = []
-    for i, q in enumerate(QS):
-        thl = round(t14["linear"]["theta"][i], 4)
+    for i, q in enumerate(t14["q"]):
+        thl = THETA_LIN[i]
         for seed in (0, 1):
             units.append(dict(rule="linear", input="pixels", theta=thl, seed=seed, extra=dict(q=q, exp="A_lin")))
         units.append(dict(rule="linear", input="gauss", theta=thl, seed=0, extra=dict(q=q, exp="B_lin")))
@@ -58,25 +65,32 @@ def main():
             if tau == 0.0:
                 units.append(dict(rule="rect", tau=tau, input="gauss", theta=round(T["gauss_own_theta"][i], 4), c=c, seed=0,
                                   extra=dict(q=q, exp="Bown_rect")))
-    cfg = {"defaults": dict(N=980, steps=3000, n_snap=24, n_sub=256, nls_iters=300), "units": units}
-    (OUT / "main14.json").write_text(json.dumps(cfg, indent=1))
+    N = 980
+    cfg = {"defaults": dict(N=N, wmin=OMEGA / N, ii_scale=II_TOTAL / N, steps=3000, n_snap=24, n_sub=256, nls_iters=300),
+           "units": units}
+    (OUT / "v2_14.json").write_text(json.dumps(cfg, indent=1))
     print(json.dumps(t14, indent=1)); print(len(units), "units")
+
+
+def main28():
+    """28x28 (B=784, N=5B=3920): linear vs rectified tau=0 at the 2nd and 3rd theta of the 14x14 grid
+    (same quantiles q of the 28x28 Sigma), seed 0."""
+    q14 = json.loads((OUT / "theta_table14.json").read_text())["q"]
+    t = tables(28, qs=q14)
+    (OUT / "theta_table28.json").write_text(json.dumps(t, indent=1))
+    units = []
+    for i in (1, 2):
+        q = q14[i]
+        units.append(dict(rule="linear", input="pixels", theta=round(t["linear"]["theta"][i], 4), extra=dict(q=q, exp="A28_lin")))
+        T = t["rect_t0"]
+        units.append(dict(rule="rect", tau=0.0, input="pixels", theta=round(T["theta"][i], 4), c=T["c"], extra=dict(q=q, exp="A28_rect")))
+    N = 3920
+    cfg = {"defaults": dict(res=28, N=N, wmin=OMEGA / N, ii_scale=II_TOTAL / N, steps=3000, n_snap=24, n_sub=256,
+                            nls_iters=200, seed=0), "units": units}
+    (OUT / "v2_28.json").write_text(json.dumps(cfg, indent=1))
+    print(json.dumps(units, indent=1))
 
 
 if __name__ == "__main__":
     main()
-
-
-def main28():
-    """28x28 (B=784, N=5B=3920): linear vs rectified tau=0 at q=0.95, 0.97, seed 0."""
-    t = tables(28)
-    (OUT / "theta_table28.json").write_text(json.dumps(t, indent=1))
-    units = []
-    for q in (0.95, 0.97):
-        i = QS.index(q)
-        units.append(dict(rule="linear", input="pixels", theta=round(t["linear"]["theta"][i], 4), extra=dict(q=q, exp="A28_lin")))
-        T = t["rect_t0"]
-        units.append(dict(rule="rect", tau=0.0, input="pixels", theta=round(T["theta"][i], 4), c=T["c"], extra=dict(q=q, exp="A28_rect")))
-    cfg = {"defaults": dict(res=28, N=3920, steps=3000, n_snap=24, n_sub=256, nls_iters=200, seed=0), "units": units}
-    (OUT / "main28.json").write_text(json.dumps(cfg, indent=1))
-    print(json.dumps(units, indent=1))
+    main28()

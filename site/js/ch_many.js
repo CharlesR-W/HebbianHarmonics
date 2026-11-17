@@ -27,7 +27,8 @@ const JITTER = 1e-3;      // optional private multiplicative jitter per step, w 
 const KEYS = Object.keys(DEF);
 const EQ_TOL = 1e-6;      // the equilibrium readout is claimed only when r/η < EQ_TOL
 const DONE_TOL = 1e-8;    // the run pauses ("converged") when r/η < DONE_TOL
-const SEQ_TOL = 1e-6;     // a tour step counts as converged at r/η < SEQ_TOL (docs/findings.md uses 1e-5)
+const SEQ_TOL = 1e-6;
+const EARLY_STEPS = 400, EARLY_EVERY = 10;   // readout at least every 10 steps over the first 400 (mean-field)     // a tour step counts as converged at r/η < SEQ_TOL (docs/findings.md uses 1e-5)
 const SPEC_TOL = 1e-5;    // a direction of Sym(B) counts as pinned down when its AᵀA eigenvalue > SPEC_TOL × largest
 const MAX_EDGES = 4000;
 const sub = n => String(n).replace(/\d/g, d => "₀₁₂₃₄₅₆₇₈₉"[d]);
@@ -159,7 +160,7 @@ export async function init(panel, ctx) {
   let s = null, sampler = null, prevWii = null, prevWib = null, prevValid = false, runId = 0, version = 0;
   let pca = null, H = null, cl = null, colourOf = null, neuronColour = null, clusterColour = [], cstats = null;
   let tOff = 0, seq = null, seqIdx = 0, holdT = 0, seqSteps = 0, frameNo = 0, mbResid = NaN;
-  const series = { t: [], K: [], er: [], r: [], rt: [], cosC: [], cosK: [], cosT: [], tr: [] };
+  const series = { t: [], K: [], er: [], r: [], rt: [], cosC: [], cosK: [], cosT: [], cosP: [], tr: [] };
   const seqMarks = [];
   let edgeBuf = null;
 
@@ -174,7 +175,7 @@ export async function init(panel, ctx) {
     prevWii = new Float64Array(N * N); prevWib = new Float64Array(N * B); prevValid = false;
     edgeBuf = { pairs: new Uint32Array(2 * (N * (N - 1) / 2 + N * B)), w: new Float32Array(N * (N - 1) / 2 + N * B) };
     H = E.harmonic(s).slice();
-    pca = null; neuronColour = new Int8Array(N).fill(-1); mbResid = NaN;
+    pca = null; neuronColour = new Int8Array(N).fill(-1); mbResid = NaN; lastDispatchStep = 0;
     runId++; version++;
     postRun();
   }
@@ -214,8 +215,17 @@ export async function init(panel, ctx) {
       help: `Synapses survive where $\\mathrm{Cov}(u_i,u_j) > \\theta$. κ₀ = 1ᵀΣ1/B² = ${f2(SG.kappa0)} is the mean covariance of two initial neurons; below γκ₀ = ${f2(st.gamma * SG.kappa0)} the population starts bound together.`,
       onInput: x => { if (st.cont) { st.theta = x; PP.theta = x; moved(); postRun(); } },
       onChange: x => change({ theta: x }) });
-    thetaHost.replaceChildren(sl.el); thetaS = sl;
+    thetaHost.replaceChildren(sl.el, thetaInfo); thetaS = sl;
+    drawThetaInfo();
   };
+  const thetaInfo = ui.h("div", { class: "u-help", style: { marginTop: "2px" } });
+  function drawThetaInfo() {
+    const gk = st.gamma * SG.kappa0, bound = st.theta < gk;
+    thetaInfo.innerHTML = `$\\kappa_0 = \\mathbf 1^\\top\\Sigma_g\\mathbf 1/B^2 = ${f2(SG.kappa0)}$ · collective threshold $\\gamma\\kappa_0 = ${f2(gk)}$: `
+      + (st.gamma === 0 ? "none ($\\gamma = 0$, neurons choose independently)" : bound ? "$\\theta$ is below it, the population starts bound together" : "$\\theta$ is above it, neurons choose independently")
+      + ` · floor $\\omega = N w_{\\min} = ${ui.fmt(st.n * st.wmin, 2)}$`;
+    ui.renderMath(thetaInfo);
+  }
   makeTheta();
   const pS = ui.segmented({ label: "sparse wiring: connection probability $p$", options: [1, 0.7, 0.5, 0.3].map(x => ({ value: x, label: String(x) })), value: st.p, stack: true,
     help: "$p < 1$: a fixed random mask; each neuron can only ever touch a random subset of inputs and neurons.", onChange: x => change({ p: x }) });
@@ -248,9 +258,11 @@ export async function init(panel, ctx) {
   showFamControls();
   const stats = ui.stats({ parent: L.side, items: [
     { key: "k", label: "clusters $K$", fmt: String },
+    { key: "dead", label: "dead neurons", fmt: String },
     { key: "er", label: "effective rank of $H$", fmt: x => ui.fmt(x, 3) },
     { key: "r", label: "stationarity $r/\\eta$", fmt: sci },
     { key: "cos", label: "readout cosine, $\\theta$ unknown", fmt: f3 },
+    { key: "ps", label: "parts-sum cosine, $\\theta$ unknown", fmt: f3 },
     { key: "dir", label: "directions pinned down", fmt: String },
     { key: "fps", label: "frame rate", unit: "fps", fmt: x => x.toFixed(0) }] });
   ui.legend({ parent: L.side, items: [
@@ -427,18 +439,38 @@ export async function init(panel, ctx) {
       let ps = 0; for (let a = 0; a < m; a++) ps += ea.vectors[a * m];
       for (let a = 0; a < m; a++) pv[S[a]] = (ps < 0 ? -1 : 1) * ea.vectors[a * m];
       let num = 0; for (let b = 0; b < B; b++) num += u[b] * pv[b];
+      // Perron vector of Σ_SS alone (no θ shift), and the stability margin max_{b∉S} (A h)_b, h summing to 1
+      for (let a = 0; a < m; a++) for (let c = 0; c < m; c++) A[a * m + c] += st.theta;
+      const es = E.eigh(A, m); let sgn2 = 0, numS = 0;
+      for (let a = 0; a < m; a++) sgn2 += es.vectors[a * m];
+      for (let a = 0; a < m; a++) numS += u[S[a]] * (sgn2 < 0 ? -1 : 1) * es.vectors[a * m];
+      let off = -Infinity, hs = 0; for (let b = 0; b < B; b++) hs += part[b];
+      const inS = new Uint8Array(B); S.forEach(b => { inS[b] = 1; });
+      for (let b = 0; b < B; b++) if (!inS[b]) { let v0 = 0; for (let c = 0; c < B; c++) v0 += Sigma[b * B + c] * part[c] / hs; off = Math.max(off, v0 - st.theta); }
+      const gapOK = m < 2 || ea.values[0] - ea.values[1] > 1e-6;
+      const stab = !Number.isFinite(off) ? "stable (no inputs off S)" : off < 0 && gapOK ? `stable: max off S of $(Ah)_b$ = ${ui.fmt(off, 2)}` : `not a stable part: max off S of $(Ah)_b$ = ${ui.fmt(off, 2)}`;
       // c_k = (hᵀΣh − θ)/|h|² = a member's summed input conductance (λ = η = 1)
       let q = 0; for (let a = 0; a < B; a++) for (let c = 0; c < B; c++) q += part[a] * Sigma[a * B + c] * part[c];
       const ck = (q - st.theta) / (nrm * nrm);
       const showP = partsLine === "perron";
       return { title: `c${clusterColour[k] + 1} · ${cstats.sizes[k]} neurons · ${m} inputs · c = ${ui.fmt(ck, 3)}`, color: catColor(clusterColour[k]), values: SG.order.map(b => part[b] / nrm),
         overlay: showP ? SG.order.map(b => pv[b]) : ev,
-        sub: `cos with v${sub(bi + 1)} of Σ_g: ${f2(Math.abs(bc))} · with Perron vector of (Σ_g−θ11ᵀ) on its ${m} inputs: ${f3(num)}` };
+        sub: `cos with eigenvector v${sub(bi + 1)} of Σ_g: <b>${f2(Math.abs(bc))}</b> · with Perron vector of $A_{SS}$: <b>${f3(num)}</b> (of $\\Sigma_{SS}$: ${f3(numS)}) · ${stab}`,
+        h: part };
     });
     let lo = -0.25; panels.forEach(pn => pn.overlay.forEach(x => { if (x < lo) lo = x; }));
     partsC.update({ labels, panels, yrange: [Math.floor(lo * 4) / 4, 1], overlayName: partsLine === "perron" ? "Perron vector of (Σ_g − θ11ᵀ) on the cluster's support" : "nearest eigenvector of Σ_g" });
     const hidden = cl.K - ordC.length;
-    partsNote.innerHTML = hidden > 0 ? `${hidden} further cluster${hidden > 1 ? "s" : ""} (grey in the views) not shown.` : "";
+    // packing (F3): coexisting clusters need γ h_kᵀΣh_l ≤ θ (+ floor terms)
+    let xc = -Infinity, pair = null;
+    for (let a = 0; a < panels.length; a++) for (let c = a + 1; c < panels.length; c++) {
+      const ha = panels[a].h, hc = panels[c].h; let q = 0;
+      for (let x = 0; x < B; x++) { if (!ha[x]) continue; for (let y = 0; y < B; y++) q += ha[x] * Sigma[x * B + y] * hc[y]; }
+      if (q > xc) { xc = q; pair = [a, c]; }
+    }
+    const pack = pair && st.gamma > 0 ? `Largest cross-covariance between two shown clusters: $h_k^\\top\\Sigma_g h_l = ${f3(xc)}$ (${panels[pair[0]].title.split(" ·")[0]}, ${panels[pair[1]].title.split(" ·")[0]}); packing bound $\\theta/\\gamma = ${f2(st.theta / st.gamma)}$. ` : "";
+    partsNote.innerHTML = pack + (hidden > 0 ? `${hidden} further cluster${hidden > 1 ? "s" : ""} (grey in the views) not shown.` : "");
+    ui.renderMath(partsNote); ui.renderMath(bxParts.b);
   }
   function drawSeries() {
     const refs = seqMarks.map(m => ({ x: m.t, label: m.label }));
@@ -452,6 +484,9 @@ export async function init(panel, ctx) {
     stats.set("k", cl.K, cl.robust ? (cl.gap > 1000 ? "clear-cut (gap > 1000×)" : `gap ${ui.fmt(cl.gap, 2)}×`) : "not clustered yet");
     stats.set("er", Number.isFinite(effRank) ? effRank : E.effectiveRank(H, N, B), `of B = ${B}`);
     stats.set("r", r, Number.isFinite(r) ? (r < EQ_TOL ? "equilibrium: yes" : "equilibrium: not yet") : "");
+    let nd = 0; const thr = 1.5 * PP.wmin;
+    for (let i = 0; i < N; i++) { let m = 0; for (let b = 0; b < B; b++) if (s.Mib[i * B + b] && s.Wib[i * B + b] > m) m = s.Wib[i * B + b]; if (m <= thr) nd++; }
+    stats.set("dead", nd, "every I–B weight at the floor");
   }
   function drawAll(heavy, force) {
     lastEdges = buildEdges();
@@ -469,7 +504,8 @@ export async function init(panel, ctx) {
     drawCaption();
   }
   function drawCaption() {
-    simCap.innerHTML = `<b>Plotted:</b> top: each circle is an interior neuron's harmonic embedding $h_i \\in \\mathbb{R}^{B}$ projected orthogonally onto the top three principal axes of the current set of embeddings (centred; the frame is rotated within that subspace to match the previous frame, so it never flips); colour = cluster (single linkage in $L_1$, cut at the largest gap of merge heights; ordered by size, largest blue; grey: past the eighth cluster, or before the count is robust). Squares: the corners $e_b$ of the simplex (the boundary neurons) under the same projection, labelled when far from the centre. Lines: active synapses (above $1.5\\,w_{\\min}$), opacity $w/\\max w$, strongest ${MAX_EDGES.toLocaleString("en-GB")}. Below, left to right: $\\Sigma_g$ (diverging, symmetric range), boundary neurons ${SG.labels ? "in planted order" : "sorted by angle in the plane of the top two eigenvectors"}; $h_i^\\top\\Sigma_g h_j$ for neurons sorted by cluster (bands: cluster colour), fixed range $\\pm\\max_b(\\Sigma_g)_{bb}$; eigenvalues of $\\Sigma_g$, log scale. Parts: for each coloured cluster, the member mean of $h_i$ scaled to unit length (bars, same input order as $\\Sigma_g$) and the eigenvector of $\\Sigma_g$ with the largest $|\\cos|$ to it (ink dots, sign flipped to agree); sub-line: that cosine, and the cosine between the part and $(\\Sigma_g h - \\theta)_+$. Time series: $K$, effective rank $\\lVert H\\rVert_F^4/\\lVert H^\\top H\\rVert_F^2$, and the projected residual $r/\\eta = \\max|dw/dt|/\\eta$ (floor edges with negative drift count 0); orange: the time shown; dashed: tour steps. <b>Values:</b> ${SG.desc}; $B = ${B}$, $N = ${st.n}$, $\\theta = ${f2(st.theta)}$, $\\gamma = ${st.gamma}$, $w_{\\min} = ${ui.fmt(st.wmin, 2)}$, $p = ${st.p}$, $\\lambda = \\eta = 1$, init seed ${st.seed}, ${st.mode === "mf" ? "mean-field (plasticity sees the exact $\\Sigma_g$), Euler $dt = 0.2$" : `minibatch: plasticity sees the covariance of ${st.batch} Gaussian samples per step, Euler $dt = 0.05$`}.`;
+    drawThetaInfo();
+    simCap.innerHTML = `<b>Plotted:</b> top: each circle is an interior neuron's harmonic embedding $h_i \\in \\mathbb{R}^{B}$ projected orthogonally onto the top three principal axes of the current set of embeddings (centred; the frame is rotated within that subspace to match the previous frame, so it never flips); colour = cluster (single linkage in $L_1$, cut at the largest gap of merge heights; ordered by size, largest blue; grey: past the eighth cluster, or before the count is robust). Squares: the corners $e_b$ of the simplex (the boundary neurons) under the same projection, labelled when far from the centre. Lines: active synapses (above $1.5\\,w_{\\min}$), opacity $w/\\max w$, strongest ${MAX_EDGES.toLocaleString("en-GB")}. Below, left to right: $\\Sigma_g$ (diverging, symmetric range), boundary neurons ${SG.labels ? "in planted order" : "sorted by angle in the plane of the top two eigenvectors"}; $h_i^\\top\\Sigma_g h_j$ for neurons sorted by cluster (bands: cluster colour), fixed range $\\pm\\max_b(\\Sigma_g)_{bb}$; eigenvalues of $\\Sigma_g$, log scale. Parts: for each coloured cluster, the member mean $h$ of $h_i$ scaled to unit length (bars, same input order as $\\Sigma_g$), and as ink dots either the eigenvector of $\\Sigma_g$ with the largest $|\\cos|$ to it (sign flipped to agree) or the Perron vector of $A_{SS}$, $A = \\Sigma_g - \\theta\\mathbf 1\\mathbf 1^\\top$, $S$ = the inputs with $h_b > 0.02$; title: $c = (h^\\top\\Sigma_g h - \\theta)/\\lVert h\\rVert^2$; sub-line: the cosines of the part with that eigenvector, with the Perron vector of $A_{SS}$ and with that of $\\Sigma_{SS}$, and $\\max_{b \\notin S}(Ah)_b$ for $h$ summing to 1 (stable part: negative, and $c$ the strict top eigenvalue of $A_{SS}$). Note under the panels: the largest $h_k^\\top\\Sigma_g h_l$ between two shown clusters. Time series: $K$, effective rank $\\lVert H\\rVert_F^4/\\lVert H^\\top H\\rVert_F^2$, and the projected residual $r/\\eta = \\max|dw/dt|/\\eta$ (floor edges with negative drift count 0); orange: the time shown; dashed: tour steps. <b>Values:</b> ${SG.desc}; $B = ${B}$, $N = ${st.n}$, $\\theta = ${f2(st.theta)}$, $\\gamma = ${st.gamma}$, $w_{\\min} = ${ui.fmt(st.wmin, 2)}$, $p = ${st.p}$, $\\lambda = \\eta = 1$, init seed ${st.seed}, initial $W_{IB} \\sim \\mathrm{Exp}(\\text{mean } 0.2)$, $W_{II} \\sim U(0, ${II_SCALE})$ clipped at $w_{\\min}$; Euler $dt = ${DT}$; ${st.mode === "mf" ? "mean-field (plasticity sees the exact $\\Sigma_g$)" : `minibatch: plasticity sees the covariance of ${st.batch} Gaussian samples per step`}${st.jit ? `; private jitter $\\sigma = ${JITTER}$` : ""}.`;
     ui.renderMath(simCap);
   }
   function groupsOf() {
@@ -516,7 +552,11 @@ export async function init(panel, ctx) {
     const t0 = performance.now();
     const due = jobDue();
     let n = 0;
-    do { stepOnce(); n++; } while (n < speed && performance.now() - t0 < 14);
+    // early in a run the readout is sampled at least every EARLY_EVERY steps (its mid-training peak is brief), so the
+    // sim waits for the worker there rather than outrunning it
+    const early = worker && st.mode === "mf" && !seq && s.t < EARLY_STEPS;
+    if (!(early && busy && s.t - lastDispatchStep >= EARLY_EVERY))
+      do { stepOnce(); n++; } while (n < speed && performance.now() - t0 < 14 && !(early && s.t - lastDispatchStep >= EARLY_EVERY));
     if (st.mode === "mb" && (frameNo % 8 === 0 || due)) { mbResid = E.stationarity(s, Sigma, PP).r; }
     H = s.H.slice();          // H of the weights the last step started from
     frameNo++; tick++;
@@ -529,10 +569,10 @@ export async function init(panel, ctx) {
     if (phase !== 6) { const t = simTime(); kC.setCursor(t); rC.setCursor(t); }
     if (due) dispatch();
     fpsN++; const now = performance.now(); if (now - fpsT > 1000) { fps = fpsN * 1000 / (now - fpsT); fpsN = 0; fpsT = now; stats.set("fps", fps); }
-    const r = residual(), conv = st.mode === "mf" && r < DONE_TOL;
+    const r = residual(), conv = st.mode === "mf" && r < DONE_TOL, seqConv = st.mode === "mf" && r < SEQ_TOL;
     const f = frameOf();
     if (seq) {
-      if (conv || seqSteps > 4000) {
+      if (seqConv || seqSteps > 6000) {
         if (!holdT) { holdT = now; drawSim(); drawParts(); drawSeries(); }
         else if (now - holdT > 1700) {
           seqIdx++; holdT = 0; seqSteps = 0;
@@ -576,13 +616,18 @@ export async function init(panel, ctx) {
     busy = false; specVersion = -1; RO.pending(); stats.set("dir", null, "computing…");
   }
   // readout cadence: about twice a second, slower when a readout is expensive (it shares the CPU with the sim)
-  function jobDue() { return worker && !busy && performance.now() - lastDispatch > Math.max(450, (N * N * B > 1.6e6 ? 3 : 1.5) * lastJobMs); }
+  let lastDispatchStep = 0;
+  function jobDue() {
+    if (!worker || busy) return false;
+    if (st.mode === "mf" && !seq && s.t < EARLY_STEPS && s.t - lastDispatchStep >= EARLY_EVERY) return true;
+    return performance.now() - lastDispatch > Math.max(450, (N * N * B > 1.6e6 ? 3 : 1.5) * lastJobMs);
+  }
   function dispatch() {
     const havePrev = prevValid;
     if (!worker || busy || !s) return;
     const paused = !tp.playing || residual() < DONE_TOL;   // converged counts as paused (tour steps hold while converged)
     const wantSpec = specVersion !== version && (B <= 24 ? (paused || jobCount % 4 === 0) : paused);
-    busy = true; lastDispatch = performance.now(); jobCount++;
+    busy = true; lastDispatch = performance.now(); lastDispatchStep = s.t; jobCount++;
     const job = { kind: "job", seq: ++jobSeq, runId, version, t: simTime(), P: { ...PP }, Wii: s.Wii.slice(), Wib: s.Wib.slice(),
       wantSpec, specFamilies: B <= 24 ? ["both", "ii", "ib"] : ["both"], resid: residual() };
     if (havePrev) { job.prevWii = prevWii.slice(); job.prevWib = prevWib.slice(); }
@@ -601,8 +646,9 @@ export async function init(panel, ctx) {
     if (res.spec) specVersion = lastResVersion;
     RO.show(res, lastJob ? lastJob.resid : NaN);
     const both = res.rows.both;
-    series.rt.push(res.t); series.cosC.push(both.contrast.cos); series.cosK.push(both.known.cos); series.cosT.push(res.rows.transient ? res.rows.transient.known.cos : NaN);
-    stats.set("cos", both.contrast.cos, `BW ${f3(both.contrast.bw)}`);
+    series.rt.push(res.t); series.cosC.push(both.contrast.cos); series.cosK.push(both.known.cos); series.cosT.push(res.rows.transient ? res.rows.transient.known.cos : NaN); series.cosP.push(res.rows.parts.contrast.cos);
+    stats.set("cos", both.contrast.cos, `masked least squares · BW ${f3(both.contrast.bw)}`);
+    stats.set("ps", res.rows.parts.contrast.cos, `${res.partsK} part${res.partsK === 1 ? "" : "s"}${res.robust ? "" : " (not clustered yet)"} · BW ${f3(res.rows.parts.contrast.bw)}`);
     if (res.spec && res.spec.both) stats.set("dir", res.spec.both.rank, `of ${res.spec.p} in Sym(B), at t = ${ui.fmt(res.spec.t, 3)}`);
     RO.drawTime(series, seqMarks.map(m => ({ x: m.t, label: m.label })), simTime());
     // keep the readout in step with a paused run
@@ -635,6 +681,7 @@ export async function init(panel, ctx) {
     SG = makeSigma(st); Sigma = SG.Sigma; B = SG.B;
     syncControls(); makeTheta(); drawSigma();
     if (t) { (t.group === "c" ? chipsC : RO.chips).set(t.id); (t.group === "c" ? RO.chips : chipsC).clear(); } else { chipsC.clear(); RO.chips.clear(); }
+    if (t) tp.setSpeed(t.group === "c" ? 16 : 1);   // structure tours run fast to convergence; readout tours at ×1 to show the transient
     tp.reset();
   }
   function pickTour(t) {
@@ -652,7 +699,8 @@ export async function init(panel, ctx) {
     const chips = ui.chips({ label: "Tours", items: visibleTours.filter(t => t.group === "r"), active: tour && tour.group === "r" ? tour.id : null, onPick: t => pickTour(t) });
     const setSeg = ui.segmented({ label: "show", options: [{ value: "known", label: "parameters known" }, { value: "contrast", label: "θ unknown: $P\\hat C P$ vs $P\\Sigma_g P$" }], value: "known", onChange: () => redraw() });
     const playBtn = ui.h("button", { type: "button", class: "u-chip", text: "play / pause the run above", style: { justifySelf: "start" }, onclick: () => tp.toggle() });
-    top.append(chips.el, ui.h("div", { style: { display: "grid", gap: "8px" } }, setSeg.el, playBtn));
+    const estSeg = ui.segmented({ label: "estimate", options: [{ value: "both", label: "masked least squares" }, { value: "parts", label: "parts-sum sketch" }], value: "both", onChange: () => redraw() });
+    top.append(chips.el, ui.h("div", { style: { display: "grid", gap: "8px" } }, setSeg.el, estSeg.el, playBtn));
     const status = ui.h("div", { class: "callout", style: { margin: "6px 0 12px", padding: "8px 12px", fontSize: "14px" } });
     const grid = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "16px 28px" } });
     const mk = title => { const b = ui.h("div"), w = ui.h("div", {}, ui.h("div", { class: "chart-title", html: title }), b); grid.append(w); return b; };
@@ -679,12 +727,14 @@ export async function init(panel, ctx) {
     const measC = lineChart(measBox, { series: [{ name: "I–I + I–B", y: [1], x: [1] }], ylog: true, xlog: true, yrange: [1e-16, 2], height: 230, xlabel: "rank among the B(B+1)/2 directions (log)", ylabel: "eigenvalue / largest",
       yfmt: y => (Math.round(Math.log10(y)) % 4 === 0 ? sci(y) : ""), refs: [{ y: SPEC_TOL, label: "pinned-down threshold" }] });
     const timeC = lineChart(timeBox, { series: [{ name: "θ unknown: cosine", y: [], x: [] }], height: 230, yrange: [-0.2, 1.02], xlabel: "time t", ylabel: "Frobenius cosine", xname: "t" });
+    const timeNote = ui.h("div", { class: "u-help" }); timeBox.after(timeNote);
     let last = null, lastSpec = null;
     const cell = x => `<td class="num">${x == null || !Number.isFinite(x) ? "n/a" : f3(x)}</td>`;
     const ROWS = [
-      ["both", "<b>Weights at equilibrium</b> (I–I and I–B synapses)"],
+      ["both", "<b>Masked least squares</b> on the weights (I–I and I–B synapses)"],
       ["ii", "… I–I synapses only"],
       ["ib", "… I–B synapses only"],
+      ["parts", "Parts-sum sketch $\\theta\\mathbf 1\\mathbf 1^\\top + \\sum_k c_k h_k h_k^\\top/\\lVert h_k\\rVert^2$"],
       ["transient", "Derivative-aware: weights and $dw/dt$ of the last step"],
       ["naive", "The note's formula $\\hat C = H^+RH^{+\\top}$"],
       ["untrained", "Untrained network, read as if at equilibrium (control)"],
@@ -724,15 +774,18 @@ export async function init(panel, ctx) {
       const groups = groupsOf(), lab = o.map(b => gName(b)), clab = o.map(b => String(b + 1));
       hmS.update({ values: perm(S), rows: B, cols: B, range: [-m, m], groups, rowLabels: lab, colLabels: clab, zlabel: mode === "contrast" ? "$P\\Sigma_g P$" : "$\\Sigma_g$" });
       if (!last) { hmC.update({ values: new Float32Array(B * B).fill(NaN), rows: B, cols: B, range: [-m, m], groups }); hmD.update({ values: new Float32Array(B * B).fill(NaN), rows: B, cols: B, range: [-m, m], groups }); return; }
-      const x = last.rows.both[mode === "contrast" ? "contrast" : "known"];
-      const C = mode === "contrast" ? last.Cp.map(v0 => v0 * x.scale) : last.Ck;
+      const est = estSeg.get(), x = last.rows[est][mode === "contrast" ? "contrast" : "known"];
+      const C = est === "parts" ? (mode === "contrast" ? E.project1(last.Cps, B).map(v0 => v0 * x.scale) : last.Cps)
+        : (mode === "contrast" ? last.Cp.map(v0 => v0 * x.scale) : last.Ck);
       const D = new Float64Array(B * B); for (let q = 0; q < B * B; q++) D[q] = C[q] - S[q];
       hmC.update({ values: perm(C), rows: B, cols: B, range: [-m, m], groups, rowLabels: lab, colLabels: clab, zlabel: mode === "contrast" ? "$s\\,P\\hat C P$ (best scale $s$)" : "$\\hat C$" });
       hmD.update({ values: perm(D), rows: B, cols: B, range: [-m, m], groups, rowLabels: lab, colLabels: clab, zlabel: "difference" });
       tiles.set("cos", x.cos, mode === "contrast" ? "θ unknown" : "parameters known");
       tiles.set("bw", x.bw, x.neg > 1e-6 ? `negative mass clipped: ${ui.fmtPct(x.neg, 0)}` : "");
       const ks = Array.from({ length: B }, (_, k) => k + 1);
-      const es = mode === "contrast" ? last.eig.sigmaP : last.eig.sigma, eh = mode === "contrast" ? last.eig.proj.map(v0 => v0 * x.scale) : last.eig.known;
+      const es = mode === "contrast" ? last.eig.sigmaP : last.eig.sigma;
+      const eh = est === "parts" ? E.eigh(mode === "contrast" ? E.project1(last.Cps, B) : last.Cps, B).values.map(v0 => v0 * (mode === "contrast" ? x.scale : 1))
+        : mode === "contrast" ? last.eig.proj.map(v0 => v0 * x.scale) : last.eig.known;
       eigC.update({ series: [{ name: mode === "contrast" ? "PΣ_gP" : "Σ_g", x: ks, y: Array.from(es), color: PAL.fg, dots: true },
         { name: mode === "contrast" ? "s·PĈP" : "Ĉ", x: ks, y: Array.from(eh), color: PAL.cat[0], points: true }] });
     }
@@ -762,42 +815,59 @@ export async function init(panel, ctx) {
       },
       drawTime(sr, refs, t) {
         timeC.update({ series: [
-          { name: "θ unknown (contrast)", x: sr.rt, y: sr.cosC, color: PAL.cat[0] },
-          { name: "parameters known", x: sr.rt, y: sr.cosK, color: PAL.fg },
+          { name: "least squares, θ unknown", x: sr.rt, y: sr.cosC, color: PAL.cat[0] },
+          { name: "least squares, parameters known", x: sr.rt, y: sr.cosK, color: PAL.fg },
+          { name: "parts-sum, θ unknown", x: sr.rt, y: sr.cosP, color: PAL.cat[1] },
           { name: "derivative-aware", x: sr.rt, y: sr.cosT, color: PAL.cat[2], dash: true }], refs });
         timeC.setCursor(t);
+        let bi = -1; sr.cosC.forEach((c, i) => { if (Number.isFinite(c) && (bi < 0 || c > sr.cosC[bi])) bi = i; });
+        const n = sr.cosC.length;
+        timeNote.innerHTML = bi < 0 ? "" : `Least squares, θ unknown: best ${f3(sr.cosC[bi])} at t = ${ui.fmt(sr.rt[bi], 3)}; latest ${f3(sr.cosC[n - 1])} at t = ${ui.fmt(sr.rt[n - 1], 3)}.`;
       },
       cursor(t) { timeC.setCursor(t); },
-      clearTime() { timeC.update({ series: [{ name: "θ unknown (contrast)", y: [], x: [] }] }); },
+      clearTime() { timeC.update({ series: [{ name: "least squares, θ unknown", y: [], x: [] }] }); timeNote.textContent = ""; },
     };
     return api;
   }
 
   // ------------------------------------------------------------------------------------------------ comparison (dense vs sparse)
+  // Runs automatically once, when the table first scrolls into view, with the default setting; the button re-runs it
+  // with whatever is selected above. Separate worker; the live run is untouched.
   const cmpHost = ctx.slot("compare");
-  if (cmpHost) {
-    const btn = ui.h("button", { type: "button", class: "explore-link", text: "Re-run this comparison with the current settings" });
-    const out = ui.h("div", { class: "u-help", style: { marginTop: "6px" } });
-    cmpHost.append(btn, out);
-    btn.addEventListener("click", () => {
-      if (!worker) { out.textContent = "Web workers are unavailable in this browser."; return; }
-      out.textContent = `Running two networks to convergence in the background (B = ${B}, N = ${st.n})…`;
-      const cw = new Worker(new URL("./ch_many_worker.js", import.meta.url), { type: "module" });
-      cw.onmessage = e => { const d = e.data; if (d.kind !== "compare") return; cw.terminate(); if (d.error) { out.textContent = d.error; return; } fillCompare(d.res); out.textContent = "";
-        const note = panel.querySelector("[data-cmp-note]");
-        if (note) note.textContent = `Re-run in your browser just now: ${SG.desc}; B = ${B}, N = ${st.n}, θ = ${f2(st.theta)}, γ = ${st.gamma}, w_min = ${ui.fmt(st.wmin, 2)}, init seed ${st.seed}, mean-field.`; };
-      cw.postMessage({ kind: "compare", Sigma, B, N: st.n, theta: st.theta, gamma: st.gamma, wmin: st.wmin, seed: st.seed, k: SG.k, ps: [1, 0.5] });
-    });
+  let cmpWorker = null;
+  function runCompare(useCurrent) {
+    const out = cmpHost.querySelector(".u-help"), note = panel.querySelector("[data-cmp-note]");
+    if (typeof Worker === "undefined") { out.textContent = "Web workers are unavailable in this browser; the numbers shown were measured earlier."; return; }
+    if (cmpWorker) cmpWorker.terminate();
+    const cs = useCurrent ? st : { ...DEF }, sg = useCurrent ? SG : makeSigma(cs);
+    panel.querySelectorAll("[data-cmp]").forEach(el => { el.style.opacity = "0.4"; });
+    out.textContent = `Running three networks to convergence in a background thread (B = ${sg.B}, N = ${cs.n}, θ = ${f2(cs.theta)}); the rows fill in as they finish…`;
+    const desc = `${sg.desc}; B = ${sg.B}, N = ${cs.n}, θ = ${f2(cs.theta)}, γ = ${cs.gamma}, w_min = ${ui.fmt(cs.wmin, 2)} (last row ${ui.fmt(cs.wmin / 100, 2)}), init seed ${cs.seed}, mean-field, dt = ${DT}, run until r/η < 10⁻⁷.`;
+    cmpWorker = new Worker(new URL("./ch_many_worker.js", import.meta.url), { type: "module" });
+    cmpWorker.onmessage = e => {
+      const d = e.data; if (d.kind !== "compare") return;
+      if (d.error) { out.textContent = `Comparison failed: ${d.error}`; return; }
+      if (d.row) fillCompare(d.row);
+      if (d.done) { cmpWorker.terminate(); cmpWorker = null; out.textContent = ""; if (note) note.textContent = `Computed in your browser just now: ${desc}`; }
+    };
+    cmpWorker.postMessage({ kind: "compare", Sigma: sg.Sigma, B: sg.B, N: cs.n, theta: cs.theta, gamma: cs.gamma, wmin: cs.wmin, seed: cs.seed, k: sg.k,
+      configs: [{ key: "d", p: 1 }, { key: "s", p: 0.5 }, { key: "f", p: 1, wmin: cs.wmin / 100 }] });
   }
-  function fillCompare(rows) {
-    rows.forEach(r => {
-      const key = r.p === "id" ? "b" : r.p === 1 ? "d" : "s";
-      const vals = r.p === "id" ? { cosK: f3(r.cosK), cosC: f3(r.cosC), bwC: f3(r.bwC), sub: f3(r.sub) }
-        : { K: String(r.K), dir: `${r.dir} of ${r.pdim}`, cosK: f3(r.cosK), cosC: f3(r.cosC), bwC: f3(r.bwC), sub: f3(r.sub), steps: ui.fmtInt(r.steps) };
-      for (const [f, val] of Object.entries(vals)) {
-        const el = panel.querySelector(`[data-cmp="${key}-${f}"]`); if (el) el.textContent = val;
-      }
-    });
+  if (cmpHost) {
+    const btn = ui.h("button", { type: "button", class: "explore-link", text: "Re-run this comparison with the settings selected above" });
+    cmpHost.append(btn, ui.h("div", { class: "u-help", style: { marginTop: "6px" } }));
+    btn.addEventListener("click", () => runCompare(true));
+    const io = new IntersectionObserver(es => { if (es.some(x => x.isIntersecting)) { io.disconnect(); runCompare(false); } }, { rootMargin: "200px" });
+    io.observe(cmpHost);
+  }
+  function fillCompare(r) {
+    const key = r.p === "id" ? "b" : r.key;
+    const vals = r.p === "id" ? { cosK: f3(r.cosK), cosC: f3(r.cosC), bwC: f3(r.bwC), sub: f3(r.sub) }
+      : { K: String(r.K), dead: String(r.dead), dir: `${r.dir} of ${r.pdim}`, cosK: f3(r.cosK), cosC: f3(r.cosC), bwC: f3(r.bwC), sub: f3(r.sub), ps: f3(r.psC),
+        peak: `${f3(r.peak)} (t = ${ui.fmt(r.peakT, 2)})` };
+    for (const [f, val] of Object.entries(vals)) {
+      panel.querySelectorAll(`[data-cmp="${key}-${f}"]`).forEach(el => { el.textContent = val; el.style.opacity = ""; });
+    }
   }
 
   // ------------------------------------------------------------------------------------------------ start

@@ -225,7 +225,7 @@ export async function init(panel, ctx) {
         ui.h("div", { class: "u-help", html: kind === "ib" ? "threshold $\\theta$" : "threshold $\\theta/\\gamma$" })),
     );
     verdict.innerHTML = grows
-      ? `<b>Synapse ${edgeName(syn)} grows</b> towards $w^\\ast = \\tfrac{\\eta}{\\lambda}(${kind === "ib" ? "" : "\\gamma "}h^\\top\\Sigma_g h - \\theta) = ${ui.fmtFixed(target, 3)}$: the two ends covary by more than the threshold.`
+      ? `<b>Synapse ${edgeName(syn)} grows</b> towards $w^\\ast = \\tfrac{\\eta}{\\lambda}(${kind === "ib" ? "" : "\\gamma\\,"}${rhsTex} - \\theta) = ${ui.fmtFixed(target, 3)}$: the two ends covary by more than the threshold, and that surplus is what the weight will store.`
       : `<b>Synapse ${edgeName(syn)} is pruned</b> to the floor $w_{\\min}$: the two ends do not covary by more than the threshold.`;
     ui.renderMath(chain); ui.renderMath(verdict);
   }
