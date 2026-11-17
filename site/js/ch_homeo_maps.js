@@ -66,7 +66,7 @@ function gridMap(el, { xs, ys, ylog = false, yIndex = false, cell, color, label,
       const r = svgEl("rect", { x: x0 + .5, y: y1 + .5, width: Math.max(0, x1 - x0 - 1), height: Math.max(0, y0 - y1 - 1), fill: color(c), style: onClick ? "cursor:pointer" : null }, svg);
       const lab = label(c);
       if (lab && x1 - x0 > 16 && y0 - y1 > 12) {
-        const t = svgEl("text", { x: (x0 + x1) / 2, y: (y0 + y1) / 2 + 4, "text-anchor": "middle", "font-size": 11, fill: c.dark ? "#fff" : P.fg, "pointer-events": "none" }, svg);
+        const t = svgEl("text", { x: (x0 + x1) / 2, y: (y0 + y1) / 2 + 4, "text-anchor": "middle", "font-size": 11, style: `fill:${c.dark ? "#fff" : P.fg}`, "pointer-events": "none" }, svg);
         t.textContent = lab;
       }
       r.addEventListener("pointermove", ev => ui.showTip(ev.clientX, ev.clientY, tooltip(c, i, j)));
@@ -133,12 +133,14 @@ function phaseFigure(el, phase, data, live) {
         "click: load into the explorer"),
       onClick: q => live.load({ cov, theta: q.theta, gamma: q.gamma, omega: +(meta.base.N * meta.base.wmin).toPrecision(2), n: meta.base.N, seed: 1 }, `phase diagram cell θ = ${f2(q.theta)}, γ = ${ui.fmt(q.gamma, 2)}`),
       overlays });
-    keyEl.replaceChildren(ui.legend({ items: [
+    const lgd = ui.legend({ items: [
       { label: `θ = γκ₀, heuristic crossover (κ₀ = ${f3(k0)}): one blob below it`, color: P.fg, shape: "dash" },
       ...parents.map(pp => ({ label: `θ = ${pp.lab}, heuristic (E = ${f3(pp.E)}): coarse parts stay bound below it`, color: P.ink2, shape: "line" })),
       { label: `levels where finer parts start to exist: θ = ${levels.join(", ")}`, color: P.mute, shape: "dash" },
       { label: "† every neuron dead · * seeds disagree (median shown)", color: P.wash, shape: "square" },
-    ] }).el);
+    ] });
+    lgd.el.querySelectorAll(".u-key").forEach(k => { k.style.whiteSpace = "normal"; k.style.minWidth = "0"; });   // long keys wrap on phones
+    keyEl.replaceChildren(lgd.el);
   }
   build();
 }

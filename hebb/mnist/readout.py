@@ -59,6 +59,8 @@ def ls_readout(H, Mii, Yii, Mib, Yib, family="both", alpha_rel=1e-4, iters=400, 
     lam_max = 0.0
     for _ in range(30):
         X = Aop(X); lam_max = float(X.norm()); X = X / max(lam_max, 1e-30)
+        if lam_max == 0:
+            break
     alpha = alpha_rel * lam_max
     b = torch.zeros(B, B, device=H.device, dtype=H.dtype)
     if aii:
@@ -67,18 +69,23 @@ def ls_readout(H, Mii, Yii, Mib, Yib, family="both", alpha_rel=1e-4, iters=400, 
         b += aib * _sym(Ht @ (Mib * Yib))
     # CG on (A + alpha I) C = b
     C = torch.zeros_like(b); R = b.clone(); Pd = R.clone(); rr = float((R * R).sum()); r0 = rr
-    it = 0
+    it = 0; rr_new = rr
     for it in range(iters):
+        if rr <= 0 or r0 <= 0:
+            break
         AP = Aop(Pd) + alpha * Pd
-        a = rr / float((Pd * AP).sum())
+        pap = float((Pd * AP).sum())
+        if not pap > 0:
+            break
+        a = rr / pap
         C += a * Pd; R -= a * AP
         rr_new = float((R * R).sum())
-        if rr_new < tol ** 2 * r0:
+        if rr_new <= tol ** 2 * r0:
             break
         Pd = R + (rr_new / rr) * Pd; rr = rr_new
     # data misfit per family (mean squared residual on active equations)
     HC = H @ C
-    info = dict(n_ii=nii, n_ib=nib, iters=it + 1, alpha=alpha, cg_rel_res=(rr_new / r0) ** 0.5)
+    info = dict(n_ii=nii, n_ib=nib, iters=it + 1, alpha=alpha, cg_rel_res=(rr_new / r0) ** 0.5 if r0 > 0 else 0.0)
     if nii:
         info["misfit_ii"] = float(((Mii * (HC @ Ht - Yii)) ** 2).sum() / nii) ** 0.5
     if nib:

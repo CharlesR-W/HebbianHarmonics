@@ -180,7 +180,7 @@ function initLive(ctx, data) {
     const c = sim.c;
     setStat("ns", a.nStable, a.tie ? `marginal here: ${a.tie[0]} just below, ${a.tie[1]} just above` : c.method === "enum" ? "exact enumeration of supports" : "lone-neuron flow, checked exactly");
     const fit = xMode === "c" ? a.fitC : a.fitL;
-    setStat("beta", a.K >= 3 && fit ? +fit.beta.toFixed(2) : NaN, a.K >= 3 && fit ? `over ${fit.n} clusters, r = ${ui.fmtFixed(fit.r, 2)}` : "needs ≥ 3 clusters");
+    setStat("beta", a.K >= 3 && fit ? +fit.beta.toFixed(2) : NaN, a.K >= 3 && fit ? `over ${fit.n} clusters, r = ${ui.fmtFixed(fit.r, 2)}` : a.K >= 3 ? "equal energies: undefined" : "needs ≥ 3 clusters");
     setStat("dead", a.nDead, a.noise !== "none" ? `of ${a.N} · in transit ${a.transit} (${ui.fmtPct(a.transit / a.N, 0)})` : `of ${a.N}`);
     setStat("t", Math.round(a.t * 10) / 10, `dt = ${ui.fmt(M.DT / a.lam, 2)}${fps && tp.playing ? ` · ${fps.toFixed(0)} fps` : ""} · max w ${ui.fmt(a.wmax, 2)}`);
     setStat("r", +a.resid.toPrecision(2), a.mode !== "mf" || a.noise !== "none" ? "mean-field drift at these weights" : a.resid < M.RES_TOL ? "converged (below 10⁻⁶)" : "still moving");
@@ -386,7 +386,7 @@ function allocPlot(el, { height = 320 } = {}) {
       const lab = text(svg, m.l + 10, m.t + 16, `β = ${ui.fmtFixed(fit.beta, 2)}  (fit over ${fit.n} clusters, r = ${ui.fmtFixed(fit.r, 2)})`, { class: "ttl" });
       lab.setAttribute("style", "font-weight:600");
     } else {
-      text(svg, m.l + 10, m.t + 16, a.K >= 1 ? `β needs at least 3 clusters (K = ${a.K})` : "no live clusters", { fill: P.mute });
+      text(svg, m.l + 10, m.t + 16, a.K >= 3 ? "β undefined: every cluster's part has the same energy" : a.K >= 1 ? `β needs at least 3 clusters (K = ${a.K})` : "no live clusters", { fill: P.mute });
     }
     pts = [];
     for (const q of a.empty) {

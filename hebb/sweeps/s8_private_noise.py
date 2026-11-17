@@ -39,6 +39,10 @@ from hebb import core
 from hebb.core import Params, harmonic, init_state
 from hebb.sweeps.common import RAW, Timer, _clean, cluster_embed, cov_block, pmap, save_json
 
+import os as _os
+# Revision: S8_REFLECT=1 makes add/inp/inpn use the reflected scheme (drift+noise from one state, reflect at wmin)
+# and tags raw outputs with suffix '_r'. Original results (projected/clipped Euler) are kept under the old names.
+REFLECT = bool(_os.environ.get("S8_REFLECT"))
 V6 = np.array([0.5, 0.75, 1.0, 1.5, 2.0, 3.0])
 DT = 0.05
 WMIN = 1e-4
@@ -65,12 +69,44 @@ def noise_step(W, H, SH, Sd, kind, sig, sq, rng, L=None):
     raise ValueError(kind)
 
 
+def floor_step(W, c, sig, sq, dt, wmin, kind, noise_fn, rng, scheme):
+    """One step of dw = (c - w) dt + noise, c = (Sigma h)_b - theta frozen over the step (h explicit).
+    scheme 'clip'   : original Euler-Maruyama, then clip at wmin (projected); for 'mul' = Euler drift, then
+                      w *= exp(sigma sqrt(dt) xi), then clip (NOT floor-compatible: see revision note).
+    scheme 'reflect': (add/inp) Strang splitting: exact flow of dw/dt = c - w over dt/2, sticking at wmin (exact
+                      for a deterministic flow into the floor), additive increment reflected at wmin (exact for
+                      Brownian motion), exact flow dt/2. (Reflecting the whole Euler increment would lift a
+                      noiseless floored synapse by theta*dt per step.)
+    scheme 'log'    : (mul) Ito SDE dw = (c - w) dt + sigma w dW reflected at wmin, integrated in x = log w:
+                      Strang splitting: exact flow of dw/dt = c - (1 + sigma^2/2) w over dt/2 (sticks at wmin
+                      instead of crossing it), x += sigma sqrt(dt) xi reflected at log wmin, exact flow dt/2."""
+    if scheme == "log":   # Strang splitting: exact drift dt/2, log-noise, exact drift dt/2
+        k = 1.0 + 0.5 * sig ** 2
+        ck = c / k
+        e = np.exp(-k * dt / 2)
+        Wd = np.maximum(ck + (W - ck) * e, wmin)
+        x = np.log(Wd) + sig * sq * rng.standard_normal(W.shape)
+        xm = np.log(wmin)
+        x = np.where(x < xm, 2 * xm - x, x)
+        return np.maximum(ck + (np.exp(x) - ck) * e, wmin)
+    if scheme == "reflect":   # Strang: exact drift dt/2 (stick at floor), noise reflected at wmin, exact drift dt/2
+        e = np.exp(-dt / 2)
+        Wd = np.maximum(c + (W - c) * e, wmin)
+        Wn = noise_fn(Wd)          # noise amplitude from the start-of-step state (closure)
+        Wn = np.where(Wn < wmin, 2 * wmin - Wn, Wn)
+        return np.maximum(c + (Wn - c) * e, wmin)
+    Wn = noise_fn(W + dt * (c - W))
+    return np.maximum(Wn, wmin)
+
+
 def lone_run(Sigma, parts, theta, sig, group, G, W0, T, kind, seed=0, wmin=WMIN, dt=DT, snaps=SNAPS,
-             check=10, meas_from=None, diag=None):
+             check=10, meas_from=None, diag=None, scheme="clip"):
     """Independent lone neurons (rows). theta, sig: per-row arrays; group: per-row int in [0,G).
     parts: (K,B) part embeddings (rows sum to 1). Returns per-group time series and rate counts.
     Milestoning: label = last core part visited (-1 before first core visit)."""
     rng = np.random.default_rng(seed)
+    if REFLECT and scheme == "clip" and kind in ("add", "inp", "inpn"):
+        scheme = "reflect"
     M, B = W0.shape
     K = len(parts)
     Pn = parts / np.linalg.norm(parts, axis=1, keepdims=True)
@@ -107,9 +143,13 @@ def lone_run(Sigma, parts, theta, sig, group, G, W0, T, kind, seed=0, wmin=WMIN,
         W = np.maximum(W, wmin)
         H = W / W.sum(1, keepdims=True)
         SH = H * Sd if isdiag else H @ Sigma
-        W = W + dt * (SH - th - W)
-        W = noise_step(W, H, SH, Sd, kind, sg, sq, rng, L)
-        W = np.maximum(W, wmin)
+        if scheme == "clip":
+            W = W + dt * (SH - th - W)
+            W = noise_step(W, H, SH, Sd, kind, sg, sq, rng, L)
+            W = np.maximum(W, wmin)
+        else:
+            W = floor_step(W, SH - th, sg, sq, dt, wmin, kind,
+                           lambda X: noise_step(X, H, SH, Sd, kind, sg, sq, rng, L), rng, scheme)
         snap = t in snap_steps
         meas = t * dt > meas_from
         if t % check == 0 or snap:
@@ -228,6 +268,8 @@ def _map(fn, jobs, procs=4):
 
 
 def raw_save(name, obj):
+    if REFLECT:
+        name = name + "_r"
     RAW.mkdir(parents=True, exist_ok=True)
     (RAW / f"s8_{name}.json").write_text(json.dumps(_clean(obj), separators=(",", ":")))
 
@@ -248,7 +290,8 @@ INITS = ("weak", "strong", "rand")
 
 def jobA(args):
     kind, M, T, thetas = args[:4]
-    sigs = args[4] if len(args) > 4 else SIG_A[kind]
+    sigs = args[4] if len(args) > 4 and args[4] is not None else SIG_A[kind]
+    kw = args[5] if len(args) > 5 else {}
     v = V6
     B = len(v)
     parts = np.eye(B)
@@ -260,10 +303,11 @@ def jobA(args):
             W = rng.exponential(0.2, (M, B))
         else:
             k = 0 if ini == "weak" else B - 1
-            W = vertex_init(M, B, k, v[k] - th)
+            W = vertex_init(M, B, k, v[k] - th, kw.get("wmin", WMIN))
         W0.append(W); th_r.append(np.full(M, th)); sg_r.append(np.full(M, s)); grp.append(np.full(M, gi))
     r = lone_run(np.diag(v), parts, np.concatenate(th_r), np.concatenate(sg_r), np.concatenate(grp), len(conds),
-                 np.vstack(W0), T, kind, seed=7, diag=True)
+                 np.vstack(W0), T, kind, seed=7, diag=True, dt=kw.get("dt", DT), scheme=kw.get("scheme", "clip"),
+                 wmin=kw.get("wmin", WMIN), check=max(1, int(round(0.5 / kw.get("dt", DT)))))
     out = []
     for gi, (th, s, ini) in enumerate(conds):
         Q, pi, relax, irr = rate_matrix(r["cnt"][gi], r["tau"][gi])
@@ -276,7 +320,8 @@ def jobA(args):
 
 
 def partA(M=1000, T=2000):
-    jobs = [(k, M, T, (th,)) for k in ("add", "inp", "mul") for th in THETAS_A] + [("inpn", M, T, (0.2,))]
+    kinds = ("add", "inp") if REFLECT else ("add", "inp", "mul")
+    jobs = [(k, M, T, (th,)) for k in kinds for th in THETAS_A] + [("inpn", M, T, (0.2,))]
     with Timer("A"):
         R = [x for rr in _map(jobA, jobs) for x in rr]
     summ = summarize_A(R, T, M)
@@ -388,7 +433,9 @@ def partR(M=500, T=1000):
 
 # ----------------------------------------------------------------------------- M: multiplicative pinning
 def jobM(args):
-    th, wmin, sigs, M, T = args
+    th, wmin, sigs, M, T = args[:5]
+    kw = args[5] if len(args) > 5 else {}
+    dt = kw.get("dt", DT); scheme = kw.get("scheme", "clip")
     v = V6; B = len(v)
     W0, sg, grp, conds = [], [], [], []
     for s in sigs:
@@ -396,11 +443,12 @@ def jobM(args):
             conds.append((s, k))
             W0.append(vertex_init(M, B, k, v[k] - th, wmin)); sg.append(np.full(M, s)); grp.append(np.full(M, len(conds) - 1))
     r = lone_run(np.diag(v), np.eye(B), np.full(len(conds) * M, th), np.concatenate(sg), np.concatenate(grp), len(conds),
-                 np.vstack(W0), T, "mul", seed=5, wmin=wmin, diag=True, meas_from=5.0, snaps=(T,))
+                 np.vstack(W0), T, "mul", seed=5, wmin=wmin, diag=True, meas_from=5.0, snaps=(T,), dt=dt, scheme=scheme,
+                 check=max(1, int(round(0.5 / dt))))
     out = []
     for gi, (s, k) in enumerate(conds):
         tau = r["tau"][gi].sum()
-        out.append(dict(theta=th, wmin=wmin, sigma=s, start=k, exits=float(r["cnt"][gi].sum()), time=float(tau),
+        out.append(dict(theta=th, wmin=wmin, sigma=s, start=k, dt=dt, scheme=scheme, exits=float(r["cnt"][gi].sum()), time=float(tau),
                         rate=float(r["cnt"][gi].sum() / max(tau, 1e-9)), x=2 * th / (s * s * wmin),
                         alloc_end=r["alloc"][gi], off=float(r["off"][gi])))
     return out
@@ -493,7 +541,7 @@ def partP(M=600, T=600):
 
 
 # ----------------------------------------------------------------------------- N: networks
-def net_noise(Wii, Wib, Mii, Mib, H, Sigma, kind, sig, sq, rng, lateral=True, gamma=1.0):
+def net_noise(Wii, Wib, Mii, Mib, H, Sigma, kind, sig, sq, rng, lateral=True, gamma=1.0, clip=True):
     N, B = Wib.shape
     if kind == "add":
         Zb = sig * sq * rng.standard_normal((N, B))
@@ -514,7 +562,7 @@ def net_noise(Wii, Wib, Mii, Mib, H, Sigma, kind, sig, sq, rng, lateral=True, ga
         raise ValueError(kind)
     if lateral:
         Zi = np.triu(Zi, 1); Zi = Zi + Zi.T
-    Wib = np.maximum(Wib + Zb, 0) * Mib
+    Wib = (np.maximum(Wib + Zb, 0) if clip else Wib + Zb) * Mib
     Wii = (Wii + Zi) * Mii
     return Wii, Wib
 
@@ -543,8 +591,20 @@ def jobN(args):
     q3, q4 = [], []       # snapshots of H in 3rd / 4th quarter (persistence test)
     lab3, lab4 = [], []
     for t in range(1, nsteps + 1):
-        Wii, Wib, H = core.step(Wii, Wib, Mii, Mib, S, P)
-        Wii, Wib = net_noise(Wii, Wib, Mii, Mib, H, S, kind, sig, sq, nrng, lateral, gamma)
+        if REFLECT and kind != "none":
+            # same update as core.step, but drift and noise from one state, then reflect at the floor
+            # core.step's update with the floor-compatible Strang splitting of floor_step (frozen H over the step)
+            Wii = np.maximum(Wii, WMIN * Mii); Wib = np.maximum(Wib, WMIN * Mib)
+            H = harmonic(Wii, Wib); HS = H @ S
+            cii = -theta + gamma * (HS @ H.T); cib = -theta + HS
+            e = np.exp(-DT / 2)
+            Wii = np.maximum(cii + (Wii - cii) * e, WMIN); Wib = np.maximum(cib + (Wib - cib) * e, WMIN)
+            Wii, Wib = net_noise(Wii, Wib, Mii, Mib, H, S, kind, sig, sq, nrng, lateral, gamma, clip=False)
+            Wii = np.where(Wii < WMIN, 2 * WMIN - Wii, Wii); Wib = np.where(Wib < WMIN, 2 * WMIN - Wib, Wib)
+            Wii = np.maximum(cii + (Wii - cii) * e, WMIN); Wib = np.maximum(cib + (Wib - cib) * e, WMIN)
+        else:
+            Wii, Wib, H = core.step(Wii, Wib, Mii, Mib, S, P)
+            Wii, Wib = net_noise(Wii, Wib, Mii, Mib, H, S, kind, sig, sq, nrng, lateral, gamma)
         Wii = np.maximum(Wii, WMIN) * Mii; np.fill_diagonal(Wii, 0.0)
         Wib = np.maximum(Wib, WMIN) * Mib
         if t % 20 == 0 or t in snaps:
@@ -661,6 +721,203 @@ def partN(which="main"):
 def _f(x, d=3):
     return "None" if x is None else f"{x:.{d}g}"
 
+
+
+# ----------------------------------------------------------------------------- V: scheme validation (revision)
+def mfpt_quad(theta, a, sig, L, b, n=40000):
+    """ln of the mean first-passage time L -> b of the Ito SDE dw = (-theta + a w) dt + sig w dW, reflected at L.
+    T = int_L^b s(y) int_L^y m(z) dz dy, ln s(y) = (2theta/sig^2)(1/L - 1/y) - (2a/sig^2) ln(y/L),
+    m(z) = 2/(sig^2 z^2 s(z)). Log-space quadrature on a log grid."""
+    u = np.linspace(np.log(L), np.log(b), n); du = u[1] - u[0]; y = np.exp(u)
+    ls = (2 * theta / sig ** 2) * (1 / L - 1 / y) - (2 * a / sig ** 2) * (u - np.log(L))
+    lm = np.log(2) - 2 * np.log(sig) - 2 * u - ls
+    lI = np.logaddexp.accumulate(lm + u + np.log(du))
+    from scipy.special import logsumexp
+    return float(logsumexp(ls + lI + u + np.log(du)))
+
+
+def sim_escape(args):
+    """Simulate the same 1-D problem with the lone_run update structure (c = -theta + (1+a) w explicit, -w part
+    per scheme). Returns escape rate = absorbed / total time (exponential first passage)."""
+    theta, a, sig, L, b, dt, scheme, M, Tmax, seed = args
+    rng = np.random.default_rng(seed)
+    w = np.full(M, L); alive = np.ones(M, bool); t_abs = np.full(M, np.nan)
+    sq = np.sqrt(dt); n = int(round(Tmax / dt))
+    for t in range(1, n + 1):
+        idx = np.nonzero(alive)[0]
+        if len(idx) == 0:
+            break
+        x = w[idx]
+        c = -theta + (1 + a) * x
+        if scheme == "clip":   # original mul scheme
+            x = np.maximum((x + dt * (c - x)) * np.exp(sig * sq * rng.standard_normal(len(x))), L)
+        else:
+            x = floor_step(x, c, sig, sq, dt, L, "mul", None, rng, "log")
+        w[idx] = x
+        hit = x >= b
+        t_abs[idx[hit]] = t * dt
+        alive[idx[hit]] = False
+    nabs = int((~alive).sum())
+    tot = float(np.nansum(t_abs) + alive.sum() * n * dt)
+    return dict(theta=theta, a=a, sigma=sig, wmin=L, b=b, dt=dt, scheme=scheme, M=M, Tmax=Tmax, absorbed=nabs,
+                rate=nabs / tot, x=2 * theta / (sig ** 2 * L))
+
+
+def sim_stationary(args):
+    """1-D floored synapse dw = (-theta - w) dt + noise, reflected at L; histogram of log w over t in [T/2, T]."""
+    kind, theta, sig, L, dt, scheme, M, T, seed = args
+    rng = np.random.default_rng(seed)
+    w = np.full(M, L); sq = np.sqrt(dt); n = int(round(T / dt))
+    edges = np.log(L) + np.linspace(0, 8, 41)
+    hist = np.zeros(len(edges) - 1); s1 = 0.0; cnt = 0
+    for t in range(1, n + 1):
+        c = np.full(M, -theta)
+        if kind == "mul":
+            if scheme == "clip":
+                w = np.maximum((w + dt * (c - w)) * np.exp(sig * sq * rng.standard_normal(M)), L)
+            else:
+                w = floor_step(w, c, sig, sq, dt, L, "mul", None, rng, "log")
+        else:
+            w = floor_step(w, c, sig, sq, dt, L, "add", lambda X: X + sig * sq * rng.standard_normal(M), rng, scheme)
+        if t * dt > T / 2 and t % 4 == 0:
+            hist += np.histogram(np.log(w), edges)[0]; s1 += w.sum(); cnt += M
+    # analytic
+    xg = np.linspace(edges[0], edges[-1] + 30, 200001); wg = np.exp(xg)
+    if kind == "mul":   # p(w) ∝ w^(-2-2/sig^2) exp(2 theta/(sig^2 w)); in x: times w
+        lp = (-1 - 2 / sig ** 2) * xg + 2 * theta / (sig ** 2 * wg)
+    else:               # p(w) ∝ exp(-(2/sig^2)(theta w + w^2/2)); in x: times w
+        lp = -(2 / sig ** 2) * (theta * wg + wg ** 2 / 2) + xg
+    pg = np.exp(lp - lp.max()); pg /= pg.sum()
+    mass = np.array([pg[(xg >= edges[i]) & (xg < edges[i + 1])].sum() for i in range(len(edges) - 1)])
+    mean_an = float((pg * wg).sum())
+    hist = hist / cnt
+    return dict(kind=kind, theta=theta, sigma=sig, wmin=L, dt=dt, scheme=scheme, tv=float(0.5 * np.abs(hist - mass).sum()
+                + 0.5 * max(0.0, 1 - mass.sum())), mean_sim=s1 / cnt, mean_analytic=mean_an, hist=hist, analytic=mass,
+                edges=edges)
+
+
+def partV():
+    th, a = 0.05, 3 / 1.95 - 1
+    b = 3 * th / a
+    esc_cases = [(0.03, 1.0), (0.01, 2.0), (0.01, 1.5), (0.03, 0.7), (0.003, 2.0), (0.01, 1.0)]
+    jobs = []
+    for L, s in esc_cases:
+        for dt in (0.05, 0.0125, 0.003):
+            for sch in ("log", "clip"):
+                if sch == "clip" and dt == 0.003:
+                    continue
+                jobs.append((th, a, s, L, b, dt, sch, 2000, 400.0, 1))
+    with Timer(f"V esc ({len(jobs)})"):
+        E = _map(sim_escape, jobs)
+    for e in E:
+        e["rate_quad"] = float(np.exp(-mfpt_quad(th, a, e["sigma"], e["wmin"], b)))
+        print(f"V esc x={e['x']:.3g} wmin={e['wmin']} sig={e['sigma']} dt={e['dt']} {e['scheme']:4s} rate={e['rate']:.3e} "
+              f"quad={e['rate_quad']:.3e} absorbed={e['absorbed']}/{e['M']}", flush=True)
+    # default-floor predictions (quadrature only)
+    pred = []
+    for th_ in (0.05, 0.2):
+        for s in (0.5, 1.0, 2.0, 3.0):
+            lT = mfpt_quad(th_, a, s, 1e-4, 3 * th_ / a)
+            pred.append(dict(theta=th_, sigma=s, wmin=1e-4, x=2 * th_ / (s * s * 1e-4), ln_mfpt=lT))
+            print(f"V pred wmin=1e-4 th={th_} sig={s} x={2 * th_ / (s * s * 1e-4):.3g} ln MFPT={lT:.1f}", flush=True)
+    sj = []
+    for s in (1.0, 2.0):
+        for dt in (0.05, 0.0125):
+            for sch in ("log", "clip"):
+                sj.append(("mul", 0.05, s, 0.01, dt, sch, 20000, 100.0, 2))
+    for s in (0.1, 0.4):
+        for dt in (0.05, 0.0125, 0.003):
+            for sch in ("reflect", "clip"):
+                sj.append(("add", 0.2, s, 1e-4, dt, sch, 20000, 40.0, 3))
+    with Timer(f"V stat ({len(sj)})"):
+        S = _map(sim_stationary, sj)
+    for r in S:
+        print(f"V stat {r['kind']} th={r['theta']} sig={r['sigma']} wmin={r['wmin']} dt={r['dt']} {r['scheme']:7s} "
+              f"TV(hist,analytic)={r['tv']:.3f} mean={r['mean_sim']:.4g} analytic={r['mean_analytic']:.4g}", flush=True)
+    raw_save("V", dict(escape=E, default_floor_prediction=pred, stationary=S, escape_problem=dict(
+        theta=th, a=a, b=b, note="dw = (-theta + a w) dt + sigma w dW (Ito), reflected at wmin, absorbed at b = 3 theta/a; "
+                                 "a = 3/1.95 - 1: floored synapse to input v=3 of a neuron at vertex v=2, theta=0.05")))
+
+
+def partL2():
+    """Revision: most negative dR/dt of the Rayleigh quotient along the clipped lone flow vs the floor wmin."""
+    rng = np.random.default_rng(0)
+    B = 8
+    Q, _ = np.linalg.qr(rng.standard_normal((B, B)))
+    S = (Q * np.arange(1, B + 1) ** -1.0) @ Q.T; S *= B / np.trace(S)
+    out = []
+    for name, Sig in (("signed_powerlaw8", S), ("diag8", np.diag(rng.uniform(0.5, 3, B)))):
+        for wmin in (0.0, 1e-6, 1e-4, 1e-3):
+            th, dt = 0.15, 0.01
+            A = Sig - th
+            W = rng.exponential(0.2, (500, B)); Rp = None; worst = 0.0
+            for t in range(20000):
+                W = np.maximum(W, wmin)
+                H = W / W.sum(1, keepdims=True)
+                R = np.einsum("ib,bc,ic->i", H, A, H) / (H * H).sum(1)
+                if Rp is not None:
+                    worst = min(worst, float(((R - Rp) / dt).min()))
+                Rp = R
+                W = W + dt * (H @ Sig - th - W)
+            out.append(dict(cov=name, wmin=wmin, theta=0.15, most_negative_dRdt=worst))
+            print("L2", out[-1], flush=True)
+    raw_save("L2", dict(rows=out))
+
+
+# ----------------------------------------------------------------------------- revision reruns
+def partA2():
+    """Multiplicative noise rerun with the floor-compatible log scheme (diag Sigma, three inits)."""
+    D = 0.0125
+    jobs = [("mul", 1000, 1000, (th,), (s,), dict(scheme="log", dt=D)) for th in THETAS_A for s in (0.3, 1.0, 2.0, 3.0)]
+    jobs += [("mul", 1000, 1000, (th,), (s,), dict(scheme="log", wmin=wm, dt=D)) for th in (0.05, 0.2)
+             for wm in (0.01, 0.03) for s in (1.0, 1.5, 2.0, 3.0)]
+    jobs += [("mul", 1000, 1000, (0.05,), (2.0,), dict(scheme="log", wmin=0.01, dt=d)) for d in (0.05, 0.003)]
+    with Timer(f"A2 ({len(jobs)})"):
+        RR = _map(jobA, jobs)
+    out = []
+    for j, rr in zip(jobs, RR):
+        sm = summarize_A(rr, 1000, 1000)[0]
+        sm.update(wmin=j[5].get("wmin", WMIN), dt=j[5].get("dt", DT), scheme="log")
+        out.append(dict(summary=sm, rows=rr))
+        print(f"A2 mul th={sm['theta']} sig={sm['sigma']} wmin={sm['wmin']} dt={sm['dt']} TV(w,s)={sm['tv_ws']:.3f} "
+              f"TV(r,s)={sm['tv_rs']:.3f} pi={np.round(sm['alloc'], 3)} transit={sm['transit']:.2f} off={sm['off']:.2f} "
+              f"hop={sm['hop_rate']:.2e} relax={sm['relax']:.3g} beta={sm['fit_pl']['beta']}", flush=True)
+    raw_save("A2", dict(cells=out, T=1000, M=1000))
+
+
+def partM2(M=500, T=500):
+    jobs = []
+    for th in (0.05, 0.2):
+        for wmin in (1e-4, 3e-3, 1e-2, 3e-2):
+            jobs.append((th, wmin, (0.5, 1.0, 1.5, 2.0, 3.0), M, T, dict(scheme="log", dt=0.0125)))
+    jobs.append((0.05, 1e-2, (1.0, 1.5, 2.0), M, T, dict(scheme="log", dt=0.003)))
+    jobs.append((0.05, 1e-2, (1.0, 1.5, 2.0), M, T, dict(scheme="log", dt=0.05)))
+    with Timer("M2"):
+        R = [x for rr in _map(jobM, jobs) for x in rr]
+    raw_save("M2", dict(rows=R, M=M, T=T))
+    for r in R:
+        print(f"M2 th={r['theta']} wmin={r['wmin']} dt={r['dt']} sig={r['sigma']} start={r['start']} x={r['x']:.3g} "
+              f"rate={r['rate']:.3g} off={r['off']:.2f} alloc_end={np.round(r['alloc_end'], 3)}", flush=True)
+
+
+def partH():
+    """Headline additive / input cells with the reflected scheme at dt = 0.0125 (vs original clip at 0.05)."""
+    jobs = []
+    for kind, sigs in (("add", (0.3, 0.4, 0.5, 0.7)), ("inp", (0.2, 0.3, 0.4, 0.6))):
+        for s in sigs:
+            jobs.append((kind, 1000, 600, (0.2,), (s,), dict(scheme="reflect", dt=0.0125)))
+            jobs.append((kind, 1000, 600, (0.2,), (s,), dict(scheme="reflect", dt=0.05)))
+    with Timer(f"H ({len(jobs)})"):
+        RR = _map(jobA, jobs)
+    out = []
+    for j, rr in zip(jobs, RR):
+        sm = summarize_A(rr, 600, 1000)[0]
+        sm.update(dt=j[5]["dt"], scheme="reflect")
+        out.append(sm)
+        print(f"H {sm['kind']} th=0.2 sig={sm['sigma']} dt={sm['dt']} reflect pi={np.round(sm['alloc'], 3)} TV={sm['tv_ws']:.3f} "
+              f"transit={sm['transit']:.2f} off={sm['off']:.2f} beta={sm['fit_pl']['beta']} T_exp={sm['fit_exp_v']['T']}",
+              flush=True)
+    raw_save("H", dict(summary=out))
 
 
 # ----------------------------------------------------------------------------- DT: step-size sensitivity
@@ -849,6 +1106,16 @@ if __name__ == "__main__":
         partDT()
     elif arg == "X":
         partX()
+    elif arg == "L2":
+        partL2()
+    elif arg == "V":
+        partV()
+    elif arg == "A2":
+        partA2()
+    elif arg == "M2":
+        partM2()
+    elif arg == "H":
+        partH()
     elif arg == "assemble":
         assemble()
     if arg == "A":
