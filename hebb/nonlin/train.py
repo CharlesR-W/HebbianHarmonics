@@ -122,9 +122,17 @@ def train(cfg: Cfg, out_dir: Path, D: Data | None = None, device=None, verbose=T
         tr = time.time()
         ro = {}
         Hd = Ha.double()
+        g_eff = cfg.gamma if cfg.gamma != 0 else 1.0          # gamma = 0: lateral edges carry no information
+
+        def no_ii(eq):
+            if cfg.gamma != 0:
+                return eq
+            Mii, Qii, Mib, Qib = eq
+            return torch.zeros_like(Mii), torch.zeros_like(Qii), Mib, Qib
+        fams = ("both", "ii", "ib") if cfg.gamma != 0 else ("both", "ib")
         if cfg.rule == "rect":
-            eq = NR.rect_equations(Aii.double(), Aib.double(), cfg.theta, cfg.lam, cfg.eta, cfg.gamma, cfg.wmin, c)
-            for fam in ("both", "ii", "ib"):
+            eq = no_ii(NR.rect_equations(Aii.double(), Aib.double(), cfg.theta, cfg.lam, cfg.eta, g_eff, cfg.wmin, c))
+            for fam in fams:
                 C, C0, info = NR.gauss_readout(Hd, *eq, tau=cfg.tau, family=fam, iters=cfg.nls_iters)
                 ro[f"gauss_{fam}"] = dict(score=scorer.score(C.cpu(), summ["n_clusters"], spectra=(fam == "both")), info=info)
                 C_store[f"gauss_{fam}"] = C
@@ -139,22 +147,22 @@ def train(cfg: Cfg, out_dir: Path, D: Data | None = None, device=None, verbose=T
             ro["gauss_expected_cov"] = dict(score=scorer.score(Ce.cpu(), summ["n_clusters"], spectra=True), info=info)
             C_store["gauss_expected_cov"] = Ce
             # theta unknown (fitted): is theta still a gauge?
-            eq0 = NR.rect_equations(Aii.double(), Aib.double(), 0.0, cfg.lam, cfg.eta, cfg.gamma, cfg.wmin, c)
+            eq0 = no_ii(NR.rect_equations(Aii.double(), Aib.double(), 0.0, cfg.lam, cfg.eta, g_eff, cfg.wmin, c))
             Cf, _, info = NR.gauss_readout(Hd, *eq0, tau=cfg.tau, iters=cfg.nls_iters, fit_theta=True,
-                                           a_ii=1 / (cfg.gamma * c * c), a_ib=1 / (c * c))
+                                           a_ii=1 / (g_eff * c * c), a_ib=1 / (c * c))
             ro["gauss_fit_theta"] = dict(score=scorer.score(Cf.cpu(), summ["n_clusters"]), info=info)
             # untrained control (equilibrium assumption violated)
             H0d = H0.double()
-            eqi = NR.rect_equations(Wii0.double(), Wib0.double(), cfg.theta, cfg.lam, cfg.eta, cfg.gamma, cfg.wmin, c)
+            eqi = no_ii(NR.rect_equations(Wii0.double(), Wib0.double(), cfg.theta, cfg.lam, cfg.eta, g_eff, cfg.wmin, c))
             Ci, _, info = NR.gauss_readout(H0d, *eqi, tau=cfg.tau, iters=min(cfg.nls_iters, 150))
             ro["init_gauss_both"] = dict(score=scorer.score(Ci.cpu(), summ["n_clusters"]), info=info)
         else:
-            Mii, Yii, Mib, Yib = SR.equations(Aii.double(), Aib.double(), cfg.theta, cfg.lam, cfg.eta, cfg.gamma, cfg.wmin)
-            for fam in ("both", "ii", "ib"):
+            Mii, Yii, Mib, Yib = no_ii(SR.equations(Aii.double(), Aib.double(), cfg.theta, cfg.lam, cfg.eta, g_eff, cfg.wmin))
+            for fam in fams:
                 C, info = SR.ls_readout(Hd, Mii, Yii, Mib, Yib, fam, iters=800)
                 ro[f"ls_{fam}"] = dict(score=scorer.score(C.cpu(), summ["n_clusters"], spectra=(fam == "both")), info=info)
                 C_store[f"ls_{fam}"] = C
-            Mi0 = SR.equations(Wii0.double(), Wib0.double(), cfg.theta, cfg.lam, cfg.eta, cfg.gamma, cfg.wmin)
+            Mi0 = no_ii(SR.equations(Wii0.double(), Wib0.double(), cfg.theta, cfg.lam, cfg.eta, g_eff, cfg.wmin))
             C0, info = SR.ls_readout(H0.double(), *Mi0, "both", iters=800)
             ro["init_ls_both"] = dict(score=scorer.score(C0.cpu(), summ["n_clusters"]), info=info)
         spectra = {}

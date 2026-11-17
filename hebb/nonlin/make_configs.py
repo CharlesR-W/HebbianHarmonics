@@ -94,3 +94,26 @@ def main28():
 if __name__ == "__main__":
     main()
     main28()
+
+
+def main_g0():
+    """gamma = 0 (no lateral plasticity; lateral weights decay to the floor): each neuron settles on a
+    stable part independently (sibling F1/F3), so the population resolves many parts.  Same theta table."""
+    t14 = json.loads((OUT / "theta_table14.json").read_text())
+    units = []
+    for i, q in enumerate(t14["q"]):
+        for seed in (0, 1):
+            units.append(dict(rule="linear", input="pixels", theta=THETA_LIN[i], seed=seed, extra=dict(q=q, exp="G0_A_lin")))
+        for tau, seeds in ((0.0, (0, 1)), (1.0, (0,))):
+            T = t14[f"rect_t{tau:g}"]
+            for seed in seeds:
+                units.append(dict(rule="rect", tau=tau, input="pixels", theta=round(T["theta"][i], 4), c=T["c"], seed=seed,
+                                  extra=dict(q=q, exp="G0_A_rect")))
+        T = t14["rect_t0"]
+        units.append(dict(rule="rect", tau=0.0, input="gauss", theta=round(T["theta"][i], 4), c=T["c"], seed=0, extra=dict(q=q, exp="G0_B_rect")))
+        units.append(dict(rule="linear", input="gauss", theta=THETA_LIN[i], seed=0, extra=dict(q=q, exp="G0_B_lin")))
+    N = 980
+    cfg = {"defaults": dict(N=N, gamma=0.0, wmin=OMEGA / N, ii_scale=II_TOTAL / N, steps=3000, n_snap=24, n_sub=256, nls_iters=300),
+           "units": units}
+    (OUT / "v2_g0.json").write_text(json.dumps(cfg, indent=1))
+    print(len(units), "units")

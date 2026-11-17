@@ -15,9 +15,11 @@ from hebb.nonlin import dual
 from hebb.nonlin.model import Data, thresholds
 
 SITE = Path(__file__).resolve().parents[2] / "site" / "data" / "nonlin"
-SNAP_PICK = 12
+SNAP_PICK = 10
 N_SHOW = 256
-FEATURED_Q = 0.97
+FEATURED = {  # page key -> (experiment key, q).  q = 0.98 is the sibling's theta = 0.6 for the linear rule.
+    "A_lin": ("A_lin", 0.98), "A_rect_t0": ("A_rect_t0", 0.98), "A_rect_t1": ("A_rect_t1", 0.98),
+    "Bown_rect_t0": ("Bown_rect_t0", 0.98), "B_rect_t0_q0.946": ("B_rect_t0", 0.946), "A_rect_t0_q0.946": ("A_rect_t0", 0.946)}
 
 
 # ---------------------------------------------------------------- helpers
@@ -258,6 +260,46 @@ def featured(r, z, D: Data, st, out: Path):
                 shown_cluster_rank=[int(rank[k]) for k in ls[order]], shown_dead=dead[ids].astype(int).tolist())
 
 
+def part_stats(r, z, st, D: Data, lin_parts: dict):
+    """Per major live cluster (largest first, at most 8): shape and higher-order statistics of its voltage
+    u = c_k . g over the 60k training digits, its rate variance vs the Gaussian prediction, its digit tuning,
+    a 1-feature probe, the cosine to the paired linear-rule part, and the part energy c^T C_hat c recovered by
+    each readout variant relative to the true c^T Sigma c (parameters known)."""
+    cfg = r["cfg"]; tau = cfg["tau"] if cfg["rule"] == "rect" else 0.0
+    idx = [k for k in np.argsort(-st["sizes"]) if st["major"][k]][:8]
+    if not idx:
+        return []
+    G = D.Gtr.double(); Gte = D.Gte.double()
+    out = []
+    key = (cfg["gamma"], cfg["seed"], round(cfg["extra"].get("q", -1), 4))
+    hl = lin_parts.get(key)
+    for k in idx:
+        h = torch.as_tensor(z["cent"][k], dtype=torch.float64)
+        u = G @ h; uc = u - u.mean(); sd = float(uc.std())
+        sk = float((uc ** 3).mean() / sd ** 3); ku = float((uc ** 4).mean() / sd ** 4 - 3)
+        var = float(h @ torch.as_tensor(D.Sigma) @ h)
+        b = float(u.mean()) + tau * np.sqrt(var)
+        rr = torch.relu(u - b); rv = float(rr.var(unbiased=False))
+        ute = Gte @ h; rte = torch.relu(ute - b) if cfg["rule"] == "rect" else ute
+        z_ = (rte - rte.mean()) / rte.std().clamp_min(1e-12)
+        yte = torch.as_tensor(D.yte)
+        tun = [float(z_[yte == d].mean()) for d in range(10)]
+        from hebb.nonlin.analysis import logistic_probe
+        ftr = torch.relu(u - b) if cfg["rule"] == "rect" else u
+        p1 = logistic_probe(ftr[:, None].float(), D.ytr, rte[:, None].float(), D.yte, iters=60)["test"]
+        d = dict(cluster=int(k), size=int(st["sizes"][k]), width=float(1 / (z["cent"][k] ** 2).sum()), volt_var=var, skew=sk,
+                 excess_kurtosis=ku, rate_var=rv, rate_var_over_gauss=rv / (dual.k(1.0, tau) * var) if var > 0 else None,
+                 frac_active=float((rr > 0).double().mean()), tuning=tun, pref_digit=int(np.argmax(tun)), probe_1feature=p1)
+        if hl is not None:
+            d["cos_to_linear_part"] = float(np.dot(z["cent"][k], hl) / np.linalg.norm(z["cent"][k]) / np.linalg.norm(hl))
+        for nm in ("C_gauss_both", "C_chord_both", "C_gauss_expected_cov", "C_ls_both"):
+            if nm in z.files:
+                C = torch.as_tensor(z[nm], dtype=torch.float64)
+                d[f"energy_ratio_{nm[2:]}"] = float(h @ C @ h) / var if var > 0 else None
+        out.append(rnd(d))
+    return out
+
+
 def parts_final(r, z, st, out: Path):
     side = r["cfg"]["res"]
     sizes = st["sizes"]; idx = [k for k in np.argsort(-sizes) if not st["dead_cl"][k]][:20]
@@ -318,17 +360,30 @@ def main(run_dirs):
         if pf:
             info["parts_final"] = pf
         loaded[name] = (r, z, st, info)
-    # featured: q = 0.97, seed 0, 14x14 -- linear, rect tau 0/0.5/1, gauss rect tau 0, gauss linear
+    # part statistics (paired with the linear-rule part of the same gamma, seed and q)
+    lin_parts = {}
+    for name, (r, z, st, info) in loaded.items():
+        cfg = r["cfg"]
+        if cfg["rule"] == "linear" and cfg["input"] == "pixels" and cfg["res"] == 14:
+            k = int(np.argmax(st["sizes"] * ~st["dead_cl"])) if (~st["dead_cl"]).any() else None
+            if k is not None:
+                lin_parts[(cfg["gamma"], cfg["seed"], round(cfg["extra"].get("q", -1), 4))] = z["cent"][k]
+    for name, (r, z, st, info) in loaded.items():
+        if r["cfg"]["res"] == 14:
+            info["parts"] = part_stats(r, z, st, D14, lin_parts)
+    # featured runs (14x14, gamma = 1, seed 0)
     feat = {}
     for name, (r, z, st, info) in loaded.items():
         cfg = r["cfg"]; ex = cfg.get("extra", {})
-        if cfg["res"] == 14 and ex.get("q") == FEATURED_Q and cfg["seed"] == 0 and ex.get("exp") in ("A_lin", "A_rect", "B_rect", "B_lin"):
-            key = ex["exp"] + ("" if cfg["rule"] == "linear" else f"_t{cfg['tau']:g}")
-            if key in ("B_rect_t1",):
-                continue
-            print("featured", key, name, flush=True)
-            info.update(featured(r, z, D14, st, SITE / "runs" / name))
-            feat[key] = name
+        if cfg["res"] != 14 or cfg["seed"] != 0 or cfg["gamma"] != 1.0:
+            continue
+        key = ex.get("exp", "") + ("" if cfg["rule"] == "linear" else f"_t{cfg['tau']:g}")
+        q = round(ex.get("q", 0), 3)
+        for fk, (want_key, want_q) in FEATURED.items():
+            if key == want_key and q == want_q:
+                print("featured", fk, name, flush=True)
+                info.update(featured(r, z, D14, st, SITE / "runs" / name))
+                feat[fk] = name
     index["featured"] = feat
     index["runs"] = [loaded[n][3] for n in sorted(loaded)]
     # dual activation curves + empirical scatter
@@ -350,7 +405,7 @@ def main(run_dirs):
                            ("rectified tau=0, Gaussian inversion of weights", "A_rect_t0", "C_gauss_both"),
                            ("rectified tau=0, chord (nonlinearity ignored)", "A_rect_t0", "C_chord_both"),
                            ("rectified tau=0, Gaussian inversion of exact rate cov", "A_rect_t0", "C_gauss_expected_cov"),
-                           ("Gaussian-surrogate-trained rectified tau=0, Gaussian inversion", "B_rect_t0", "C_gauss_both")):
+                           ("Gaussian-surrogate-trained rectified tau=0 (own-quantile theta), Gaussian inversion", "Bown_rect_t0", "C_gauss_both")):
         if key in feat:
             rows[lab_ + f" [{feat[key]}]"] = (loaded[feat[key]][1], var)
     index["samples"] = samples_sheet(rows, D14, SITE)

@@ -17,10 +17,14 @@ import sys
 import time
 from pathlib import Path
 
+import os
+
 import modal
 
-APP_NAME = "crw-hebbian-mnist"
-GPU = "L4"
+BACKEND = os.environ.get("MNIST_BACKEND", "gpu")      # "gpu" (L4) or "cpu" (twin app, 8 cores)
+APP_NAME = "crw-hebbian-mnist" + ("" if BACKEND == "gpu" else "-cpu")
+VOL_NAME = "crw-hebbian-mnist-results"
+GPU = "L4" if BACKEND == "gpu" else None
 TIMEOUT_S = 60 * 60
 MAX_CONCURRENCY = 20
 HERE = Path(__file__).resolve().parent
@@ -28,28 +32,28 @@ ROOT = HERE.parent.parent
 IMAGE = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install("torch==2.5.1", "numpy", "scipy")
-    .env({"MNIST_DIR": "/data/mnist", "PYTHONPATH": "/opt/proj"})
+    .env({"MNIST_DIR": "/data/mnist", "PYTHONPATH": "/opt/proj", "MNIST_BACKEND": BACKEND})
     .add_local_dir("/var/tmp/hebb-mnist/data/mnist", "/data/mnist", copy=True)
     .add_local_dir(str(ROOT / "hebb"), "/opt/proj/hebb", copy=True,
                    ignore=["**/__pycache__", "**/modal_runs", "**/configs"])
 )
 
 app = modal.App(APP_NAME)
-vol = modal.Volume.from_name(f"{APP_NAME}-results", create_if_missing=True)
+vol = modal.Volume.from_name(VOL_NAME, create_if_missing=True)
 RESULTS = "/results"
 
 
 @app.function(image=IMAGE, gpu=GPU, timeout=TIMEOUT_S, volumes={RESULTS: vol},
-              max_containers=MAX_CONCURRENCY)
+              max_containers=MAX_CONCURRENCY, **({} if GPU else dict(cpu=8.0, memory=8192)))
 def run_unit(run_id: str, unit: dict, cfg: dict) -> str:
     import torch
-    assert torch.cuda.is_available(), "unit must run on CUDA"
+    assert torch.cuda.is_available() or BACKEND == "cpu", "unit must run on CUDA"
     sys.path.insert(0, "/opt/proj")
     from hebb.mnist.model import Cfg
     from hebb.mnist.train import train
     c = Cfg(**{**cfg.get("defaults", {}), **unit})
     out = Path(RESULTS) / run_id
-    res = train(c, out, device="cuda", verbose=True)
+    res = train(c, out, device="cuda" if BACKEND == "gpu" else "cpu", verbose=True)
     vol.commit()
     return res["name"]
 

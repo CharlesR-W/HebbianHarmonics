@@ -1,1 +1,164 @@
-<p class="placeholder"><span class="ph-tag">Placeholder</span> This chapter has not been written yet. Planned: Knobs $\theta$, $w_{\min}$, $\gamma$, $p$ and $N$, on a synthetic covariance and on the lifted MNIST covariance: cluster count, sizes against mode energy, within-cluster diversity, effective rank of $H$, readout quality, and precomputed phase diagrams.</p>
+<p class="lede">The note ends on a conjecture: the homeostatic parameters are two knobs, one setting how many eigenmodes of the input get resolved and one setting how many random functions each mode gets, and together they act as a spectral filter, a number of neurons per mode as a function of the mode's energy. This chapter is where I tried to find out what the knobs actually do. Short version: the resolution knob is real, the allocation filter is real, but neither is where the conjecture put it, and the expressivity knob does not exist in this model.</p>
+
+<h2 id="knobs">The knobs, translated</h2>
+
+<p>The regulariser is the note's, a function of the weight only: $\rho(w) = w_0 - \lambda w$, with weights clipped at a floor $w_{\min}$ (the "term that stops weights getting too small"). Three numbers, but after dividing by the Hebbian rate $\eta$ only two combinations matter, and two knobs that are <em>not</em> part of $\rho$ turned out to matter at least as much.</p>
+
+<div class="table-scroll"><table class="data" id="tab-knobs">
+<thead><tr><th>knob</th><th>what enters the dynamics</th><th>what it does</th><th>homeostatic (in $\rho$)?</th><th>evidence</th></tr></thead>
+<tbody>
+<tr><td>$w_0$, the constant drift</td><td>$\theta = -w_0/\eta$, in covariance units</td><td><b>Resolution.</b> Decides which parts <em>exist</em>: one part below the smallest covariance, the single inputs above the largest covariance, nothing above the largest variance.</td><td>yes</td><td>findings F1, F2; figure (b) of the explorer</td></tr>
+<tr><td>$\lambda$, the decay</td><td>$\lambda/\eta$: the weight scale and the clock</td><td><b>Nothing else.</b> Measure weights in units of $\eta/\lambda$ and time in units of $1/\lambda$ and the dynamics are identical.</td><td>yes, but inert</td><td><a class="explore-link" href="#homeo/fig-sim?tour=lambda-inert">try it</a></td></tr>
+<tr><td>$w_{\min}$, the floor</td><td>$\omega = N w_{\min}\lambda/\eta$</td><td><b>A leak</b> towards the population mean, of relative strength about $\omega/c$; too large and the network dies at high $\theta$.</td><td>yes</td><td>F5; <a href="#homeo/fig-wmin">figure</a></td></tr>
+<tr><td>$\gamma = \eta_{II}/\eta$, the lateral gain</td><td>collective threshold $\theta_c = \gamma\kappa_0$; packing $\gamma\,h_k^\top\Sigma_g h_l \le \theta$</td><td><b>How many</b> of the existing parts a densely wired population actually resolves, coarse to fine.</td><td>no: a learning-rate ratio</td><td>F3; <a href="#homeo/fig-phase">figure</a></td></tr>
+<tr><td>spread of the initial input weights</td><td>sd of $\log W_{IB}(0)$</td><td><b>The allocation exponent</b> $\beta$ in $n_k \propto \lambda_k^\beta$, together with $\theta$.</td><td>no: an initial condition</td><td>F6; <a href="#homeo/fig-spread">figure</a></td></tr>
+<tr><td>$N$</td><td>only through $\omega$</td><td>Nothing else: boundaries in the phase diagram are $N$-independent within a grid step.</td><td>–</td><td>F3, F5</td></tr>
+</tbody></table></div>
+
+<p>Two definitions are used throughout. $\kappa_0 = \mathbf 1^\top\Sigma_g\mathbf 1/B^2$ is the covariance of two neurons at the start, when embeddings are random and exchangeable. A <em>part</em> is where a cluster can sit (chapters 1 and 2): a non-negative vector $h$ on a support $S$ of inputs with $(\Sigma_g - \theta\mathbf 1\mathbf 1^\top)_{SS}\,h_S = c\,h_S$, $c &gt; 0$ the top eigenvalue there, and $(\Sigma_g h)_b &lt; \theta$ off the support. Its <b>energy</b> is $\lambda_{\max}(\Sigma_{SS})$, the top eigenvalue of the input covariance on its support; $c$ is what is left above threshold.</p>
+
+<aside class="callout key"><p class="callout-title">Key point</p><p>Of the three homeostatic parameters, one is a resolution knob ($\theta$), one does nothing ($\lambda$), and one is a leak that can only hurt ($\omega$). What decides how many of the possible clusters you get, and how many neurons each receives, is outside $\rho$: the lateral gain and the initial weights.</p></aside>
+
+<h2 id="explorer">Explore it</h2>
+
+<p>The explorer runs the real engine on a covariance you choose. Six are synthetic, chosen to make one thing easy to see; one is real: the covariance of MNIST digits average-pooled to $7\times7$ pixels, so its parts are little images. The main view (a) is the question of the note's last paragraph: for each cluster, how many neurons it got against how much energy its part has, on log–log axes, with the fitted exponent $\beta$ and, dashed, proportional allocation $\beta = 1$. Panel (b) is the $\theta$ axis: how many stable parts exist at each $\theta$ (computed exactly, see below), with the collective region shaded, against how many are populated now.</p>
+
+<figure class="fig full card" id="fig-sim">
+  <div class="fig-title">Neurons per part as the knobs change <span class="synthetic-tag">synthetic Σ or real MNIST</span></div>
+  <div class="fig-sub">Pick a tour, or a covariance and the knobs. $\theta$, $\gamma$, $\omega$ and the noise act on the running network; the covariance, initial weights, $N$, $\lambda$, seed and $s_{II}$ restart it. The scrubber replays the run.</div>
+  <div data-slot="sim"></div>
+  <figcaption><b>Plotted:</b> (a) one dot per cluster: number of member neurons $n$ against the energy of its part, either $\lambda_{\max}(\Sigma_{SS})$ (top eigenvalue of $\Sigma_g$ on the part's support $S$; the support of the nearest stable part when the cluster's mean embedding has cosine &gt; 0.98 with one, else the inputs carrying &gt; 5% of its largest entry) or $c = (h^\top\Sigma_g h - \theta)/\lVert h\rVert^2$, both log axes; colour = size rank (largest blue); small grey dots: clusters with fewer than $\max(2, 2\%\,N)$ members; hollow circles on the "0" row: stable parts at this $\theta$ with no cluster on them; solid line: least-squares fit of $\log n$ on $\log x$ over the coloured clusters (slope $\beta$, shown when there are at least 3); dashed: slope 1 through the same centre. (b) number of stable parts of $\Sigma_g$ against $\theta$ (step line, from <code>data/homeo/covs.json</code>); shaded blue: $\theta &lt; \gamma\kappa_0$; grey: $\theta$ above the largest variance; dashed verticals: $\kappa_0$, $\gamma\kappa_0$; dotted: smallest and largest covariance and variance; orange: current $\theta$; blue dot: clusters $K$ now. (c) neurons per cluster against time, stacked by size; grey: small clusters, and (paler) dead neurons. (d) each cluster's mean embedding $h$ as bars over the inputs (or, for MNIST, as a $7\times7$ image, each tile on its own range, white = 0), then stable parts with no neurons. Clusters: single linkage on the embeddings in $L_1$, cut at the largest gap; dead neuron: every input synapse at most $1.5\,w_{\min}$. <b>Values:</b> $\lambda$ and $\eta = 1$ unless changed, Euler $dt = 0.05/\lambda$, initial input weights with mean $0.2\,\eta/\lambda$, lateral weights at the floor ($s_{II} = 0$); the mode, $N$ and $w_{\min} = \omega/N$ are printed above (a).</figcaption>
+</figure>
+
+<h3 id="explorer-try">What to try</h3>
+<ul>
+  <li><b>The filter.</b> On the graded variances (six independent inputs, variances 0.5 to 3), with no lateral plasticity, <a class="explore-link" href="#homeo/fig-sim?tour=filter-steep">low $\theta$</a> sends almost everything to the loudest input, and <a class="explore-link" href="#homeo/fig-sim?tour=filter-soft">$\theta = 0.4$</a> spreads neurons over five inputs with a much gentler slope. The slope in (a) is the "spectral filter" of the note, and $\theta$ sets it.</li>
+  <li><b>The collective regime.</b> Turn lateral plasticity back on at $\theta = 0.2$, below $\gamma\kappa_0$: <a class="explore-link" href="#homeo/fig-sim?tour=filter-collective">winner takes all</a>. The step line in (b) says six parts exist; one is populated.</li>
+  <li><b>The floor.</b> On <code>block12</code> at $\theta = 0.65$, <a class="explore-link" href="#homeo/fig-sim?tour=floor-leak">$\omega = 0.15$ kills every neuron</a>; <a class="explore-link" href="#homeo/fig-sim?tour=floor-leak-ok">$\omega = 0.0015$</a> gives twelve clusters, one per input.</li>
+  <li><b>The initial spread.</b> Same inputs and $\theta$, only the spread of the starting weights changes: <a class="explore-link" href="#homeo/fig-sim?tour=spread-narrow">narrow</a> versus <a class="explore-link" href="#homeo/fig-sim?tour=spread-wide">wide</a>.</li>
+  <li><b>Real data.</b> <a class="explore-link" href="#homeo/fig-sim?tour=mnist">MNIST pixels</a>: the parts are blobs of neighbouring pixels, not the signed, global eigen-images shown under the explorer.</li>
+</ul>
+
+<details class="more"><summary>How the parts that "exist" are counted</summary>
+<p>A part is stable (findings F1) exactly when $c$ is strictly the top eigenvalue of $(\Sigma_g - \theta\mathbf 1\mathbf 1^\top)_{SS}$, its eigenvector is positive, and $(\Sigma_g h)_b &lt; \theta$ strictly for every input off the support; equivalently, $h$ is a strict local maximum of $h^\top(\Sigma_g - \theta\mathbf 1\mathbf 1^\top)h/h^\top h$ over non-negative $h$. For the synthetic covariances ($B \le 16$) <code>hebb/homeo_cov.py</code> enumerates all $2^B - 1$ supports at every $\theta$ on a grid of step 0.01 (the slider's step), and stores the stable ones in <code>data/homeo/covs.json</code>. At a few grid values $\theta$ equals a correlation level exactly and some parts are marginal; there the tooltip gives the counts just below and just above. For MNIST ($B = 49$, too many supports) the same script runs the lone-neuron flow $\dot w = \Sigma_g h - \theta - w$ from 849 starts (every pixel, 500 random, 300 random $3\times3$ patches) and checks every distinct end point with the exact test; that count is a lower bound in principle (parts with tiny basins could be missed), but it is exact for every part it lists.</p>
+<p>None of this involves $N$, $\gamma$, $\omega$ or the initial weights: which parts exist depends on $\Sigma_g$ and $\theta$ only. How many of them get neurons depends on everything else.</p>
+</details>
+
+<h2 id="count">How many clusters?</h2>
+
+<p>The conjecture says the number of clusters is set by the homeostatic parameters. Partly. $\theta$ fixes the menu: the number of stable parts is a function of $\Sigma_g$ and $\theta$ alone, the step line in (b). Which of them get populated is decided early in the run by the lateral synapses. At the start, two neurons covary by about $\kappa_0$, so their lateral drift is $\eta(\gamma\kappa_0 - \theta)$. If $\theta &lt; \gamma\kappa_0$, lateral synapses grow before anyone has chosen, the population becomes one equipotential blob, and a blob behaves like one neuron: it lands in one part, the loudest. Otherwise neurons choose independently. The same test then repeats inside each coarse part: neurons heading for a coarse part with self-covariance $E_{\text{parent}}$ stay bound while $\gamma E_{\text{parent}} &gt; \theta$ and pick one finer part together. On <code>block12</code> at $\theta = 0.2$, three parts exist; with $\gamma = 0$ all three are populated, with $\gamma = 1$ only one (4 of 4 seeds, F2).</p>
+
+<figure class="fig wide card" id="fig-phase">
+  <div class="fig-title">Clusters $K$ over $\theta$ and $\gamma$, with the predicted boundaries <span class="synthetic-tag">synthetic Σ</span></div>
+  <div class="fig-sub">Hover a cell for each seed; click it to load that state into the explorer above.</div>
+  <div data-slot="phase"></div>
+  <figcaption><b>Plotted:</b> each cell is one $(\theta, \gamma)$ grid point; colour and number: median over seeds of the number of populated clusters $K$ (clusters with $\ge \max(2, 2\%\,N)$ live members, average linkage in $L_1$ cut at 0.1); cell edges halfway between grid values; † every neuron dead; * seeds disagree. Dashed line: $\theta = \gamma\kappa_0$; solid ink lines: $\theta = \gamma E_{\text{parent}}$ for the coarse parts ($E$ = mean of $\Sigma_g$ over the part's inputs); grey dotted verticals: the correlation levels at which finer parts start to exist. <b>Values:</b> <code>data/sweeps/phase.json</code> (<code>hebb/sweeps/s2_phase.py</code>): mean-field, $N = 120$, $w_{\min} = 10^{-4}$, $\lambda = \eta = 1$, $dt = 0.05$, run to residual $&lt; 10^{-5}$; seeds 0–2 (<code>block12</code>: 3 blocks of 4, within 0.5, across 0.1) and 0–1 (<code>hier8</code>: correlations 0.6 / 0.3 / 0.05). The explorer starts from its own random weights (seed 1), so next to a boundary it can land on the other side.</figcaption>
+</figure>
+
+<p>The predicted boundaries hold within 0.03–0.08 everywhere they were tested (F3), and do not move with $N$ (60 to 240) or with the scale of the initial input weights. Two more rules come with the gating. <b>Packing:</b> two clusters can coexist only if $\gamma h_k^\top\Sigma_g h_l \le \theta + \lambda w_{\min}/\eta$, so with lateral plasticity on, overlapping parts exclude each other (chapter 2's ring: 16 overlapping bumps with $\gamma = 0$, 3–4 non-overlapping ones with $\gamma = 1$). And <b>initial lateral weights</b> act like a larger $\gamma$: a dense random start $W_{II} \sim U(0, 1)$ moves the $1 \to 3$ boundary on <code>block12</code> from 0.27 to 0.53 without changing $\kappa_0$ (F3).</p>
+
+<p>The floor is the third knob, and it is a hazard rather than a dial. Every synapse at the floor still conducts $w_{\min}$, so each neuron is tied to the whole population by about $N w_{\min}$ of conductance. When $\theta$ exceeds every initial drive, input synapses decay, and a neuron survives only if its embedding concentrates before its input conductance falls to about $\omega$.</p>
+
+<figure class="fig wide card" id="fig-wmin">
+  <div class="fig-title">The floor: clusters over $\theta$ and $w_{\min}$, and where the network dies <span class="synthetic-tag">synthetic Σ</span></div>
+  <div class="fig-sub">Click a cell to load it into the explorer. Right: the extinction threshold for three network sizes against $\omega = N w_{\min}$.</div>
+  <div class="fig-row" style="align-items:start">
+    <div style="flex:1.4;min-width:280px"><div data-slot="wmin"></div></div>
+    <div style="flex:1;min-width:240px"><div data-slot="omega"></div></div>
+  </div>
+  <figcaption><b>Plotted:</b> left, as the previous figure with $w_{\min}$ (log) on the vertical axis, $\gamma = 1$, $N = 120$; † every neuron dead in the median seed; grey dotted: $\theta = 0.1$ and $0.5$, where the block parts and the single inputs start to exist. Right: the smallest $\theta$ on the grid at which every neuron is dead in every seed, against $\omega = N w_{\min}$ (log), for $N = 60, 120, 240$; a missing point means no extinction up to $\theta = 0.8$. <b>Values:</b> <code>data/sweeps/phase.json</code>, <code>block12</code>, seeds 0–2 ($N = 240$: 0–1), mean-field, $\lambda = \eta = 1$.</figcaption>
+</figure>
+
+<p>Across network sizes the threshold roughly collapses on $\omega$ (F5): about 0.8 at $\omega = 0.024$ falling to about 0.35 at $\omega = 1.2$. The collapse is empirical; I have no derivation. Below extinction, a large floor can also hold the network in states that are not stable parts at all ($w_{\min} = 10^{-3}$, $\theta = 0.45$ sits on single inputs that are unstable as $w_{\min} \to 0$). Keep $\omega \le 0.02$; the explorer's default is $0.02$.</p>
+
+<aside class="callout key"><p class="callout-title">Key point</p><p>$\theta$ sets which clusters <em>can</em> exist. Whether a densely wired population resolves them is a race decided in the first moments, by $\gamma\kappa_0$ against $\theta$, and the floor can only lose neurons.</p></aside>
+
+<h2 id="allocation">Neurons per part: a filter, but in the transient</h2>
+
+<p>Now the note's last question: how does the number of neurons on a mode depend on its energy? To measure it cleanly I planted four blocks of three inputs (correlation 0.6 within a block, 0 across) and changed one block's variance or size while holding everything else fixed, eight paired seeds per point (SPEC §7.5).</p>
+
+<figure class="fig wide card" id="fig-alloc">
+  <div class="fig-title">Planted family: share of neurons on block 0 as its energy changes <span class="synthetic-tag">synthetic Σ</span></div>
+  <div class="fig-sub">Switch between varying block 0's variance, its size, or its size at fixed top eigenvalue; and between no lateral plasticity and $\gamma = 1$.</div>
+  <div data-slot="alloc"></div>
+  <figcaption><b>Plotted:</b> fraction of the $N$ neurons in clusters assigned to block 0 (at least 80% of the cluster's mean embedding on block 0's inputs), mean over seeds (dots, line) with ± 1 sd (band), against block 0's variance $v_0$ or size $m_0$ (log axis); one colour per $\theta$; legend: the mean over seeds of the per-seed slope $\beta$ of $\log(\text{frac}_0/\text{frac}_{\text{other}})$ on $\log x$. Dashed grey: the share block 0 would get if neurons were proportional to energy, $\lambda_0/(\lambda_0 + 3 \cdot 2.2)$, with $\lambda_0$ block 0's top eigenvalue. <b>Values:</b> <code>data/sweeps/alloc.json</code> (<code>hebb/sweeps/s3_alloc.py</code>): mean-field, $N = 150$, $w_{\min} = 10^{-4}$, initial $W_{IB} \sim \mathrm{Exp}(0.2)$, lateral weights at the floor, seeds 0–7, residual $\le 10^{-6}$.</figcaption>
+</figure>
+
+<p>There is a filter, and it is steep. At $\theta = 0.25$, without lateral plasticity, the exponent is $\beta \approx$ <span data-v="beta-025">2.9</span>; at $\theta = 0.05$ it is <span data-v="beta-005">6.8</span>. With $\gamma = 1$ above the collective threshold it is the same (<span data-v="beta-025g1">3.1</span>); below it (here $\theta = 0.05$ and $0.15$) every neuron goes to the loudest block. What controls the share is the block's top eigenvalue $\lambda_k = \lambda_{\max}(\Sigma_{S_kS_k})$: making a block bigger at fixed top eigenvalue (the "size, same λ" family) barely changes anything, with slightly fewer neurons for bigger blocks. A part whose supra-threshold eigenvalue $c$ is not positive does not exist and gets nothing: a hard cutoff.</p>
+
+<div class="fig-row">
+<figure class="fig card" id="fig-beta">
+  <div class="fig-title">The exponent against $\theta$ <span class="synthetic-tag">synthetic Σ</span></div>
+  <div data-slot="beta"></div>
+  <figcaption><b>Plotted:</b> fitted $\beta$ in $n \propto \lambda^\beta$ against $\theta$. Lines: $\Sigma_g = \mathrm{diag}(0.5, 0.75, 1, 1.5, 2, 3)$, $\gamma = 0$, 3000 independent neurons ($N \to \infty$), initial weights exponential (mean 0.2; dashed: mean 0.02 and 2, on top of each other), uniform, or log-normal. Points: the planted blocks above ($\gamma = 0$, mean over 8 seeds), and the non-negative power-law covariance of chapter 2 ($\gamma = 0$, fit over its clusters). Dashed grey: $\beta = 1$. <b>Values:</b> <code>alloc_limit.json</code>, <code>alloc.json</code>; $w_{\min} = 10^{-6}$ (limit) or $10^{-4}$.</figcaption>
+</figure>
+<figure class="fig card" id="fig-spread">
+  <div class="fig-title">The exponent against the initial spread <span class="synthetic-tag">synthetic Σ</span></div>
+  <div data-slot="spread"></div>
+  <figcaption><b>Plotted:</b> fitted $\beta$ against the standard deviation $s$ of $\log W_{IB}(0)$ for log-normal starts $W = 0.2\,e^{sZ - s^2/2}$ (mean 0.2), one line per $\theta$; black dots: the default exponential start, whose log-sd is $\pi/\sqrt6 \approx 1.28$. Missing points: every neuron went to the loudest input. <b>Values:</b> <code>alloc_ingredients.json</code>, <code>alloc_limit.json</code>: $\Sigma_g = \mathrm{diag}(0.5, \dots, 3)$, $\gamma = 0$, 2000 (3000) independent neurons, 4000 steps of $dt = 0.05$.</figcaption>
+</figure>
+</div>
+
+<p>So the filter is $n_k \propto \lambda_k^{\beta}$ with $\beta$ falling from about <span data-v="beta-lo">7.6</span> at $\theta = 0.02$ to about <span data-v="beta-hi">1.5</span> at $\theta = 0.45$, just below the smallest variance. Why: a neuron's log-weights move as $\tfrac{d}{dt}\log h_b \supset v_b/s - \theta/w_b$. The first term rewards energy, so as $\theta \to 0$ the loudest input wins everything; the second rewards whichever input the neuron happened to start strongest on, so at higher $\theta$ the initial weights decide more. That is why the <em>spread</em> of the initial weights is the other dial: at $\theta = 0.2$, a narrow log-normal start (log-sd 0.5) gives $\beta \approx$ <span data-v="spread-05">5.9</span>, a very wide one (log-sd 3) gives <span data-v="spread-3">0.76</span>. Proportional allocation, $\beta = 1$, is reachable, but only by tuning the initial spread against $\theta$.</p>
+
+<p>And here is the catch. <b>Any allocation is a fixed point</b> (F4). The fixed-point equation of a cluster, $(\Sigma_g - \theta\mathbf 1\mathbf 1^\top)_{SS}h_S = c\,h_S$, does not contain the number of neurons in it. The only place $n_k$ enters is the floor: $h_k(|w_{kB}| + w_{\min}(N - n_k)) = w_{kB} + w_{\min}\sum_{l\ne k} n_l h_l$, a pull of relative size $\omega/c$ towards the population mean. This holds for any weight-only regulariser ($w = f(\mathrm{Cov})$ gives $h \propto f(\Sigma_g h)$) and for per-neuron synaptic scaling (which $h$ ignores). Converged runs that differ only in the seed sit at different allocations with residuals below $10^{-5}$ (three corners in chapter 1: 34/30/26, 34/32/24, 35/28/27). The equilibrium does not choose $n(\text{energy})$; the race at the start does, and once run, the network stays where it landed. Try changing the seed in the explorer.</p>
+
+<figure class="fig wide card" id="fig-ingredients">
+  <div class="fig-title">What changes the allocation, and what does not <span class="synthetic-tag">synthetic Σ</span></div>
+  <div data-slot="ingredients"></div>
+  <figcaption><b>Plotted:</b> one row per ingredient: the setting, the fitted exponent $\beta$ ($n \propto v^\beta$ over the six inputs of $\mathrm{diag}(0.5, \dots, 3)$; WTA: every neuron on the loudest input; dead: every neuron dead), and the effect. <b>Values:</b> <code>alloc_limit.json</code>, <code>alloc_ingredients.json</code> ($\gamma = 0$, 2000–3000 independent neurons, the last recorded step), and <code>alloc.json</code> for the $\gamma$ row (planted blocks, $N = 150$). Every number is read from those files.</figcaption>
+</figure>
+
+<aside class="callout key"><p class="callout-title">Key point</p><p>There is a spectral filter: parts with $c \le 0$ get nothing, and the rest get $n_k \propto \lambda_k^\beta$ with $\beta$ between about 7 and 1.5. But it is set by $\theta$ <em>and the initial weights</em> during the transient, it becomes winner-take-all whenever lateral plasticity binds the population first, and the equilibrium does not care: every allocation is a fixed point.</p></aside>
+
+<h2 id="history">History matters</h2>
+
+<p>If the allocation and the cluster count are decided by the transient, slow changes of $\theta$ should leave a memory. They do, but part of it is an artefact. Sweeping $\theta$ up and back down with the state carried over, the clean (deterministic) network keeps merged clusters merged and symmetric states symmetric, even unstable ones: a near-zero residual does not certify stability (F8). Adding a little <em>private</em> noise to every synapse breaks that symmetry.</p>
+
+<figure class="fig wide card" id="fig-hyst">
+  <div class="fig-title">$\theta$ swept up and down, with and without private jitter <span class="synthetic-tag">synthetic Σ</span></div>
+  <div data-slot="hyst"></div>
+  <figcaption><b>Plotted:</b> number of populated clusters $K$ (clusters with $\ge 2\%$ of $N$, average linkage cut 0.1) at each $\theta$ along the loop $0.02 \to 0.80 \to 0.02$ in steps of 0.02, state carried over; blue: rising, orange dashed: falling; grey: number of stable parts at that $\theta$ (<code>data/homeo/covs.json</code>). <b>Values:</b> <code>hysteresis.json</code> (deterministic, up to 3000 steps or residual $&lt; 10^{-4}$ per $\theta$, seed 0; seed 1 is identical) and <code>hysteresis_jitter.json</code> ($w \leftarrow w\,e^{\sigma\xi}$ every step, 1500 steps per $\theta$, seed 0); $N = 120$, $w_{\min} = 10^{-4}$, mean-field.</figcaption>
+</figure>
+
+<p>With $\gamma = 0$ and jitter, $K$ tracks the number of stable parts both ways within a grid step or two, so most of the deterministic $\gamma = 0$ loop was the symmetry artefact. With $\gamma = 1$ the memory is real: $K = 1$ along the entire loop for both covariances and both noise levels, while a fresh start at the same $\theta$ gives 3 or 12 clusters. A laterally bound population never splits as $\theta$ rises.</p>
+
+<h2 id="reservoir">Many representatives per mode?</h2>
+
+<p>The note's second knob was expressivity: many neurons per mode, each "a random feature applied to that eigenmode", a reservoir. In the dense model this fails exactly. Members of a cluster are clones: the dynamics is symmetric under permuting neurons and shared minibatch noise treats them alike, so neurons that become identical stay identical forever. The only way I found to get several distinct functions per mode is to change the wiring, shown here as a <em>labelled comparison</em> (the explorer and every other figure stay dense).</p>
+
+<figure class="fig wide card" id="fig-div">
+  <div class="fig-title">Comparison only: sparse random wiring <span class="synthetic-tag">synthetic Σ</span></div>
+  <div data-slot="div"></div>
+  <figcaption><b>Plotted:</b> (a) participation ratio of the voltage covariance of all neurons with at least 80% of their embedding on one planted block, averaged over blocks (1 = identical copies; at most 4, the block size), against the connection probability $p$ of a fixed random mask on all synapses; mean over 3 seeds, band: min–max. (b) number of clusters. Blue: $\gamma = 1$; orange: $\gamma = 0$ (same masks). <b>Values:</b> <code>data/sweeps/diversity.json</code> (<code>hebb/sweeps/s4_diversity.py</code>): <code>block12</code>, $\theta = 0.3$, $N = 120$, $w_{\min} = 10^{-4}$, mean-field.</figcaption>
+</figure>
+
+<p>With lateral plasticity on, sparse wiring makes members differ slightly in $h$ but their voltages stay correlated above 0.997. Without it, the population fragments into many small clusters of exact clones, and the number of distinct functions per block rises with sparsity, up to a participation ratio of <span data-v="pr-max">2.07</span> at $p = 0.15$: a few functions per mode, bounded by the mode's own dimension, not a reservoir of random features.</p>
+
+<h2 id="verdict">The verdict on the conjecture</h2>
+
+<div class="table-scroll"><table class="data" id="tab-verdict">
+<thead><tr><th>conjecture (the note)</th><th>what I found</th><th>verdict</th><th>evidence</th></tr></thead>
+<tbody>
+<tr><td>The number of clusters is set by the homeostatic parameters.</td><td>$\theta$ sets which parts exist. How many are populated is set by $\gamma$ against $\kappa_0$ (coarse to fine), the initial weights and the history; the floor only removes neurons.</td><td><span class="verdict amended">partly</span></td><td><a href="#homeo/fig-phase">phase diagram</a>, <a href="#homeo/fig-wmin">floor</a></td></tr>
+<tr><td>Clusters are eigenmodes of $g$.</td><td>Clusters sit on non-negative, localised parts: Perron vectors of $\Sigma_g - \theta\mathbf 1\mathbf 1^\top$ on a support. They are eigenvectors only when the top eigenvector happens to be non-negative.</td><td><span class="verdict amended">amended</span></td><td>chapters 1–2; MNIST parts in the <a href="#homeo/fig-sim?tour=mnist">explorer</a></td></tr>
+<tr><td>Each mode has many representatives, a reservoir of random functions.</td><td>Dense wiring: members are exact clones (member-to-centroid $L_1 &lt; 10^{-5}$ for every $w_{\min}$, $\gamma$, $N$ and batch size tried). Sparse wiring without lateral plasticity: a few distinct functions per mode, at most its dimension.</td><td><span class="verdict fails">fails</span></td><td><a href="#homeo/fig-div">diversity</a></td></tr>
+<tr><td>Two knobs: resolution and expressivity.</td><td>Resolution: yes, $\theta$. Expressivity: no weight-only regulariser gives it; $\lambda$ is inert and $\omega$ a leak.</td><td><span class="verdict amended">half</span></td><td><a href="#homeo/tab-knobs">knobs</a></td></tr>
+<tr><td>Neurons per mode ∝ energy: the parameters encode a spectral filter $n(\text{energy})$.</td><td>A filter exists: $n_k \propto \lambda_k^{\beta(\theta)}$ with a hard cutoff at $c \le 0$, $\beta$ from about 7 down to 1.5, set by $\theta$ and the initial spread; winner-take-all in the collective regime. It belongs to the transient: any allocation is a fixed point.</td><td><span class="verdict amended">amended</span></td><td><a href="#homeo/fig-alloc">planted family</a>, <a href="#homeo/fig-beta">β(θ)</a>, <a href="#homeo/fig-ingredients">ingredients</a></td></tr>
+</tbody></table></div>
+
+<h3 id="what-would-change">What would have to change to get the conjectured behaviour</h3>
+<p>Speculation, one line each; none of it is tested here.</p>
+<ul>
+  <li><b>Private noise.</b> Independent noise per synapse breaks the clone symmetry and lets neurons hop between parts; if hopping rates depend on $c_k$, the equilibrium could select an allocation (the transient's choice would then be forgotten).</li>
+  <li><b>Sparse wiring.</b> Each neuron reading a random subset of inputs gives distinct functions per mode, up to the mode's dimension (the comparison above); a reservoir needs a richer lift than the mode itself.</li>
+  <li><b>Per-neuron thresholds or a nonlinearity.</b> A threshold that adapts to the neuron's own activity (or to how many neurons share its part) is the obvious way to put $n_k$ into the fixed-point equation, which weight-only $\rho$ cannot do.</li>
+</ul>
+
+<figure class="fig wide card" id="fig-pnoise">
+  <div class="fig-title">Allocation under private noise (follow-up sweep)</div>
+  <div data-slot="pnoise"></div>
+  <figcaption><b>Plotted:</b> if present, the fitted allocation exponent $\beta$ against $\theta$, one line per noise level $\sigma$ of private multiplicative jitter. <b>Values:</b> <code>data/sweeps/alloc_private_noise.json</code>.</figcaption>
+</figure>
+
+<aside class="callout caveat"><p class="callout-title">Caveat</p><p>Everything here is the dense, symmetric, linear (resistor) model with a weight-only regulariser and Euler steps; the allocation results are about where a transient from a random start ends, so they depend on the initial distribution by construction. The MNIST covariance is one linear lift of one dataset at $7\times7$; its border pixels never change, so their inputs carry no variance and get no neurons. The explorer's random start (mulberry32) is not the sweeps' (numpy), so for a given seed it lands in a different, statistically equivalent place; tour notes quote what the explorer gives.</p></aside>

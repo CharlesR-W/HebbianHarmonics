@@ -28,7 +28,7 @@ const KEYS = Object.keys(DEF);
 const EQ_TOL = 1e-6;      // the equilibrium readout is claimed only when r/η < EQ_TOL
 const DONE_TOL = 1e-8;    // the run pauses ("converged") when r/η < DONE_TOL
 const SEQ_TOL = 1e-6;
-const EARLY_STEPS = 400, EARLY_EVERY = 10;   // readout at least every 10 steps over the first 400 (mean-field)     // a tour step counts as converged at r/η < SEQ_TOL (docs/findings.md uses 1e-5)
+const EARLY_STEPS = 400, EARLY_EVERY = 20;   // readout at least every 20 steps over the first 400 (mean-field)     // a tour step counts as converged at r/η < SEQ_TOL (docs/findings.md uses 1e-5)
 const SPEC_TOL = 1e-5;    // a direction of Sym(B) counts as pinned down when its AᵀA eigenvalue > SPEC_TOL × largest
 const MAX_EDGES = 4000;
 const sub = n => String(n).replace(/\d/g, d => "₀₁₂₃₄₅₆₇₈₉"[d]);
@@ -40,29 +40,29 @@ const sci = x => (Number.isFinite(x) ? (x === 0 ? "0" : ui.fmt(x, 2)) : "n/a");
 // each step run to convergence; `cont` keeps the weights between steps (otherwise each restarts from the same init).
 const TOURS = [
   { id: "sweep", group: "c", label: "θ sweep on blocks", params: { fam: "blocks", b: 24, nb: 4, win: 0.5, btw: 0.1, theta: 0.05, p: 1, n: 150, seed: 1 }, seq: [0.05, 0.15, 0.3, 0.6],
-    note: "Four planted blocks of six inputs (within 0.5, between 0.1; $\\gamma\\kappa_0 = 0.22$). Each step restarts from the same initial weights at a larger $\\theta$: $0.05 \\to$ one cluster on all 24 inputs; $0.15 \\to$ one cluster on ONE block (four block parts exist, the bound population takes one); $0.3 \\to$ one cluster per block; $0.6 \\to$ one cluster per input." },
+    note: "Four planted blocks of six inputs (within 0.5, between 0.1; $\\gamma\\kappa_0 = 0.22$). Each step restarts from the same initial weights at a larger $\\theta$: $0.05 \\to$ one cluster on all 24 inputs; $0.15 \\to$ one cluster on ONE block (four block parts exist, the bound population takes one); $0.3 \\to$ one cluster per block; $0.6 \\to$ single inputs (23 of 24 get a cluster; two neurons die)." },
   { id: "bound", group: "c", label: "Bound: four parts, one cluster", params: { fam: "blocks", b: 24, nb: 4, win: 0.5, btw: 0.1, theta: 0.15, p: 1, n: 150, seed: 1 },
     note: "The same blocks at $\\theta = 0.15$: above the between-block correlation, so each block is a stable part, but below $\\gamma\\kappa_0 = 0.22$, so every lateral synapse grows at first. The population moves as one blob and all 150 neurons land on a single block. <a href=\"#many?tour=unbound\">With $\\gamma = 0$</a> (no lateral plasticity) neurons choose independently: four clusters." },
   { id: "unbound", hidden: true, group: "c", label: "γ = 0 at θ = 0.15", params: { fam: "blocks", b: 24, nb: 4, win: 0.5, btw: 0.1, theta: 0.15, gamma: 0, p: 1, n: 150, seed: 1 },
     note: "The bound tour without lateral plasticity ($\\gamma = 0$): nothing gates the population, and every block gets a cluster." },
   { id: "signed", group: "c", label: "Signed Σ at θ = 0", params: { fam: "pow", b: 16, alpha: 1.5, cs: 2, theta: 0, p: 1, n: 150, seed: 1 },
-    note: "Power-law spectrum with signed correlations and no pruning drift ($\\theta = 0$): synapses die only where covariance is negative. Two clusters on disjoint sets of inputs. <a href=\"#many?tour=signedpos\">Same spectrum, all correlations ≥ 0</a>: one cluster." },
+    note: "Power-law spectrum with signed correlations and no pruning drift ($\\theta = 0$): synapses die only where covariance is negative. Two clusters on disjoint sets of inputs (pruning by anticorrelation). <a href=\"#many?tour=signedpos\">Same spectrum, all correlations ≥ 0</a>: one cluster." },
   { id: "signedpos", hidden: true, group: "c", label: "Σ ≥ 0 at θ = 0", params: { fam: "powpos", b: 16, alpha: 1.5, cs: 2, theta: 0, p: 1, n: 150, seed: 1 },
     note: "The signed tour's $\\Sigma_g$ plus the smallest $c\\,\\mathbf{1}\\mathbf{1}^\\top$ that makes every correlation ≥ 0, still at $\\theta = 0$: nothing is pruned and the whole population forms one cluster." },
   { id: "takeall", group: "c", label: "One block takes everything", params: { fam: "blocks", b: 24, nb: 8, win: 0.6, btw: 0.05, theta: 0.1, p: 1, n: 150, seed: 1 },
-    note: "Eight blocks of three (within 0.6, between 0.05), $\\theta = 0.1$: above the between-block correlation but below $\\kappa_0 \\approx 0.135$, the mean covariance of the initial neurons. The population moves as one and settles on a single block; seven blocks get no neurons." },
+    note: "Eight blocks of three (within 0.6, between 0.05), $\\theta = 0.1$: above the between-block correlation, so all eight blocks are stable parts, but below $\\gamma\\kappa_0 = 0.135$. The population moves as one and settles on a single block; seven blocks get no neurons." },
   { id: "tree", group: "c", label: "θ walks down a tree", params: { fam: "hier", b: 16, theta: 0.05, p: 1, n: 150, seed: 1 }, seq: [0.05, 0.15, 0.25, 0.35, 0.45, 0.65],
-    note: "Hierarchical $\\Sigma_g$: 2 groups of 2 groups of 4 inputs, correlations 0.05 / 0.3 / 0.6 across / between sibling groups / within. Restarting at each $\\theta$: one cluster on all 16 → one on a top-level half → the two halves → one leaf group per half → all four leaf groups → one cluster per input (plus a few neurons that lose every synapse and float to the centroid)." },
+    note: "Hierarchical $\\Sigma_g$: 2 halves of 2 groups of 4 inputs, correlation 0.05 across halves, 0.3 between groups in a half, 0.6 within a group ($\\kappa_0 = 0.275$). Restarting at each $\\theta$: all 16 inputs (0.05) → one half (0.15 and 0.25: the halves are parts, but below $\\gamma\\kappa_0$ the population is bound) → one group in each half (0.35) → all four groups (0.45) → single inputs (0.65: 14 of 16 inputs get a cluster, two neurons die)." },
   { id: "hyst", group: "c", label: "…without restarting", params: { fam: "hier", b: 16, theta: 0.05, p: 1, n: 150, seed: 1 }, seq: [0.05, 0.15, 0.25, 0.35, 0.45, 0.65], cont: true,
-    note: "The same $\\theta$ steps, but keeping the weights between steps. The population never splits: one cluster narrows down a single branch of the tree, all 16 inputs → 8 → 4 → 2 → a single input." },
+    note: "The same $\\theta$ steps, keeping the weights between steps. The bound population never splits: one cluster narrows from 16 inputs to one half (0.15), to one group of four (0.45). At 0.65 that group is no longer a stable part, yet the cluster sits on it with $r/\\eta < 10^{-6}$ (the residual dips) before leaving, still whole, for a single input." },
   { id: "ringfree", group: "c", label: "Ring: place fields", params: { fam: "ring", b: 16, ell: 1.5, theta: 0.4, gamma: 0, p: 1, n: 160, seed: 1 },
     note: "Ring covariance ($\\ell = 1.5$): its eigenvectors are Fourier modes, signed and spread round the ring. Without lateral plasticity ($\\gamma = 0$), $\\theta = 0.4$: 16 clusters, one bump of width 4 centred on each input. Localised place fields, not Fourier modes." },
   { id: "ringpack", group: "c", label: "Ring: packing", params: { fam: "ring", b: 16, ell: 1.5, theta: 0.4, gamma: 1, p: 1, n: 160, seed: 1 },
     note: "The same with $\\gamma = 1$: two clusters may coexist only if their cross-covariance $h_k^\\top\\Sigma_g h_l \\le \\theta/\\gamma$. Adjacent bumps overlap too much (0.645 > 0.4), so only a few non-overlapping bumps survive." },
   { id: "dense", group: "r", label: "Readout: dense wiring", params: { fam: "blocks", b: 24, nb: 4, win: 0.5, btw: 0.1, theta: 0.3, p: 1, n: 150, seed: 1 },
-    note: "Default blocks, every potential synapse present ($p = 1$). Four clusters, every member a copy of its cluster's part: the weights pin down 24 of the 300 directions of $\\Sigma_g$." },
+    note: "Default blocks, every potential synapse present ($p = 1$), at ×1. Four clusters, every member a copy of its cluster's part: the weights pin down 24 of the 300 directions of $\\Sigma_g$. Watch the readout peak (about 0.99) around $t = 7.5$, then settle at the parts-sum value (0.914)." },
   { id: "sparse", group: "r", label: "Readout: sparse wiring", params: { fam: "blocks", b: 24, nb: 4, win: 0.5, btw: 0.1, theta: 0.3, p: 0.5, n: 150, seed: 1 },
-    note: "The same, but each potential synapse exists with probability $p = 0.5$ (a fixed random mask). Still four clusters, but members differ, and the weights pin down far more of $\\Sigma_g$: contrast-subspace cosine ≈ 0.99." },
+    note: "The same, but each potential synapse exists with probability $p = 0.5$ (a fixed random mask). Still four clusters, but members differ, and the weights pin down 84 directions: contrast-subspace cosine 0.987." },
 ];
 
 // ------------------------------------------------------------------------------------------------ input statistics
@@ -175,7 +175,7 @@ export async function init(panel, ctx) {
     prevWii = new Float64Array(N * N); prevWib = new Float64Array(N * B); prevValid = false;
     edgeBuf = { pairs: new Uint32Array(2 * (N * (N - 1) / 2 + N * B)), w: new Float32Array(N * (N - 1) / 2 + N * B) };
     H = E.harmonic(s).slice();
-    pca = null; neuronColour = new Int8Array(N).fill(-1); mbResid = NaN; lastDispatchStep = 0;
+    pca = null; neuronColour = new Int8Array(N).fill(-1); mbResid = NaN; lastDispatchStep = 0; cl = null; effRank = NaN;
     runId++; version++;
     postRun();
   }
@@ -212,7 +212,7 @@ export async function init(panel, ctx) {
     marks.push({ value: 0, label: "0" });
     const seen = [], mk = marks.filter(m => { if (m.value < -0.1 || m.value > 1 || seen.some(x => Math.abs(x - m.value) < 0.11)) return false; seen.push(m.value); return true; });
     const sl = ui.slider({ label: "pruning threshold $\\theta$", min: -0.1, max: 1, step: 0.01, value: st.theta, fmt: x => f2(x), marks: mk,
-      help: `Synapses survive where $\\mathrm{Cov}(u_i,u_j) > \\theta$. κ₀ = 1ᵀΣ1/B² = ${f2(SG.kappa0)} is the mean covariance of two initial neurons; below γκ₀ = ${f2(st.gamma * SG.kappa0)} the population starts bound together.`,
+      help: `Synapses survive where $\\mathrm{Cov}(u_i,u_j) > \\theta$ (lateral: $> \\theta/\\gamma$).`,
       onInput: x => { if (st.cont) { st.theta = x; PP.theta = x; moved(); postRun(); } },
       onChange: x => change({ theta: x }) });
     thetaHost.replaceChildren(sl.el, thetaInfo); thetaS = sl;
@@ -296,6 +296,9 @@ export async function init(panel, ctx) {
   const kC = lineChart(bxTs1.b, { series: [{ name: "clusters K", y: [], x: [] }, { name: "effective rank of H", y: [], x: [] }], height: 210, ylog: true, xlabel: "time t", ylabel: "count (log)", xname: "t" });
   const rC = lineChart(bxTs2.b, { series: [{ name: "r/η", y: [], x: [] }], ylog: true, height: 210, xlabel: "time t", ylabel: "r/η", legend: false, yfmt: y => (Math.round(Math.log10(y)) % 3 === 0 ? sci(y) : ""), refs: [{ y: EQ_TOL, label: "equilibrium tolerance" }] });
 
+  // Performance: give the two live figures their own compositing layers and containment, so the many small DOM
+  // changes per frame (time, tiles, cursors) repaint only the figure instead of the whole (very tall) page layer.
+  for (const f of [ctx.slot("sim").closest("figure"), ctx.slot("readout").closest("figure")]) if (f) { f.style.willChange = "transform"; f.style.contain = "layout paint"; }
   const simCap = ui.h("figcaption");
   ctx.slot("sim").after(simCap);
 
@@ -305,8 +308,7 @@ export async function init(panel, ctx) {
   // ------------------------------------------------------------------------------------------------ analysis
   function analyse() {
     pca = E.pca3(H, N, B, pca);
-    const big = N * N * B > 1.6e6;
-    if (!cl || !big || frameNo % 3 === 0) {
+    if (!cl || frameNo % 3 === 0) {
       cl = E.clustersAuto(H, N, B);
       cstats = E.clusterStats(H, N, B, cl.labels, cl.K, Sigma);
       assignColours();
@@ -416,7 +418,7 @@ export async function init(panel, ctx) {
     for (let a = 0; a < N; a++) for (let c = 0; c < N; c++) S2[a * N + c] = M[perm[a] * N + perm[c]];
     const groups = []; let o = 0;
     byC.forEach((list, q) => { const k = ordC[q], c = clusterColour[k]; if (list.length) groups.push({ start: o, end: o + list.length, color: catColor(c), label: c >= 0 ? `c${c + 1}` : "" }); o += list.length; });
-    simHM.update({ values: S2, rows: N, cols: N, range: [-SG.maxVar, SG.maxVar], groups: cl.robust ? { rows: groups } : null,
+    simHM.update({ values: S2, rows: N, cols: N, range: [-SG.maxVar, SG.maxVar], groups: cl.robust && groups.length <= 40 ? { rows: groups } : null,
       tooltip: (i, j, val) => ui.tipRows(`neurons ${perm[i]} and ${perm[j]}`, [{ name: "h_iᵀΣh_j", value: f3(val) },
         { name: "clusters", value: cl.robust ? `${clusterLabel(cl.labels[perm[i]])}, ${clusterLabel(cl.labels[perm[j]])}` : "not clustered yet" }]) });
   }
@@ -448,14 +450,14 @@ export async function init(panel, ctx) {
       const inS = new Uint8Array(B); S.forEach(b => { inS[b] = 1; });
       for (let b = 0; b < B; b++) if (!inS[b]) { let v0 = 0; for (let c = 0; c < B; c++) v0 += Sigma[b * B + c] * part[c] / hs; off = Math.max(off, v0 - st.theta); }
       const gapOK = m < 2 || ea.values[0] - ea.values[1] > 1e-6;
-      const stab = !Number.isFinite(off) ? "stable (no inputs off S)" : off < 0 && gapOK ? `stable: max off S of $(Ah)_b$ = ${ui.fmt(off, 2)}` : `not a stable part: max off S of $(Ah)_b$ = ${ui.fmt(off, 2)}`;
+      const stab = !Number.isFinite(off) ? "stable (no inputs off S)" : off < 0 && gapOK ? `stable: max off <i>S</i> of (<i>Ah</i>)<sub>b</sub> = ${ui.fmt(off, 2)}` : `not a stable part: max off <i>S</i> of (<i>Ah</i>)<sub>b</sub> = ${ui.fmt(off, 2)}`;
       // c_k = (hᵀΣh − θ)/|h|² = a member's summed input conductance (λ = η = 1)
       let q = 0; for (let a = 0; a < B; a++) for (let c = 0; c < B; c++) q += part[a] * Sigma[a * B + c] * part[c];
       const ck = (q - st.theta) / (nrm * nrm);
       const showP = partsLine === "perron";
       return { title: `c${clusterColour[k] + 1} · ${cstats.sizes[k]} neurons · ${m} inputs · c = ${ui.fmt(ck, 3)}`, color: catColor(clusterColour[k]), values: SG.order.map(b => part[b] / nrm),
         overlay: showP ? SG.order.map(b => pv[b]) : ev,
-        sub: `cos with eigenvector v${sub(bi + 1)} of Σ_g: <b>${f2(Math.abs(bc))}</b> · with Perron vector of $A_{SS}$: <b>${f3(num)}</b> (of $\\Sigma_{SS}$: ${f3(numS)}) · ${stab}`,
+        sub: `cos with eigenvector v${sub(bi + 1)} of Σ_g: <b>${f2(Math.abs(bc))}</b> · with Perron vector of <i>A</i><sub>SS</sub>: <b>${f3(num)}</b> (of Σ<sub>SS</sub>: ${f3(numS)}) · ${stab}`,
         h: part };
     });
     let lo = -0.25; panels.forEach(pn => pn.overlay.forEach(x => { if (x < lo) lo = x; }));
@@ -468,9 +470,9 @@ export async function init(panel, ctx) {
       for (let x = 0; x < B; x++) { if (!ha[x]) continue; for (let y = 0; y < B; y++) q += ha[x] * Sigma[x * B + y] * hc[y]; }
       if (q > xc) { xc = q; pair = [a, c]; }
     }
-    const pack = pair && st.gamma > 0 ? `Largest cross-covariance between two shown clusters: $h_k^\\top\\Sigma_g h_l = ${f3(xc)}$ (${panels[pair[0]].title.split(" ·")[0]}, ${panels[pair[1]].title.split(" ·")[0]}); packing bound $\\theta/\\gamma = ${f2(st.theta / st.gamma)}$. ` : "";
-    partsNote.innerHTML = pack + (hidden > 0 ? `${hidden} further cluster${hidden > 1 ? "s" : ""} (grey in the views) not shown.` : "");
-    ui.renderMath(partsNote); ui.renderMath(bxParts.b);
+    const pack = pair && st.gamma > 0 ? `Largest cross-covariance between two shown clusters: <i>h</i><sub>k</sub><sup>⊤</sup>Σ<sub>g</sub><i>h</i><sub>l</sub> = ${f3(xc)} (${panels[pair[0]].title.split(" ·")[0]}, ${panels[pair[1]].title.split(" ·")[0]}); packing bound θ/γ = ${f2(st.theta / st.gamma)}. ` : "";
+    partsNote.innerHTML = !panels.length ? "No cluster with more than one member yet." : pack + (hidden > 0 ? `${hidden} further cluster${hidden > 1 ? "s" : ""} (grey in the views) not shown.` : "");
+
   }
   function drawSeries() {
     const refs = seqMarks.map(m => ({ x: m.t, label: m.label }));
@@ -491,7 +493,7 @@ export async function init(panel, ctx) {
   function drawAll(heavy, force) {
     lastEdges = buildEdges();
     drawView(lastEdges, force);
-    drawStats();
+    if (heavy || force || tick % 4 === 1) drawStats();   // DOM text changes repaint; four times less often is plenty
     if (heavy) { drawSim(); drawParts(); drawSeries(); }
   }
   function drawSigma() {
@@ -533,7 +535,7 @@ export async function init(panel, ctx) {
   function clearSeries() { for (const k in series) series[k] = []; seqMarks.length = 0; RO.clearTime(); }
   let effRank = NaN;
   function pushSeries() {
-    effRank = E.effectiveRank(H, N, B);
+    if (frameNo % 4 === 0 || !Number.isFinite(effRank)) effRank = E.effectiveRank(H, N, B);
     series.t.push(simTime()); series.K.push(cl.robust ? cl.K : NaN); series.er.push(effRank); series.r.push(residual());
     if (series.t.length > 1500) for (const k of ["t", "K", "er", "r"]) series[k] = series[k].filter((_, i) => i % 2 === 0);
   }
@@ -555,6 +557,7 @@ export async function init(panel, ctx) {
     // early in a run the readout is sampled at least every EARLY_EVERY steps (its mid-training peak is brief), so the
     // sim waits for the worker there rather than outrunning it
     const early = worker && st.mode === "mf" && !seq && s.t < EARLY_STEPS;
+    if (!seq && early !== wasEarly) { tp.setStatus(early ? `readout sampled every ${EARLY_EVERY} steps until step ${EARLY_STEPS}` : ""); wasEarly = early; }
     if (!(early && busy && s.t - lastDispatchStep >= EARLY_EVERY))
       do { stepOnce(); n++; } while (n < speed && performance.now() - t0 < 14 && !(early && s.t - lastDispatchStep >= EARLY_EVERY));
     if (st.mode === "mb" && (frameNo % 8 === 0 || due)) { mbResid = E.stationarity(s, Sigma, PP).r; }
@@ -566,10 +569,10 @@ export async function init(panel, ctx) {
     pushSeries();
     drawAll(false);
     if (phase === 0) drawSim(); else if (phase === 3) drawParts(); else if (phase === 6) drawSeries();
-    if (phase !== 6) { const t = simTime(); kC.setCursor(t); rC.setCursor(t); }
+    if (phase === 2) { const t = simTime(); kC.setCursor(t); rC.setCursor(t); }
     if (due) dispatch();
     fpsN++; const now = performance.now(); if (now - fpsT > 1000) { fps = fpsN * 1000 / (now - fpsT); fpsN = 0; fpsT = now; stats.set("fps", fps); }
-    const r = residual(), conv = st.mode === "mf" && r < DONE_TOL, seqConv = st.mode === "mf" && r < SEQ_TOL;
+    const r = residual(), conv = st.mode === "mf" && r < DONE_TOL, seqConv = st.mode === "mf" && r < (seq && seqIdx === seq.list.length - 1 ? DONE_TOL : SEQ_TOL);   // the last step runs to full convergence
     const f = frameOf();
     if (seq) {
       if (seqConv || seqSteps > 6000) {
@@ -588,7 +591,7 @@ export async function init(panel, ctx) {
   }
   function setThetaSeq(th) {
     st.theta = th; thetaS.set(th);
-    seqMarks.push({ t: simTime(), label: `θ = ${f2(th)}` });
+    seqMarks.push({ t: simTime(), label: f2(th) });
     if (seq.cont) { PP.theta = th; postRun(); }
     else { tOff = simTime(); newState(); analyse(); }
     drawCaption();
@@ -616,7 +619,7 @@ export async function init(panel, ctx) {
     busy = false; specVersion = -1; RO.pending(); stats.set("dir", null, "computing…");
   }
   // readout cadence: about twice a second, slower when a readout is expensive (it shares the CPU with the sim)
-  let lastDispatchStep = 0;
+  let lastDispatchStep = 0, wasEarly = false;
   function jobDue() {
     if (!worker || busy) return false;
     if (st.mode === "mf" && !seq && s.t < EARLY_STEPS && s.t - lastDispatchStep >= EARLY_EVERY) return true;
@@ -626,10 +629,11 @@ export async function init(panel, ctx) {
     const havePrev = prevValid;
     if (!worker || busy || !s) return;
     const paused = !tp.playing || residual() < DONE_TOL;   // converged counts as paused (tour steps hold while converged)
-    const wantSpec = specVersion !== version && (B <= 24 ? (paused || jobCount % 4 === 0) : paused);
+    const early = st.mode === "mf" && !seq && s.t < EARLY_STEPS && !paused;
+    const wantSpec = !early && specVersion !== version && (B <= 24 ? (paused || jobCount % 4 === 0) : paused);
     busy = true; lastDispatch = performance.now(); lastDispatchStep = s.t; jobCount++;
     const job = { kind: "job", seq: ++jobSeq, runId, version, t: simTime(), P: { ...PP }, Wii: s.Wii.slice(), Wib: s.Wib.slice(),
-      wantSpec, specFamilies: B <= 24 ? ["both", "ii", "ib"] : ["both"], resid: residual() };
+      wantSpec, specFamilies: B <= 24 ? ["both", "ii", "ib"] : ["both"], resid: residual(), light: early };
     if (havePrev) { job.prevWii = prevWii.slice(); job.prevWib = prevWib.slice(); }
     if (wantSpec) RO.specPending(B);
     worker.postMessage(job, [job.Wii.buffer, job.Wib.buffer, ...(havePrev ? [job.prevWii.buffer, job.prevWib.buffer] : [])]);
@@ -646,7 +650,7 @@ export async function init(panel, ctx) {
     if (res.spec) specVersion = lastResVersion;
     RO.show(res, lastJob ? lastJob.resid : NaN);
     const both = res.rows.both;
-    series.rt.push(res.t); series.cosC.push(both.contrast.cos); series.cosK.push(both.known.cos); series.cosT.push(res.rows.transient ? res.rows.transient.known.cos : NaN); series.cosP.push(res.rows.parts.contrast.cos);
+    series.rt.push(res.t); series.cosC.push(both.contrast.cos); series.cosK.push(both.known.cos); series.cosT.push(res.rows.transient && res.rows.transient !== "skip" ? res.rows.transient.known.cos : NaN); series.cosP.push(res.rows.parts.contrast.cos);
     stats.set("cos", both.contrast.cos, `masked least squares · BW ${f3(both.contrast.bw)}`);
     stats.set("ps", res.rows.parts.contrast.cos, `${res.partsK} part${res.partsK === 1 ? "" : "s"}${res.robust ? "" : " (not clustered yet)"} · BW ${f3(res.rows.parts.contrast.bw)}`);
     if (res.spec && res.spec.both) stats.set("dir", res.spec.both.rank, `of ${res.spec.p} in Sym(B), at t = ${ui.fmt(res.spec.t, 3)}`);
@@ -729,7 +733,8 @@ export async function init(panel, ctx) {
     const timeC = lineChart(timeBox, { series: [{ name: "θ unknown: cosine", y: [], x: [] }], height: 230, yrange: [-0.2, 1.02], xlabel: "time t", ylabel: "Frobenius cosine", xname: "t" });
     const timeNote = ui.h("div", { class: "u-help" }); timeBox.after(timeNote);
     let last = null, lastSpec = null;
-    const cell = x => `<td class="num">${x == null || !Number.isFinite(x) ? "n/a" : f3(x)}</td>`;
+    const cell = x => `<td class="num" data-v>${x == null || !Number.isFinite(x) ? "n/a" : f3(x)}</td>`;
+    let tableSig = "", statusSig = "";
     const ROWS = [
       ["both", "<b>Masked least squares</b> on the weights (I–I and I–B synapses)"],
       ["ii", "… I–I synapses only"],
@@ -746,8 +751,19 @@ export async function init(panel, ctx) {
       const r = res.rows;
       const head = `<thead><tr><th rowspan="2">estimate $\\hat C$</th><th colspan="2" class="num">parameters known</th><th colspan="2" class="num">unknown scale</th><th colspan="3" class="num">$\\theta$ unknown: contrast subspace</th></tr>
         <tr><th class="num">cosine</th><th class="num">BW</th><th class="num">rel. error</th><th class="num">BW</th><th class="num">cosine</th><th class="num">BW</th><th class="num">overlap, $k = ${SG.k}$</th></tr></thead>`;
+      // rebuild (and typeset) only when the row layout changes; otherwise update the numbers in place
+      const sig = SG.k + "|" + ROWS.map(([key]) => (r[key] === "skip" ? "s" : r[key] ? "x" : "n")).join("");
+      if (sig === tableSig) {
+        const cells = tableHost.querySelectorAll("td[data-v]");
+        let q = 0;
+        for (const [key] of ROWS) { const x = r[key]; if (!x || x === "skip") continue;
+          for (const v0 of [x.known.cos, x.known.bw, x.scale.rel, x.scale.bw, x.contrast.cos, x.contrast.bw, x.contrast.sub]) cells[q++].textContent = v0 == null || !Number.isFinite(v0) ? "n/a" : f3(v0); }
+        return;
+      }
+      tableSig = sig;
       const body = ROWS.map(([key, label]) => {
         const x = r[key];
+        if (x === "skip") return `<tr><td>${label}</td><td colspan="7" class="num" style="color: var(--mute)">skipped while the readout samples the first ${EARLY_STEPS} steps densely</td></tr>`;
         if (!x) return `<tr><td>${label}</td><td colspan="7" class="num">${key === "transient" ? "needs two consecutive steps (play or step the run)" : "n/a (γ = 0)"}</td></tr>`;
         return `<tr${key === "both" ? ' style="background: var(--wash)"' : ""}><td>${label}</td>${cell(x.known.cos)}${cell(x.known.bw)}${cell(x.scale.rel)}${cell(x.scale.bw)}${cell(x.contrast.cos)}${cell(x.contrast.bw)}${cell(x.contrast.sub)}</tr>`;
       }).join("");
@@ -759,10 +775,13 @@ export async function init(panel, ctx) {
       if (!last) return;
       const res = last, resid = lastResid;
       const ok = resid < EQ_TOL;
+      const sig = `${ok}|${setSeg.get()}|${st.mode}`;
+      if (sig === statusSig) { status.querySelector("[data-t]").textContent = ui.fmt(res.t, 3); status.querySelector("[data-r]").textContent = sci(resid); return; }
+      statusSig = sig;
       status.className = ok ? "callout key" : "callout caveat";
       status.innerHTML = ok
-        ? `<b>Equilibrium assumption holds</b> at t = ${ui.fmt(res.t, 3)}: $r/\\eta = ${sci(resid)} < 10^{-6}$. Every active synapse satisfies its fixed-point equation, so the readout below uses only the weights${setSeg.get() === "known" ? " and the known $\\theta$, $\\lambda/\\eta$, $\\gamma$" : ", $\\lambda/\\eta$ and $\\gamma$ (not $\\theta$)"}.`
-        : `<b>Equilibrium assumption violated</b> at t = ${ui.fmt(res.t, 3)}: $r/\\eta = ${sci(resid)} \\ge 10^{-6}$. The equilibrium readout below assumes $dw/dt = 0$ and is a control here; the derivative-aware row uses the observed $dw/dt$ and is exact away from equilibrium${st.mode === "mb" ? " (in minibatch mode, exact for the minibatch's covariance, not for $\\Sigma_g$)" : ""}.`;
+        ? `<b>Equilibrium assumption holds</b> at t = <span data-t>${ui.fmt(res.t, 3)}</span>: <i>r</i>/<i>η</i> = <span data-r>${sci(resid)}</span> &lt; 10⁻⁶. Every active synapse satisfies its fixed-point equation, so the readout below uses only the weights${setSeg.get() === "known" ? " and the known $\\theta$, $\\lambda/\\eta$, $\\gamma$" : ", $\\lambda/\\eta$ and $\\gamma$ (not $\\theta$)"}.`
+        : `<b>Equilibrium assumption violated</b> at t = <span data-t>${ui.fmt(res.t, 3)}</span>: <i>r</i>/<i>η</i> = <span data-r>${sci(resid)}</span> ≥ 10⁻⁶. The equilibrium readout below assumes $dw/dt = 0$ and is a control here; the derivative-aware row uses the observed $dw/dt$ and is exact away from equilibrium${st.mode === "mb" ? " (in minibatch mode, exact for the minibatch's covariance, not for $\\Sigma_g$)" : ""}.`;
       ui.renderMath(status);
     }
     function redraw() {
@@ -804,7 +823,7 @@ export async function init(panel, ctx) {
     }
     const api = {
       chips,
-      setSigma() { last = null; lastSpec = null; redraw(); tiles.update({ dir: null, eqs: null, cos: null, bw: null }); measC.update({ series: [{ name: "I–I + I–B", y: [1], x: [1], color: PAL.fg }] }); tableHost.innerHTML = ""; status.textContent = "Waiting for the first readout…"; },
+      setSigma() { last = null; lastSpec = null; tableSig = ""; statusSig = ""; redraw(); tiles.update({ dir: null, eqs: null, cos: null, bw: null }); measC.update({ series: [{ name: "I–I + I–B", y: [1], x: [1], color: PAL.fg }] }); tableHost.innerHTML = ""; status.textContent = "Waiting for the first readout…"; statusSig = ""; },
       pending() { /* a new run: keep the last picture until the first result arrives */ },
       specPending(b) { if (b >= 32) measNote.textContent = `Computing the measurement spectrum for B = ${b} (${b * (b + 1) / 2} directions; a few seconds)…`; },
       error(msg) { status.textContent = `Readout failed: ${msg}`; },
@@ -873,5 +892,5 @@ export async function init(panel, ctx) {
   // ------------------------------------------------------------------------------------------------ start
   drawSigma();
   tp.reset();
-  if (tour) { (tour.group === "c" ? chipsC : RO.chips).set(tour.id); }
+  if (tour) { (tour.group === "c" ? chipsC : RO.chips).set(tour.id); tp.setSpeed(tour.group === "c" ? 16 : 1); }
 }

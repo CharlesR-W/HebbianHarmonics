@@ -51,7 +51,7 @@ export function partsSum(H, Wib, Mib, N, B, P, labels, K) {
 export function readPair(H, Wii, Wib, Mii, Mib, N, B, P, opts = {}, warm = null, key = "") {
   const base = { theta: P.theta, lam: P.lam, eta: P.eta, gamma: P.gamma, wmin: P.wmin, maxIter: 300, ...opts };
   const rk = E.readoutLS(H, Wii, Wib, Mii, Mib, N, B, { ...base, thetaMode: "known", x0: warm ? warm.get(key + ":k") : undefined });
-  const mode = P.gamma === 1 ? "project" : "fit";
+  const mode = P.gamma === 1 || P.gamma === 0 ? "project" : "fit";   // γ = 0: I–B equations only, the θ11ᵀ shift is exact too
   const rp = E.readoutLS(H, Wii, Wib, Mii, Mib, N, B, { ...base, thetaMode: mode, x0: warm ? warm.get(key + ":p") : undefined });
   if (warm) { warm.set(key + ":k", rk.C); warm.set(key + ":p", rp.C); }
   return { rk, rp, mode };
@@ -69,7 +69,7 @@ export function runAndScore({ Sigma, B, N, theta, gamma, wmin, seed, k, p, iiSca
     E.advance(s, Sigma, P, n); steps += n;
     if (steps <= track) {
       const H = E.harmonicFrom(s.Wii, s.Wib, N, B);
-      const rp = E.readoutLS(H, s.Wii, s.Wib, s.Mii, s.Mib, N, B, { theta, lam: P.lam, eta: P.eta, gamma, wmin, maxIter: 200, thetaMode: gamma === 1 ? "project" : "fit", x0: warm.get("t") });
+      const rp = E.readoutLS(H, s.Wii, s.Wib, s.Mii, s.Mib, N, B, { theta, lam: P.lam, eta: P.eta, gamma, wmin, maxIter: 200, thetaMode: gamma === 1 || gamma === 0 ? "project" : "fit", x0: warm.get("t") });
       warm.set("t", rp.C);
       const c = E.compareCov(rp.C, Sigma, B, { setting: "contrast", k }).cosine;
       if (c > peak) { peak = c; peakStep = steps; }

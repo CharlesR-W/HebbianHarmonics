@@ -45,7 +45,7 @@ function initLive(ctx, data) {
   allocBox.before(xSeg.el);
   const alloc = allocPlot(allocBox, { height: 330, tooltip: true });
   const tp = ui.transport({
-    parent: L.view, watch: fig, speeds: [1, 4, 16].map(x => ({ value: x, label: `×${x}` })), speed: 4, autoplay: true, maxHistory: 300,
+    parent: L.view, watch: fig, speeds: [1, 4, 16, 64].map(x => ({ value: x, label: `×${x}` })), speed: 16, autoplay: true, maxHistory: 300,
     timeFmt: t => `t = ${ui.fmtFixed(t, 1)}`,
     onTick: speed => tick(speed),
     onSeek: f => { cur = f; show(f, true); },
@@ -321,13 +321,14 @@ function thetaMarks(c, gamma, lo, hi) {
     { value: st.var_max, label: "var↑", title: `largest variance ${f3(st.var_max)}: above it nothing exists` },
   ].filter(m => m.value >= lo && m.value <= hi);
   raw.sort((a, b) => a.value - b.value);
-  const out = [];
+  // a label only when it is clear of the previous labelled tick; coincident ticks share one label ("κ₀=γκ₀")
+  let last = null;
   for (const m of raw) {
-    const last = out[out.length - 1];
-    if (last && (m.value - last.value) / (hi - lo) < 0.075) { last.title += "; " + m.title; if (Math.abs(m.value - last.value) / (hi - lo) < 0.004) last.label += "=" + m.label; else last.label = last.label; m.label = ""; out.push(m); continue; }
-    out.push(m);
+    if (last && Math.abs(m.value - last.value) / (hi - lo) < 0.004) { last.label += "=" + m.label; last.title += "; " + m.title; m.label = ""; }
+    else if (last && (m.value - last.value) / (hi - lo) < 0.075) m.label = "";
+    else last = m;
   }
-  return out;
+  return raw;
 }
 function groupRuns(lab) {
   const out = []; let s = 0;

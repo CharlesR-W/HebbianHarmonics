@@ -66,7 +66,8 @@ class Cfg:
 
 def run_name(c: Cfg) -> str:
     r = "lin" if c.rule == "linear" else f"rect_t{c.tau:g}"
-    return f"{r}_{c.input}{c.res}_N{c.N}_th{c.theta:g}_s{c.seed}"
+    g = "" if c.gamma == 1.0 else f"_g{c.gamma:g}"
+    return f"{r}_{c.input}{c.res}_N{c.N}_th{c.theta:g}{g}_s{c.seed}"
 
 
 # ---------------------------------------------------------------- data

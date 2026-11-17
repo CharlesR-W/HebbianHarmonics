@@ -31,17 +31,18 @@ function onRun(msg) {
 }
 
 function onJob(msg) {
-  const { Wii, Wib, prevWii, prevWib, P, wantSpec, specFamilies, t } = msg;
+  const { Wii, Wib, prevWii, prevWib, P, wantSpec, specFamilies, t, light } = msg;
   const { N, B, Mii, Mib, Sigma, k } = run;
   const t0 = performance.now();
   const H = E.harmonicFrom(Wii, Wib, N, B);
   const rows = {};
   const main = readPair(H, Wii, Wib, P, {}, "both");
   rows.both = scoreAll(main.rk.C, main.rp.C, Sigma, B, k);
-  const ii = P.gamma !== 0 ? readPair(H, Wii, Wib, P, { use: "ii" }, "ii") : null;
-  rows.ii = ii ? scoreAll(ii.rk.C, ii.rp.C, Sigma, B, k) : null;
-  const ib = readPair(H, Wii, Wib, P, { use: "ib" }, "ib");
-  rows.ib = scoreAll(ib.rk.C, ib.rp.C, Sigma, B, k);
+  // light jobs (dense sampling early in a run): only the main readout, the parts-sum and the derivative-aware readout
+  const ii = !light && P.gamma !== 0 ? readPair(H, Wii, Wib, P, { use: "ii" }, "ii") : null;
+  rows.ii = ii ? scoreAll(ii.rk.C, ii.rp.C, Sigma, B, k) : light ? "skip" : null;
+  const ib = light ? null : readPair(H, Wii, Wib, P, { use: "ib" }, "ib");
+  rows.ib = ib ? scoreAll(ib.rk.C, ib.rp.C, Sigma, B, k) : "skip";
   // parts-sum sketch (findings F10): θ11ᵀ + Σ_k c_k h_k h_kᵀ/|h_k|², from the clusters of the current embeddings
   const cl = E.clustersAuto(H, N, B);
   const ps = partsSum(H, Wib, Mib, N, B, P, cl.labels, cl.K);
@@ -55,8 +56,8 @@ function onJob(msg) {
     rows.transient = scoreAll(tr.C, E.project1(tr.C, B), Sigma, B, k);
   }
   // the note's naive formula C = H⁺ R H⁺ᵀ
-  const nv = E.readoutNaive(H, Wii, Mii, N, B, P);
-  rows.naive = nv ? scoreAll(nv, E.project1(nv, B), Sigma, B, k) : null;
+  const nv = light ? null : E.readoutNaive(H, Wii, Mii, N, B, P);
+  rows.naive = nv ? scoreAll(nv, E.project1(nv, B), Sigma, B, k) : light ? "skip" : null;
   rows.untrained = run.untrained;
   Object.assign(rows, run.base);
   // spectra of Sigma and of the readouts (for the overlay chart), contrast setting = P·P
