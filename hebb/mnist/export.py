@@ -273,8 +273,8 @@ def support_metrics(z, ctx, dead_set):
                       relerr_on_support_known=float(np.linalg.norm(Cs - Ss) / np.linalg.norm(Ss)),
                       frac_C_mass_on_support_block=float((C[blk] ** 2).sum() / max((C ** 2).sum(), 1e-300)))
         parts = cent[live]
-        q_true = np.einsum("kb,bc,kc->k", parts, S, parts)
-        q_hat = np.einsum("kb,bc,kc->k", parts, C, parts)
+        q_true = ((parts @ S) * parts).sum(1)
+        q_hat = ((parts @ C) * parts).sum(1)
         res[v]["part_energy_relerr_median"] = float(np.median(np.abs(q_hat - q_true) / np.abs(q_true)))
     return rnd(res)
 
@@ -334,7 +334,7 @@ def export_run(name: str, run_dir: Path, ctx: LiftCtx, x28_te, featured: bool):
     Hs = H_sub[:, pos].astype(np.float32)                               # (S, n, B)
     S_, n, B = Hs.shape
     Sig = ctx.Sigma.astype(np.float32)
-    sims = np.einsum("snb,bc,smc->snm", Hs, Sig, Hs)
+    sims = np.matmul(Hs @ Sig, Hs.transpose(0, 2, 1))
     lo, hi = float(np.quantile(sims, 0.001)), float(sims.max())
     a = max(abs(lo), abs(hi))
     q = np.clip(np.round((sims + a) / (2 * a) * 255), 0, 255).astype(np.uint8)
