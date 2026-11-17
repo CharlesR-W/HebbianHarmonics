@@ -1,0 +1,152 @@
+{
+ "defaults": {
+  "steps": 1500,
+  "n_snap": 12,
+  "n_sub": 256,
+  "cg_iters": 200
+ },
+ "units": [
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 0.3,
+   "mode": "sgd"
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 0.3,
+   "mode": "mf"
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 0.6,
+   "mode": "sgd"
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 0.6,
+   "mode": "mf"
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 0.9,
+   "mode": "sgd"
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 0.9,
+   "mode": "mf"
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 1.2,
+   "mode": "sgd"
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 1.2,
+   "mode": "mf"
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 1.6,
+   "mode": "sgd"
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 1.6,
+   "mode": "mf"
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 2.0,
+   "mode": "sgd"
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 256,
+   "theta": 2.0,
+   "mode": "mf"
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "N": 256,
+   "theta": 0.1,
+   "mode": "sgd"
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "N": 256,
+   "theta": 0.2,
+   "mode": "sgd"
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "N": 256,
+   "theta": 0.3,
+   "mode": "sgd"
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "N": 256,
+   "theta": 0.4,
+   "mode": "sgd"
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "N": 256,
+   "theta": 0.5,
+   "mode": "sgd"
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "N": 256,
+   "theta": 0.6,
+   "mode": "sgd"
+  },
+  {
+   "lift": "rff",
+   "B": 1024,
+   "N": 2048,
+   "theta": 0.3,
+   "mode": "sgd",
+   "steps": 600
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "N": 2048,
+   "theta": 1.2,
+   "mode": "sgd",
+   "steps": 600
+  }
+ ]
+}

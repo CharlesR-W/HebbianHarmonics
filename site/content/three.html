@@ -1,0 +1,102 @@
+<p class="placeholder"><span class="ph-tag">Placeholder · style guide</span> This tab is a living style guide for chapter authors: every component of the page rendered together, with <b>fake data and fake dynamics</b> (not the model). It will be replaced by Chapter 1. The contract is <code>site/DESIGN.md</code>.</p>
+
+<p class="lede">A lede paragraph opens each chapter, slightly larger: what I wanted to know and what you will see. Three boundary neurons, a hundred interior ones, and a rule that only ever looks at covariances.</p>
+
+<h2 id="sim">The centrepiece: a live simulation</h2>
+
+<p>A live simulation sits in a <code>figure.fig.full.card</code> with the sim layout: the big view on the left with its transport under it, controls and readouts on the right, linked views underneath. Below 900&nbsp;px the right column drops under the view. The run pauses whenever the figure is off screen, which is why linked views live inside the same figure. Try the tour chips, drag the view, scrub the run.</p>
+
+<figure class="fig full card" id="fig-sim">
+  <div class="fig-title">Harmonic embeddings of interior neurons in the simplex over three boundary neurons <span class="synthetic-tag">fake dynamics</span></div>
+  <div class="fig-sub">Drag to orbit. Height above the triangle is the neuron's voltage variance $h_i^\top\Sigma_g h_i$.</div>
+  <div data-slot="sim"></div>
+  <figcaption><b>Plotted:</b> top: each circle is an interior neuron $i$ at its harmonic embedding $h_i$ (barycentric position in the triangle whose corners, squares, are the boundary neurons $g_1, g_2, g_3$), lifted by $h_i^\top\Sigma_g h_i$; its colour mixes the boundary colours in proportion to $h_i$. Lines are synapses, opacity $\propto w_{ij}/\max w$. Bottom left: $h_i^\top\Sigma_g h_j$ for neurons sorted by nearest vertex (bands: group), diverging map, fixed range $[-0.6, 0.6]$. Bottom right: mean over neurons of $\lVert h_i(t+\Delta t) - h_i(t)\rVert_1$ against time; orange line: the time shown. <b>Values:</b> $N = 150$ (default), $B = 3$, fake dynamics for this style guide only.</figcaption>
+</figure>
+
+<h2 id="prose">Prose patterns</h2>
+
+<p>Body text is Source Serif 4 at 18&nbsp;px; maths renders with KaTeX, inline like $u = Hg$ with $H = L_{II}^{-1}W_{IB}$, or displayed and numbered:</p>
+<div class="eq" id="eq-rule" data-num="1">$$\frac{dw_{ij}}{dt} = w_0 - \lambda w_{ij} + \eta_{ij}\,h_i^\top \Sigma_g h_j, \qquad w_{ij} \ge w_{\min}.$$</div>
+<p>Refer to it as <a href="#three/eq-rule">(1)</a>. A side note sits in the margin on wide screens and opens on tap on narrow ones<span class="sidenote">Side notes are for asides a careful reader wants and a quick reader can skip, such as why $w_{\min} &gt; 0$ keeps $L_{II}$ invertible.</span>; the number is added for you.</p>
+
+<aside class="callout key"><p class="callout-title">Key point</p><p>The one thing to take away from a section. At most one per section.</p></aside>
+<aside class="callout caveat"><p class="callout-title">Caveat</p><p>An honest limitation: what this does not show, or where the evidence is thin.</p></aside>
+<aside class="callout"><p>A neutral note, without a title.</p></aside>
+
+<aside class="callout found">
+  <p class="callout-title">What we found</p>
+  <ul>
+    <li><span class="verdict holds">holds</span>Hebbian plasticity reads only second moments of the clamped inputs.</li>
+    <li><span class="verdict amended">amended</span>Clusters are thresholded Perron vectors of blocks, not eigenvectors of $\Sigma_g$.</li>
+    <li><span class="verdict fails">fails</span>With $w_0 \ge 0$ there is one cluster, whatever the input.</li>
+    <li><span class="verdict open">open</span>Do neurons per cluster track mode energy?</li>
+  </ul>
+</aside>
+
+<details class="more"><summary>The maths: why rows of $H$ are probability vectors</summary>
+<p>Kirchhoff at interior node $i$: $\sum_j w_{ij}(u_j - u_i) = 0$, so $u_i$ is a weighted average of its neighbours. Hence $u = L_{II}^{-1}W_{IB}\,g$, every entry of $H$ is non-negative, and $H\mathbf 1 = \mathbf 1$.</p>
+</details>
+
+<div class="table-scroll"><table class="data">
+  <thead><tr><th>Decision</th><th>Default</th><th>Alternative</th><th class="num">Effect size</th></tr></thead>
+  <tbody>
+    <tr><td>Weights</td><td>symmetric</td><td>directed Laplacian</td><td class="num">n/a</td></tr>
+    <tr><td>Boundary-boundary synapses</td><td>none</td><td>allowed</td><td class="num">0.00</td></tr>
+    <tr><td>Covariance</td><td>mean-field, exact $\Sigma_g$</td><td>minibatch estimates</td><td class="num">0.12</td></tr>
+  </tbody>
+</table></div>
+
+<p>Deep links put a chapter in a given state: <a class="explore-link" href="#three?tour=collapse">see the collapse tour</a>. Inline key swatches: <span class="swatch" style="--sw: var(--c-cat-0)"></span>$g_1$, <span class="swatch" style="--sw: var(--c-cat-1)"></span>$g_2$, <span class="swatch" style="--sw: var(--c-cat-2)"></span>$g_3$; synthetic data is tagged <span class="synthetic-tag">synthetic Σ</span>.</p>
+
+<h2 id="charts">Charts</h2>
+
+<figure class="fig wide card">
+  <div class="fig-title">Heatmap at scale: a 1,200 × 1,200 matrix on canvas</div>
+  <div data-slot="hm-big"></div>
+  <figcaption><b>Plotted:</b> a fake 1,200 × 1,200 similarity matrix with four planted blocks (bands: blocks), sequential map. Hover a cell for its value.</figcaption>
+</figure>
+
+<div class="fig-row">
+  <figure class="fig card">
+    <div class="fig-title">Scatter, coloured by category, with boundary anchors</div>
+    <div data-slot="scatter"></div>
+    <figcaption><b>Plotted:</b> fake 2D embedding of 300 neurons, colour = cluster (fixed categorical order, grey = unassigned); squares = boundary neurons. Click a point to select it.</figcaption>
+  </figure>
+  <figure class="fig card">
+    <div class="fig-title">Bars with an overlay</div>
+    <div data-slot="bars"></div>
+    <figcaption><b>Plotted:</b> bars: a cluster's part $h$ over 16 boundary neurons; dots: the top eigenvector of $\Sigma_g$ (signed) over the same neurons. Fake.</figcaption>
+  </figure>
+</div>
+
+<figure class="fig wide card">
+  <div class="fig-title">Small multiples: one panel per cluster, bars over boundary neurons</div>
+  <div data-slot="multi"></div>
+  <figcaption><b>Plotted:</b> for each fake cluster, its part $h$ (bars, cluster colour) and the nearest eigenvector of $\Sigma_g$ (ink dots) over the same 12 boundary neurons. Shared $y$ range $[-0.6, 0.6]$.</figcaption>
+</figure>
+
+<div class="fig-row">
+  <figure class="fig card">
+    <div class="fig-title">Image grid with labelled rows, from Float32 arrays</div>
+    <div data-slot="images"></div>
+    <figcaption><b>Plotted:</b> fake 14 × 14 "embeddings as images", diverging map with one shared symmetric range; each row is one fake cluster, its colour under each tile.</figcaption>
+  </figure>
+  <figure class="fig card">
+    <div class="fig-title">Filmstrip: one matrix over snapshots</div>
+    <div data-slot="film"></div>
+    <figcaption><b>Plotted:</b> a fake $40 \times 40$ similarity matrix at 8 snapshots, fixed diverging range $[-1, 1]$; thumbnails show every snapshot at once.</figcaption>
+  </figure>
+</div>
+
+<h2 id="controls">Controls, tiles, legends, colour</h2>
+
+<figure class="fig wide card">
+  <div class="fig-title">Every control, standalone</div>
+  <div data-slot="controls"></div>
+</figure>
+
+<figure class="fig wide card">
+  <div class="fig-title">The colour grammar</div>
+  <div data-slot="colours"></div>
+  <figcaption><b>Plotted:</b> the categorical order (clusters, boundary neurons when $B \le 8$), the three colour maps with their roles, and the neuron shapes. Defined in <code>css/tokens.css</code>.</figcaption>
+</figure>
