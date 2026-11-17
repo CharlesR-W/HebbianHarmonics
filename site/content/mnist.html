@@ -97,7 +97,7 @@
 
 <h2 id="mnist-samples">Moment-based sample synthesis under explicit generative assumptions</h2>
 
-<p>Second moments do not determine $p(x)$, so every generator adds a model. The <b>mean</b> is not in the weights; I supply the training mean. Pixels: Gaussian completion $x \sim \mathcal N(\bar x, \hat C)$, clipped to $[0, 1]$. RFF: $g \sim \mathcal N(\mu_g, \hat C)$, then a pre-image $\arg\min_{x \in [0,1]^{196}} \lVert\phi(x) - g\rVert^2$ by projected Adam; exploratory, as a Gaussian $g$ is generally not the image of any digit.</p>
+<p>Second moments do not determine $p(x)$, so every generator adds a model. The <b>mean</b> is not in the weights; I supply the training mean. Pixels: Gaussian completion $x \sim \mathcal N(\bar x, \hat C_+ / s^2)$, clipped to $[0, 1]$, where $\hat C_+$ is $\hat C$ with negative eigenvalues clipped and $s$ is the feature scale of the lift ($\hat C$ lives in scaled units; dividing by $s^2$ returns to pixel units). RFF: $g \sim \mathcal N(\mu_g, \hat C)$, then a pre-image $\arg\min_{x \in [0,1]^{196}} \lVert\phi(x) - g\rVert^2$ by projected Adam; exploratory, as a Gaussian $g$ is generally not the image of any digit.</p>
 
 <figure class="fig wide card" id="fig-mnist-samples">
   <div class="fig-title">Samples from each generator, the same random draws in every row</div>
@@ -106,7 +106,7 @@
   <figcaption data-slot="samples-cap"></figcaption>
 </figure>
 
-<p>Pixel samples from the weights are the mean digit plus a few flickering blobs (21–35% of the true variance; MMD² 0.027–0.035 against 0.015 for diag $\Sigma_g$ and 0.012 for the true moments). RFF samples are blurry blends of a 0 and a 1, the two learned parts, although real digits survive the pre-image round trip. Blurry blobs are the ceiling of any second-moment generator here, as the true-moment row shows.</p>
+<p>Pixel samples from the weights are the mean digit plus a few flickering blobs (21–35% of the true variance; MMD² 0.027–0.035 against 0.015 for diag $\Sigma_g$ and 0.012 for the true moments). RFF samples are blurry blends of a 0 and a 1, the two learned parts, although real digits survive the pre-image round trip. The true-moment row is a same-generator reference, not a universal ceiling: it shows what these two Gaussian completions give with the exact covariance, not what every generator consistent with those moments could produce.</p>
 
 <h2 id="mnist-verdict">What this says about the note</h2>
 

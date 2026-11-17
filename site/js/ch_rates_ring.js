@@ -54,7 +54,7 @@ export function ringFigure(host, ctx) {
 
   const pair = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "10px 28px" } });
   const mk = title => { const t = ui.h("div", { class: "chart-title", html: title }), sub = ui.h("div", { class: "u-help", style: { margin: "-2px 0 6px" } }), b = ui.h("div"); pair.append(ui.h("div", { style: { minWidth: 0 } }, t, sub, b)); return { b, sub }; };
-  const boxL = mk("Linear rule: $\\mathrm{Cov}(u_i, u_j)$"), boxR = mk("Rectified, $\\tau = 0$: $c^2\\,\\mathrm{Cov}(r_i, r_j)$");
+  const boxL = mk("Linear rule: embeddings $H$ (neurons × inputs)"), boxR = mk("Rectified rule, $\\tau = 0$: embeddings $H$ (neurons × inputs)");
   L.view.append(pair);
   const hmOpts = side => ({ map: "seq", range: [0, HMAX], square: false, cellH: 3, size: 330, zlabel: "$h_{ib}$", xlabel: "input b (around the ring)", ylabel: "neuron (sorted)",
     tooltip: (r, b, v) => tip(side, r, b, v) });

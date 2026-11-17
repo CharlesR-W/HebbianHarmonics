@@ -127,7 +127,7 @@ export function filmFigure(host, index, ctx) {
     if (anim) { stop(); return; }
     if (k === steps.length - 1) { k = 0; snap.set(0); draw(); }
     acc = 0;
-    anim = ui.animate(host, dt => { acc += dt; if (acc < 700) return; acc = 0; if (k >= steps.length - 1) { stop(); ctx.setParams({ snap: k }); return; } k += 1; snap.set(k); draw(); });
+    anim = ui.animate(host, dt => { acc += dt; if (acc < 0.7) return; acc = 0; if (k >= steps.length - 1) { stop(); ctx.setParams({ snap: k }); return; } k += 1; snap.set(k); draw(); });
     setIcon();
   });
   setIcon();
