@@ -60,3 +60,38 @@ transitions bracket 0.1 and 0.6; active-edge errors < 1e-15 at γ = 1.4; clone s
 9. **F F10 sparse wiring on signed power-law.** Chapter `many` measured an improvement
    (0.50 → 0.71; 0.87 → 0.90) where F10 says "does not improve". Treat as
    setting-dependent; quote only what the page computes live, with its scope.
+
+## Round 2 (MNIST and rectified-output experiments; GPT-6.1 Sol)
+
+Checked and found sound: training dynamics vs SPEC (clip–solve–update–clip, γ, centred
+unbiased minibatch covariance; numpy/torch parity 1e-15); one global feature scale (θ is
+in scaled covariance units, not a Pearson correlation); readout masks, ridge CG,
+projection, scale-optimised BW with PSD clipping; baselines and the untrained control
+go through the same scorer; sample synthesis and MMD (held-out test digits, common
+draws and budgets); nonlinear inversion, Gaussian surrogate, higher-order gap; probes
+(60k/10k split, train-only standardisation, matched feature counts, fixed weight
+decay); a dozen headline numbers match the JSON.
+
+10. **"Unknown θ" / "unknown scale" are scoring conventions, not estimators.** All three
+    MNIST scores evaluate one reconstruction made with the TRUE θ and λ/η supplied.
+    Projecting afterwards does not make it independent of θ (a small example: changing
+    the supplied θ by 1 moved the projected estimate by Frobenius norm 0.73). Call them
+    "full", "scale-invariant" and "contrast-subspace" scores of the known-parameter
+    readout. Recovery without knowing θ was not demonstrated on MNIST.
+11. **"Parts contain only mutually positively correlated inputs" is false.** An I–B
+    synapse responds to (HΣ)_ib, not to Σ_ab. Exported parts contain pixel pairs with
+    negative covariance (θ = 0.3 part: a pair at −0.413). Do not explain the two RFF
+    parts as "correlated halves"; report them as observed.
+12. **The "rank-K truncation" reference** uses K = total clusters INCLUDING the dead pool
+    (headline: rank 13 for 12 parts), truncates the full Σ and then projects. Call it
+    "rank-n_clusters truncation of Σ (dead pool counted)"; it is a reference point, not
+    a ceiling on what a K-part readout could achieve (I–B equations constrain whole
+    rows of Σ).
+13. **Scope of sweep-wide MNIST claims.** Contrast cosine over all live runs is
+    0.17–0.61 (not 0.28–0.61). "Exactly two parts for every D and bandwidth" is false:
+    bandwidth ×0.5 gives one part at θ = 0.1, generic-init rff64 gives one throughout.
+    "About 12 parts at most" is for SGD on the default grid; the mean-field twin of the
+    headline run has 16 live parts.
+14. **Parts-sum vs masked least squares on MNIST** could not be reproduced by the
+    reviewer (no implementation in `hebb/mnist/`, nothing in the JSON). Do not state it
+    on the page.

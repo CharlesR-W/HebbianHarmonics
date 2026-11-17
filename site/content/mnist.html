@@ -1,1 +1,146 @@
-<p class="placeholder"><span class="ph-tag">Placeholder</span> This chapter has not been written yet. Planned: Precomputed runs on MNIST with a pixel lift and random Fourier features: training curves, $H\Sigma_g H^\top$ over training, embeddings as images, a 2D map of the embeddings, and the readout $\hat C$ against $\Sigma_g$ with baselines.</p>
+<p class="lede">You asked for MNIST with a kernel lift whose size is a knob: train the network, read the lifted covariance back out of the weights, and look at the embeddings, their similarity matrix and the graph. I lifted 14×14 digits two ways, the pixels themselves (a linear kernel, $B = 196$) and random Fourier features of a Gaussian kernel ($D = 64$, 256, 1024), and trained <span data-n="n-runs">114</span> networks across $\theta$, $N$, the floor and two initial weightings, then solved each one's weights for $\Sigma_g$ and drew samples from the result. The outcome is narrower than the note hoped: $\theta$ resolves at most about 12 tiny parts before the network dies, no "fragmented" regime is ever reached, every random-Fourier lift gives exactly two parts (a "1" detector and a "0" detector), and the weights give back $\Sigma_g$ accurately on the parts' pixels and essentially nowhere else.</p>
+
+<figure class="fig wide" id="fig-mnist-film">
+  <div class="fig-title">The headline run at a glance: $H\Sigma_g H^\top$ over training</div>
+  <div data-slot="film"><p class="mute">loading…</p></div>
+  <figcaption><b>Plotted:</b> the voltage covariance $h_i^\top\Sigma_g h_j$ of 256 displayed neurons at six training steps, rows and columns in one fixed order (final clusters by size, dead pool last; within a cluster by distance to its centroid), diverging map on one symmetric range for all frames (red +, blue −; the range is printed in the image title). The first frame is step 1, not step 0. <b>Values:</b> pixels, $N = 2048$, $\theta = 0.9$, $\omega = 0.5$, heavy-tailed init, minibatch 256, seed 0; image <code>data/mnist/filmstrip_…png</code>.</figcaption>
+</figure>
+
+<p>Read it left to right: for the first few steps every neuron sees nearly the same mixture of pixels, so the matrix is flat. By step 11 a few dozen neurons have begun to localise; by step 69 most have lost every input and joined a single grey block (the dead pool), and what survives is a diagonal of small, sharply bounded blocks: <span data-n="h-live">12</span> parts, each a set of identical neurons.</p>
+
+<h2 id="mnist-runs">The sweep: one part, a few parts, a dead pool, extinction</h2>
+
+<p>Each lift is scaled by one constant so the mean feature variance is 1, so $\theta$ is in units of a typical feature's variance; the pixel $\theta$ values sit at the 94th–99.3rd percentile of the off-diagonal entries of $\Sigma_g$, the RFF values at the 64th–95th. The dynamics are the base model exactly, with every synapse potential, $\gamma = \lambda = \eta = 1$ and the floor $w_{\min} = \omega/N$. Each run takes 3,000 minibatch steps (or uses the exact $\Sigma_g$ in mean-field mode) and is read out on its weights averaged over the last 600 steps.</p>
+
+<figure class="fig wide card" id="fig-mnist-sweep">
+  <div class="fig-title">All <span data-n="n-runs">114</span> runs against $\theta$</div>
+  <div class="fig-sub">Switch between the pixel and RFF lifts. Large rings are the <span data-n="n-feat">8</span> runs with full exports: click one to load it into the figures below.</div>
+  <div data-slot="sweep"><p class="mute">loading…</p></div>
+  <figcaption data-slot="sweep-cap"><b>Plotted:</b> for every run with this lift family, against $\theta$: the number of live clusters (clusters other than the dead pool; single-linkage components of $L_1(h_i, h_j) &lt; 0.1$), the fraction of the $N$ neurons in the dead pool (every synapse at the floor), and the contrast cosine of the masked least-squares readout ($P\hat CP$ against $P\Sigma_gP$, $P = I - \mathbf 1\mathbf 1^\top/B$; drawn only for runs with a live part). Lines join runs that differ only in $\theta$ (solid: heavy-tailed init; dashed: generic init); dots are single variants (mean-field, seed 1, another floor $\omega$ or RFF bandwidth). Accent line: the run loaded below. <b>Values:</b> <code>data/mnist/index.json</code>, final weights (averaged over the last 600 steps for minibatch runs).</figcaption>
+</figure>
+
+<p>Three things hold across the grid. At low $\theta$ there is one part on the whole stroke region: at $\theta = 0.3$ every pixel network converges onto a "0"-shaped ring, the Perron vector of the high-variance strokes. Raising $\theta$ gives two or three large parts, then something the note did not anticipate: most neurons lose all their inputs <em>before</em> they have localised, and join the <b>dead pool</b>, a floor-coupled clump sitting at the centroid. The survivors form 7–12 small parts, and one step further (about $\theta = 1.1$ for pixels) the whole network is extinct, although single pixels with variance up to 2.98 would still be stable parts. Starting near the centroid, a neuron's boundary drive $(\Sigma_g h)_b$ is about a row mean of $\Sigma_g$, at most 0.16, far below $\theta$, so its weights decay before its embedding can concentrate.</p>
+
+<aside class="callout key"><p class="callout-title">Key point</p><p>On real data $\theta$ does not walk through ever finer partitions. The cluster count peaks at about 12 just below extinction (<span data-n="max-live-all">16</span> in the mean-field twin); the "fragmented" regime is never reached. A heavy-tailed initial weighting roughly doubles the number of populated parts and moves extinction from about $\theta = 0.75$ to about 1.0, so which parts are populated is a property of the transient, not of $\theta$ alone.</p></aside>
+
+<p>Random Fourier features change none of this, except that there are always exactly two large parts: at every $D$, bandwidth and init, then the dead pool, then extinction. The feature covariance is symmetric about zero (half of all pairs are anticorrelated), and since conductances cannot be negative, a part must be a set of mutually positively correlated features.</p>
+
+<h2 id="mnist-run">One network, over training</h2>
+
+<p>The figure opens on the generic dense init ($W_{IB} \sim \mathrm{Exp}$, mean 0.1), the default you asked for, at the $\theta$ where it populates most parts; the headline run uses the heavy-tailed init at $\theta = 0.9$. All eight fully exported runs have $N = 2048$.</p>
+
+<figure class="fig full card" id="fig-mnist-run">
+  <div class="fig-title">One trained network: similarity, map and embeddings over training</div>
+  <div class="fig-sub">Pick a run, then drag the step slider or press play. Hover any panel for its numbers.</div>
+  <div data-slot="run"><p class="mute">loading…</p></div>
+  <figcaption data-slot="run-cap"></figcaption>
+</figure>
+
+<p>The map makes the dead pool unmistakable: as $\theta$ rises past about 0.6 (pixels), most of the map collapses onto one grey point, and the live parts are small, tight islands. Every cluster is a set of clones: within-cluster $L_1$ spread is about $10^{-5}$ (<span data-n="h-within">9.6×10⁻⁶</span> in the headline run), so the 2,048 neurons compute at most a dozen distinct functions. That agrees with the synthetic chapters: redundancy, not a reservoir of different random functions.</p>
+
+<details class="more" id="mnist-defs"><summary>How clusters, the dead pool and the displayed neurons are defined</summary>
+<p><b>Clusters</b> are the single-linkage components of "$L_1(h_i, h_j) &lt; 0.1$", which does not depend on any ordering. In all 114 runs the counts at tolerance 0.05, 0.1 and 0.2 are identical and equal the leader clustering (<code>hebb.core.clusters</code>). <b>Live</b> clusters exclude the dead pool; <b>major</b> clusters hold at least 1% of $N$. <b>The dead pool</b> is a real cluster: neurons whose every synapse is at the floor, floating at the floor-weighted centroid of everything, with energy far below $\theta$. It is flagged and drawn grey, never counted as a learned part. <b>Displayed neurons</b>: 256 per run in one fixed order, stratified so every cluster has at least $\min(\text{size}, 4)$ members and the rest are proportional to size, so counts in the sample are not cluster sizes; the figures always quote <code>clusters[].size</code>. <b>Stationarity residual</b>: the mean-field drift $|dw/dt|$ at the snapshot weights, projected onto the floor constraint. Minibatch runs end at their noise floor (headline: mean $1.9\times10^{-4}$, but max 0.46 on a few noisy edges); the mean-field twins reach 0.</p>
+</details>
+
+<h3 id="mnist-parts">What the neurons became, as images</h3>
+
+<p>For the pixel lift a harmonic embedding $h_i$ is a probability vector over the 196 pixels, so it is literally a 14×14 image. For RFF it is a vector over features, so each part is shown through its response instead: the average stimulus weighted by how strongly the part responds, the test digits it responds to most, and its mean response per digit class. The eigen-images of $\Sigma_g$ sit alongside, because the note expected each population to be "isomorphic to an eigenmode".</p>
+
+<figure class="fig wide card" id="fig-mnist-parts">
+  <div class="fig-title">Learned parts against the eigen-images of $\Sigma_g$</div>
+  <div class="fig-sub">Follows the run picked above. Hover or tap a part (or an eigen-image) to see its top digits and digit tuning.</div>
+  <div data-slot="parts"><p class="mute">loading…</p></div>
+  <figcaption data-slot="parts-cap"></figcaption>
+</figure>
+
+<p>The pixel parts are blobs of 2–3 pixels at high-variance stroke locations. Their top digits are mostly heavy-ink 8s, 0s and 3s: they detect ink at a place, not a digit class. None resembles an eigen-image; each is a nonnegative, localised part of $\Sigma_g - \theta\mathbf 1\mathbf 1^\top$ on a small support, as on the synthetic covariances. The two RFF parts are a "1" detector and a "0" detector: the two signed ends of the leading kernel-PCA axis, split into two nonnegative parts.</p>
+
+<h3 id="mnist-graph">The graph, and who gets the neurons</h3>
+
+<div class="fig-row">
+  <figure class="fig card" id="fig-mnist-graph">
+    <div class="fig-title">The learned graph</div>
+    <div class="fig-sub">Edges are exported at six steps; for pixels, the Tutte layout puts each neuron at its harmonic position in the image.</div>
+    <div data-slot="graph"><p class="mute">loading…</p></div>
+    <figcaption data-slot="graph-cap"></figcaption>
+  </figure>
+  <figure class="fig card" id="fig-mnist-alloc">
+    <div class="fig-title">Neurons per part against the part's energy</div>
+    <div class="fig-sub">The dead pool is a cluster, but not a learned part.</div>
+    <div data-slot="alloc"><p class="mute">loading…</p></div>
+    <figcaption data-slot="alloc-cap"></figcaption>
+  </figure>
+</div>
+
+<p>The note guessed that neurons would be allocated in proportion to mode energy. Here every part's energy $h_k^\top\Sigma_g h_k$ is pinned just above $\theta$ (<span data-n="h-energy">1.04–1.37</span> in the headline run, i.e. $\theta$ plus the within-cluster weight), while the part sizes vary <span data-n="h-ratio">11×</span>. The rank correlation of size with energy is 0.69, but over that tiny range of energies it says little: how many neurons a part gets is inherited from which initial basin they started in, as in the synthetic chapters. With a second seed the sizes change.</p>
+
+<h2 id="mnist-readout">Pretend you only have the weights</h2>
+
+<p>The note's recipe: at equilibrium every active synapse states one equation in $C$, so solve for it. I use masked ridge least squares over symmetric $C$ on the active edges ($w &gt; 2w_{\min}$): $(HC)_{ib} = \theta + w_{ib}$ for input synapses and $h_i^\top C h_j = (\theta + w_{ij})/\gamma$ for lateral ones, each family's squared residual averaged over its equations so the roughly two million lateral equations do not swamp the input ones. Then score $\hat C$ against $\Sigma_g$ in three settings (parameters known; scale unknown; $\theta$ unknown, the contrast score) with Frobenius cosine, Bures–Wasserstein and subspace overlap side by side.</p>
+
+<figure class="fig wide card" id="fig-mnist-readout">
+  <div class="fig-title">The readout $\hat C$ against $\Sigma_g$</div>
+  <div class="fig-sub">Follows the run picked above. Choose the estimator; hover a cell.</div>
+  <div data-slot="readout"><p class="mute">loading…</p></div>
+  <figcaption data-slot="readout-cap"></figcaption>
+</figure>
+
+<p>Told straight:</p>
+<ul>
+  <li><b>It is no better than knowing the variances.</b> Across all live runs the contrast cosine is <span data-n="ro-range">0.28–0.61</span>. For the headline run it is <span data-n="h-ro">0.50</span>, against <span data-n="h-diag">0.52</span> for diag $\Sigma_g$, <span data-n="h-id">0.35</span> for the identity and <span data-n="h-rk">0.96</span> for the rank-$K$ truncation of $\Sigma_g$ (the best a $K$-part sketch could hope for). With the parameters known, the relative Frobenius error is <span data-n="h-known">0.86</span> (identity <span data-n="h-known-id">0.94</span>, diag <span data-n="h-known-diag">0.86</span>, rank-$K$ <span data-n="h-known-rk">0.26</span>).</li>
+  <li><b>For RFF it does beat the trivial baselines:</b> <span data-n="r1024-ls">0.49</span> against <span data-n="r1024-diag">0.20</span> for diag at $D = 1024$.</li>
+  <li><b>Bures–Wasserstein alone misleads.</b> BW calls the readout worse than the identity or diag in every run (<span data-n="ro-bw">0.66–0.94</span> against <span data-n="bl-bw">0.24–0.70</span>), because $\hat C$ is nearly zero off the parts and BW punishes missing variance hardest. Cosine and subspace overlap tell the other half of the story.</li>
+  <li><b>Where it measures, it is accurate.</b> Restricted to the <span data-n="h-sup-n">30</span> pixels the live parts cover, $\hat C$ reproduces $\Sigma_g$ with cosine <span data-n="h-sup-cos">0.84</span> (<span data-n="sup-pix">0.75–0.84</span> across the featured pixel runs), and the median part energy is off by <span data-n="h-pe">0.3%</span>. <span data-n="h-sup-mass">77%</span> of $\hat C$'s mass sits on that block, which holds only <span data-n="h-sig-mass">30%</span> of the mass of $P\Sigma_gP$.</li>
+  <li><b>The limit is rank.</b> The headline weights give <span data-n="h-rank">67</span> independent equations for <span data-n="h-dim">19,306</span> unknowns: <span data-n="h-rank-ii">12</span> from the lateral synapses (one per part: its energy) and <span data-n="h-rank-ib">55</span> from the input synapses, the rows $(\Sigma_g h_k)_b$ on each part's support. Clones multiply the equations (about 22,000 active lateral ones), not the rank. The weights store a parts-sketch, not $\Sigma_g$.</li>
+  <li><b>Best mid-training.</b> The training curves above include the readout of the instantaneous weights at every snapshot: in the headline run the contrast cosine climbs from 0.35 to about 0.58 near step 50, then falls back as pruning proceeds. Those mid-training readouts violate the equilibrium assumption the estimator rests on, and are labelled as such.</li>
+</ul>
+
+<details class="more" id="mnist-estimators"><summary>Other estimators: the note's pseudo-inverse and the parts-sum sketch both do worse here</summary>
+<p>The note's formula $C = H^+RH^{+\top}$ (with $R$ from all lateral weights, clipped ones included, and the diagonal filled with the row maximum) and its input analogue $\mathrm{sym}(H^+R_{IB})$ are worse than least squares in <span data-n="naive-worse">every</span> live run. The parts-sum sketch $\theta\mathbf 1\mathbf 1^\top + \sum_k c_k h_k h_k^\top/\lVert h_k\rVert^2$, with $c_k$ a member's summed input conductance, is also worse in every run (headline 0.41 against 0.50; RFF $D = 1024$: 0.39 against 0.49; from <code>docs/mnist.md</code>, not in the exports). <b>This disagrees with the synthetic finding</b> that the parts-sum is the better estimator: there the parts were disjoint blocks of a nonnegative $\Sigma_g$; MNIST parts overlap and $\Sigma_g$ is signed, and least squares uses every row $(\Sigma_g h_k)_b$ on a support (a rank-55 sketch here), while the parts-sum keeps rank at most $K + 1$. The input-synapse family carries almost everything (least squares on input synapses alone ≈ both families), and the readout of the untrained network equals the identity baseline. No hinge penalty for the clipped edges was used and no PSD projection inside the fit; negative eigenvalues are clipped before BW (10–15% of the mass).</p>
+</details>
+
+<h2 id="mnist-samples">Moment-based sample synthesis under explicit generative assumptions</h2>
+
+<p>You asked to sample from the distribution the weights encode, for example to reconstruct digits. Second moments do not determine $p(x)$, so every generator here adds a model, and the samples inherit it. Two things come from outside the weights. The <b>mean</b>: Hebb sees the centred covariance, so no synapse stores it; I supply the training mean. The <b>completion</b>: for pixels, $x \sim \mathcal N(\bar x, \hat C)$ in pixel units, with negative eigenvalues clipped, unconstrained directions at zero variance, and samples clipped to $[0, 1]$. For RFF, a Gaussian draw $g \sim \mathcal N(\mu_g, \hat C)$ in feature space and then a pre-image, $x^\ast = \arg\min_{x \in [0,1]^{196}} \lVert\phi(x) - g\rVert^2$ by projected Adam (300 steps, learning rate 0.02, from the mean image, the same for every row). That is exploratory: a Gaussian $g$ is generally not the image of any digit, so the optimiser, its start and the box shape the result.</p>
+
+<figure class="fig wide card" id="fig-mnist-samples">
+  <div class="fig-title">Samples from each generator, with the same random draws in every row</div>
+  <div class="fig-sub">Pick a sheet. MMD² against held-out digits is given per row (lower is closer to real digits).</div>
+  <div data-slot="samples"><p class="mute">loading…</p></div>
+  <figcaption data-slot="samples-cap"></figcaption>
+</figure>
+
+<p>For pixels the weight-reconstructed samples look like the mean digit with a few flickering blobs: the generator carries only 21–35% of the true variance, almost all of it on the parts' pixels. It is worse than the diag baseline in MMD and improves as more parts are populated. Its samples do match their own target covariance (to sampling noise), but that target is 80–85% away from $\Sigma_g$: the readout error, showing up as samples. For RFF the inverse map is fine (real digits survive the round trip with residual $10^{-6}$), but Gaussian feature vectors are far from the image of $\phi$, and the reconstructed samples are blurry blends of a 0 and a 1, the two learned parts. Blurry digit-like blobs are the honest ceiling of any second-moment generator here; the true-moment row shows that ceiling.</p>
+
+<h2 id="mnist-verdict">What this says about the note</h2>
+
+<aside class="callout found">
+  <p class="callout-title">What we found</p>
+  <ul>
+    <li><span class="verdict amended">amended</span><b>"The embeddings separate into discrete clusters, their number set by the homeostatic parameters."</b> On digits, yes, but the parts are tiny blobs of 2–3 pixels (pixels) or two detectors (RFF), never a rich set of modes. $\theta$ moves the count from 1 to at most about 12, and then the network dies: extinction, not fragmentation.</li>
+    <li><span class="verdict fails">fails</span><b>"Each population becomes isomorphic to an eigenmode."</b> Parts are nonnegative localised blobs; no part looks like an eigen-image of $\Sigma_g$.</li>
+    <li><span class="verdict fails">fails</span><b>"Neurons in proportion to energy."</b> Energies sit in a narrow band just above $\theta$ while sizes vary 11×; sizes follow the initial basins.</li>
+    <li><span class="verdict fails">fails</span><b>"An expansion code: many different random functions per mode."</b> Members are clones (spread about $10^{-5}$).</li>
+    <li><span class="verdict amended">amended</span><b>"Solve the weights for $\mathrm{Cov}(g)$."</b> The readout is exact on what the weights measure and blind elsewhere: it is rank-limited by the number of populated parts, so on MNIST it scores about like diag $\Sigma_g$ (pixels) or modestly better than it (RFF).</li>
+    <li><span class="verdict fails">fails</span><b>"With a rich lift the covariance gives $p(\text{stimulus})$."</b> Not from the centred covariance, and here not even the covariance comes back; samples are the mean digit plus blobs.</li>
+    <li><span class="verdict open">open</span><b>Stochastic against mean-field.</b> They agree away from transitions and differ near them (pixels, $N = 2048$, $\theta = 0.6$: 6 live parts and 807 dead in mean-field, 3 live and none dead with minibatches), as in the synthetic chapters.</li>
+  </ul>
+</aside>
+
+<h2 id="mnist-decisions">Design decisions</h2>
+
+<div class="fig wide"><div class="table-scroll" style="margin:0"><table class="data" style="min-width:760px;font-size:13.5px">
+  <thead><tr><th style="width:17%">Decision</th><th style="width:22%">Default</th><th style="width:22%">Alternative</th><th>Why, and what the alternative would change</th></tr></thead>
+  <tbody>
+    <tr><td>Covariance</td><td>Centred $\mathrm{Cov}(g)$, as the rule is written</td><td>Raw second moment $\mathbb E[gg^\top]$</td><td>The network never sees the mean of $g$. Off-diagonal $\Sigma_g$ is signed (53% of pixel pairs, 50% of RFF pairs negative), and conductances are nonnegative, so an anticorrelated pair is pruned at any $\theta \ge 0$: a "1" stroke and a "0" stroke are never wired together. In the readout, anticorrelations appear only as clipped edges, which the estimator does not use.</td></tr>
+    <tr><td>Feature scaling</td><td>One global constant per lift so the mean feature variance is 1 ($\mathrm{tr}\,\Sigma_g = B$)</td><td>z-scoring each feature</td><td>Puts $\theta$ in units of a typical feature's variance, on a correlation-like scale. z-scoring would blow up near-constant border pixels and change the kernel geometry.</td></tr>
+    <tr><td>Lifts</td><td>14×14 pixels (2×2 average-pooled); RFF $\sqrt{2/D}\cos(\omega^\top x + b)$ of a Gaussian kernel, $D$ = 64, 256, 1024, bandwidth = median pairwise distance (4.47 pixel units), also ×0.5 and ×2 at $D = 256$</td><td>A third lift: random ReLU or local-patch features</td><td>The pilots showed the bottleneck is the plasticity (how many parts are populated before extinction), not the kernel: every RFF size and bandwidth gave the same two parts. A third lift would not have been better motivated than the init and floor controls I spent the budget on.</td></tr>
+    <tr><td>Floor and lateral init at large $N$</td><td>$w_{\min} = \omega/N$ with $\omega = 0.5$ (also 0.05, 5); $W_{II} \sim U(0, 0.2\cdot512/N)$</td><td>Fixed $w_{\min} = 10^{-3}$ and $U(0, 0.2)$</td><td>With the fixed values $N = 2048$ went fully extinct at $\theta \ge 0.6$ where $N = 512$ had live parts. Extinction depends on $\omega = N w_{\min}$, as in the synthetic sweeps; keeping the total initial lateral conductance per neuron fixed (about 51) removes the $N$-dependence. $\omega = 5$: extinct at $\theta \ge 0.6$; $\omega = 0.05$: fewer dead, fewer and larger parts.</td></tr>
+    <tr><td>Initial input weights</td><td>Generic: $W_{IB} \sim \mathrm{Exp}$, mean 0.1 (dense)</td><td>Heavy-tailed: $\mathrm{Gamma}$(shape 0.1, mean 0.1), still dense, added alongside</td><td>With $B$ in the hundreds a dense iid init puts every embedding within $O(1/\sqrt B)$ of the centroid, and pruning races symmetry breaking. Leaning each neuron on a few inputs roughly doubles the populated parts and delays extinction; it is shown next to the generic init, not instead of it.</td></tr>
+    <tr><td>Training</td><td>Minibatch 256 (unbiased covariance of $u = Hg$), 3,000 steps, $dt = 0.1$; final weights averaged over the last 600 steps; mean-field twins with the exact $\Sigma_g$</td><td>Last-step weights; mean-field only</td><td>Averaging removes most minibatch noise from the readout (the instantaneous-weight readout is also exported). Dynamics in float32 on GPU; every readout in float64, after float32 conjugate gradients diverged on the 4-million-equation problems.</td></tr>
+    <tr><td>2D map</td><td>UMAP with the Hellinger metric (Euclidean on $\sqrt{h}$), computed at the final snapshot and warm-started backwards, each frame Procrustes-aligned to the next</td><td>PCA; boundary nodes in the map</td><td>Hellinger is the natural metric for probability vectors. Boundary nodes $e_b$ are all equidistant under it, so their placement would be arbitrary; for pixels the graph offers the Tutte layout $H\cdot(\text{pixel } xy)$ instead.</td></tr>
+    <tr><td>Not done</td><td>—</td><td>Hinge penalty for clipped edges; a fitted $\theta$ offset in the contrast setting; sampling from the better mid-training readout</td><td>The contrast score projects out $\mathbf 1\mathbf 1^\top$ instead of fitting $\theta$. Sampling uses the final readout only, which is the one the equilibrium assumption covers.</td></tr>
+  </tbody>
+</table></div></div>
+
+<p class="mute" style="font-size:14px">Source: <code>docs/mnist.md</code>; code <code>hebb/mnist/</code>; data <code>data/mnist/</code> (114 runs: $N = 512$ on Modal CPU, $N = 2048$ on Modal A10 GPUs, about \$5–6 in all).</p>

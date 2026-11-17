@@ -68,7 +68,7 @@ export async function partsFigure(host, index) {
           cell.append(strip);
         }
       }
-      cell.append(ui.h("div", { style: { ...small, textAlign: "center", fontVariantNumeric: "tabular-nums" }, html: `${f.n_live_clusters} live<br>${ui.fmtInt(f.n_dead)} dead` }));
+      cell.append(ui.h("div", { style: { ...small, textAlign: "center", fontVariantNumeric: "tabular-nums" }, html: `${f.n_live_clusters} live · <span style="white-space:nowrap">${ui.fmtInt(f.n_dead)} dead</span>` }));
       cell.addEventListener("pointermove", ev => ui.showTip(ev.clientX, ev.clientY, cellTip(row, r)));
       cell.addEventListener("pointerleave", () => ui.hideTip());
     }
@@ -114,7 +114,7 @@ export function filmFigure(host, index, ctx) {
   const snap = ui.slider({ label: "training step", min: 0, max: steps.length - 1, step: 1, value: k, fmt: i => ui.fmtInt(steps[i]),
     onInput: i => { k = i; draw(); }, onChange: i => ctx.setParams({ snap: i }) });
   bar.append(ui.h("div", { style: { flex: "1 1 260px", maxWidth: "380px" } }, sel.el), ui.h("div", { style: { flex: "1 1 300px", maxWidth: "420px", display: "flex", gap: "10px", alignItems: "center" } }, play, ui.h("div", { style: { flex: 1 } }, snap.el)));
-  const body = ui.h("div", { style: { display: "grid", gap: "18px" } });
+  const body = ui.h("div", { style: { display: "flex", flexWrap: "wrap", gap: "18px 40px", alignItems: "flex-start" } });
   host.append(body);
 
   // play: one snapshot every 0.7 s, only while on screen (ui.animate)
@@ -149,16 +149,16 @@ export function filmFigure(host, index, ctx) {
       const r = d.r, n = r.n_shown;
       const title = pi === 0 ? "Linear rule, q = 0.980" : FILM_OPTS.find(o => o.key === other).label.replace(/^r/, "R");
       const head = ui.h("div", { class: "chart-title", text: title });
-      const tiles = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, 38px)", gap: "3px" } });
+      const tiles = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, 32px)", gap: "3px" } });
       const tilesBox = ui.h("div", {}, ui.h("div", { class: "u-help", style: { marginBottom: "4px" }, html: "16 neurons, $h_i$" }), tiles);
       const vBox = ui.h("div", { style: { minWidth: 0 } }), rBox = ui.h("div", { style: { minWidth: 0 } });
-      const row = ui.h("div", { style: { display: "flex", flexWrap: "wrap", gap: "10px 26px", alignItems: "flex-start" } }, tilesBox,
-        ui.h("div", { style: { minWidth: 0, flex: "1 1 220px", maxWidth: "300px" } }, ui.h("div", { class: "u-help", style: { marginBottom: "4px" }, html: "voltage covariance $h_i^\\top\\Sigma_g h_j$" }), vBox),
-        ui.h("div", { style: { minWidth: 0, flex: "1 1 220px", maxWidth: "300px" } }, ui.h("div", { class: "u-help", style: { marginBottom: "4px" }, html: `rate covariance $c^2\\mathrm{Cov}(r_i, r_j)$${pi === 0 ? " (post hoc)" : ""}` }), rBox));
-      body.append(ui.h("div", {}, head, row));
+      const row = ui.h("div", { style: { display: "flex", flexWrap: "wrap", gap: "10px 18px", alignItems: "flex-start" } }, tilesBox,
+        ui.h("div", { style: { minWidth: 0, flex: "1 1 190px", maxWidth: "240px" } }, ui.h("div", { class: "u-help", style: { marginBottom: "4px" }, html: "voltage covariance $h_i^\\top\\Sigma_g h_j$" }), vBox),
+        ui.h("div", { style: { minWidth: 0, flex: "1 1 190px", maxWidth: "240px" } }, ui.h("div", { class: "u-help", style: { marginBottom: "4px" }, html: `rate covariance $c^2\\mathrm{Cov}(r_i, r_j)$${pi === 0 ? " (post hoc)" : ""}` }), rBox));
+      body.append(ui.h("div", { style: { flex: "1 1 560px", minWidth: 0 } }, head, row));
       ui.renderMath(row);
       const groups = groupsOf(r);
-      const common = { rows: n, cols: n, map: "div", size: 230, groups: { rows: groups }, xlabel: "neuron j", ylabel: "neuron i" };
+      const common = { rows: n, cols: n, map: "div", size: 200, groups: { rows: groups }, xlabel: "neuron j", ylabel: "neuron i" };
       const tipFn = (kind, a) => (i, j, v) => ui.tipRows(`${kind}, step ${ui.fmtInt(steps[k])}`, [{ name: `neurons ${r.shown_ids[i]}, ${r.shown_ids[j]}`, value: ui.fmtFixed(v, 3) }]);
       const hv = heatmap(vBox, { ...common, range: [-aV, aV], zlabel: "$h_i^\\top\\Sigma_g h_j$", tooltip: tipFn("voltage cov.") });
       const hr = heatmap(rBox, { ...common, range: [-aR, aR], zlabel: "$c^2\\mathrm{Cov}(r_i,r_j)$", tooltip: tipFn("rate cov.") });
@@ -169,7 +169,7 @@ export function filmFigure(host, index, ctx) {
   function draw() {
     for (const p of panels) {
       const { r, img, volt, rate } = p.d, n = r.n_shown, lay = r.files.neurons_over_time.layout;
-      p.tiles.replaceChildren(...Array.from({ length: 16 }, (_, row) => spriteCanvas(img, lay, row * lay.ncol + k, 38)));
+      p.tiles.replaceChildren(...Array.from({ length: 16 }, (_, row) => spriteCanvas(img, lay, row * lay.ncol + k, 32)));
       p.hv.update({ values: decode(volt, k, n, r.files.similarity_volt.a) });
       p.hr.update({ values: decode(rate, k, n, r.files.similarity_rate.a) });
     }

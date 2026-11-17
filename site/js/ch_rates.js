@@ -15,8 +15,28 @@ const f3 = x => (Number.isFinite(x) ? ui.fmtFixed(x, 3) : "n/a");
 const rg = ([a, b], f = f2) => (!Number.isFinite(a) ? "n/a" : f(a) === f(b) ? f(a) : a < 0 ? `${f(a)} to ${f(b)}` : `${f(a)}–${f(b)}`);
 
 export async function init(panel, ctx) {
-  // the live ring figure needs no data
-  ringFigure(ctx.slot("ring"), ctx);
+  // secondary material lives in closed <details>: open the one holding a link's target before the shell scrolls to it
+  const openFor = hash => {
+    const m = /^#rates\/([^?]+)/.exec(hash || ""), el = m && document.getElementById(m[1]);
+    for (let d = el && el.closest("details"); d; d = d.parentElement && d.parentElement.closest("details")) d.open = true;
+  };
+  openFor(location.hash);
+  window.addEventListener("hashchange", () => openFor(location.hash));
+  ctx.article.addEventListener("click", ev => { const a = ev.target.closest && ev.target.closest('a[href^="#rates/"]'); if (a) openFor(a.getAttribute("href")); }, true);
+  // figures inside a closed <details> are built the first time it opens (they need a laid-out width)
+  const lazy = (id, fn) => {
+    const d = document.getElementById(id);
+    let done = false;
+    const run = () => { if (done || !d.open) return; done = true; Promise.resolve(fn()).catch(e => console.warn(`rates/${id}:`, e)); };
+    d.addEventListener("toggle", run); run();
+  };
+
+  // the live ring figure needs no data; a shared link with its state opens it
+  const ringBox = document.getElementById("rates-ring");
+  const ringState = p => p.has("rho") || p.has("seed");
+  if (ringState(ctx.params)) ringBox.open = true;
+  ctx.onParams(p => { if (ringState(p)) ringBox.open = true; });
+  lazy("rates-ring", () => ringFigure(ctx.slot("ring"), ctx));
 
   const [index, dual, synth] = await Promise.all([D.json("index.json"), D.json("dual.json"), D.json("synth_ring.json")]);
   const S = D.summarise(index);
@@ -24,13 +44,13 @@ export async function init(panel, ctx) {
   dualFigure(ctx.slot("dual"), dual, index, ctx);
   partsTable(ctx.slot("parts-table"), S);
   scoreTable(ctx.slot("score"), S);
-  probeChart(ctx.slot("probe"), index, S);
-  readoutChart(ctx.slot("readout"), index);
+  lazy("rates-probes", () => probeChart(ctx.slot("probe"), index, S));
+  lazy("rates-readout", () => readoutChart(ctx.slot("readout"), index));
   [ctx.slot("parts-table"), ctx.slot("score"), ctx.article.querySelector('[data-n="ring-python"]')].forEach(el => el && ctx.renderMath(el));
   // image-heavy figures last
   await partsFigure(ctx.slot("parts"), index);
   filmFigure(ctx.slot("film"), index, ctx);
-  await samplesFigure(ctx.slot("samples"), index);
+  lazy("rates-samples", () => samplesFigure(ctx.slot("samples"), index));
 }
 
 // ------------------------------------------------------------------ the dual activation, with the empirical scatter
@@ -134,7 +154,7 @@ function scoreTable(tbody, S) {
     ["adds", "<b>Survives to higher θ</b>", "Rate covariances of skewed parts exceed the Gaussian value, so lateral binding is stronger.",
       `$\\tau = 1$, $q = 0.987$: ${ui.fmtInt(S.t1Alive987)} of 980 alive; linear rule: ${rg(S.linDead987, ui.fmtInt)} dead; Gaussian control at the digits' θ: ${ui.fmtInt(S.surrDead967)} dead already at $q = 0.967$`],
     ["adds", "<b>Different fixed points for Gaussian inputs</b>", "More and narrower clusters at the same pairwise threshold, from the convexity of $k_\\tau$; no new information.",
-      "synthetic ring: see the live figure and the Python runs below it"],
+      'synthetic ring: see <a href="#rates/rates-ring">the live figure and the Python runs</a>'],
     ["not", "<b>More clusters on real data</b>", "The dense population binds into one blob on the loudest part and stays there.",
       `live clusters at $q = 0.980$: rectified ${rg(S.rectLiveAtQ98, String)}, linear ${rg(S.linLiveAtQ98, String)}; most major clusters in any 14×14 rectified run: ${S.rectMajorMax}`],
     ["not", "<b>Diverse members</b>", "Members of the cluster are exact clones computing one function.",

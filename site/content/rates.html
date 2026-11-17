@@ -1,22 +1,8 @@
-<p class="lede">You asked whether a neuron-wise nonlinearity such as ReLU has a useful general version, and chose the mildest one: keep the circuit linear, and let plasticity see firing rates instead of voltages. Raw pixels go in, with no kernel lift; the hope was that rectification alone gives the rule access to higher moments. It does: on digits the rule finds a different, heavier-tailed part, and a Gaussian control shows that this comes entirely from moments beyond the second. But on digits the network it builds is one cluster of identical neurons whose rates are a worse code than the pixels, so I have not run a stacked version, and whether depth helps is still open.</p>
+<p class="lede">Does a neuron-wise nonlinearity such as ReLU have a useful general version? I tried the mildest one: keep the circuit linear and let plasticity see firing rates instead of voltages, on raw pixels with no kernel lift. That alone gives the rule access to higher moments: on digits it finds a different, heavier-tailed part, and a Gaussian control shows that this comes entirely from moments beyond the second. But the network is one cluster of identical neurons whose rates are a worse code than the pixels, so I have not run a stacked version; whether depth helps is still open.</p>
 
 <h2 id="rates-idea">Linear circuit, rectified output</h2>
 
-<p>Kirchhoff is untouched, so $u = Hg$ and the harmonic embeddings are the same functions of the weights as before. What changes is what plasticity correlates: the rate $r_i = c\,f(u_i - b_i)$ with $f = \mathrm{ReLU}$, and likewise $s_b = c\,f(g_b - b_b)$ for the inputs:</p>
-
-<div class="eq" id="eq-rates-rule" data-num="1">$$\boxed{\begin{aligned}\frac{dw_{ij}}{dt} &= w_0 - \lambda w_{ij} + \gamma\eta\,\mathrm{Cov}(r_i, r_j)\\[2pt] \frac{dw_{ib}}{dt} &= w_0 - \lambda w_{ib} + \eta\,\mathrm{Cov}(r_i, s_b)\end{aligned}}$$</div>
-
-<p><b>Where the threshold sits is the whole question.</b> An interior voltage is a convex combination of the inputs, and pixels are non-negative, so with $b_i = 0$ the ReLU is the identity and nothing changes. The nonlinearity only bites relative to a threshold, so I set it from the neuron's own statistics, $b_i = \mathbb E[u_i] + \tau\,\mathrm{sd}(u_i)$<span class="sidenote">For a Gaussian voltage the neuron fires for 50%, 31% and 16% of stimuli at $\tau = 0$, 0.5 and 1. The gain $c$ is one constant per $\tau$ (1.46, 1.99, 2.91), chosen so that the mean input-rate variance on the pixels is 1, which keeps $\theta$ and $w_{\min}$ on the same scale for both rules.</span>: $\tau = 0$ rectifies deviations from the mean, and larger $\tau$ makes firing sparser. Because $b_i$ tracks the neuron's own activity, it is <b>intrinsic-excitability homeostasis</b>, not part of the synaptic regulariser: $\rho(w) = w_0 - \lambda w$ still depends on the weight only, as the note wants. I use the fast limit, with $b_i$ computed from the exact moments of $u_i = h_i^\top g$ at the current weights.</p>
-
-<h2 id="rates-gauss">For Gaussian inputs: one convex function of the correlation</h2>
-
-<p>If $(u_i, u_j)$ are jointly Gaussian with standard deviations $s_i, s_j$ and correlation $\rho$, then exactly</p>
-
-<div class="eq" id="eq-rates-dual" data-num="2">$$\mathrm{Cov}(r_i, r_j) = c^2\, s_i s_j\, k_\tau(\rho).$$</div>
-
-<p>$k_\tau$ is <em>one</em> scalar function for every pair, because the threshold is measured in each neuron's own standard deviation. At $\tau = 0$ it is the degree-1 arc-cosine kernel minus the product of the means,</p>
-$$\begin{aligned}k_0(\rho) &= \frac{\sin\varphi + (\pi - \varphi)\cos\varphi - 1}{2\pi}, \quad \varphi = \arccos\rho\\ &= \frac{\rho}{4} + \frac{\rho^2}{4\pi} + \frac{\rho^4}{48\pi} + \dots\end{aligned}$$
-<p>its slope is the probability that both neurons fire, so it is increasing and convex. Normalised, $\tilde k_\tau = k_\tau/k_\tau(1)$ is the rate correlation as a function of the voltage correlation:</p>
+<p>Kirchhoff is untouched, so $u = Hg$ and the harmonic embeddings are the same functions of the weights as before. What changes is what plasticity correlates: the rate $r_i = c\,f(u_i - b_i)$ with $f = \mathrm{ReLU}$, and likewise $s_b$ for the inputs (rule <a href="#rates/eq-rates-rule">(1)</a>). Pixels are non-negative, so at $b_i = 0$ the ReLU does nothing (<a href="#method/nonlinearity">why</a>); the threshold $b_i = \mathbb E[u_i] + \tau\,\mathrm{sd}(u_i)$ follows the neuron's own statistics (intrinsic-excitability homeostasis, outside $\rho(w)$; <a href="#method/row-relu">details</a>), and larger $\tau$ makes firing sparser. For Gaussian inputs the rate covariance is then <em>one</em> convex, increasing function $k_\tau$ of the voltage correlation, scaled by the two voltage standard deviations (<a href="#rates/eq-rates-dual">(2)</a>). Normalised, $\tilde k_\tau = k_\tau/k_\tau(1)$ is the rate correlation as a function of the voltage correlation:</p>
 
 <figure class="fig wide card" id="fig-rates-dual">
   <div class="fig-title">Rate correlation against voltage correlation: the Gaussian prediction and real digits</div>
@@ -29,14 +15,20 @@ $$\begin{aligned}k_0(\rho) &= \frac{\sin\varphi + (\pi - \varphi)\cos\varphi - 1
 
 <aside class="callout key"><p class="callout-title">Key point</p><p>For Gaussian inputs the rectified rule still sees only $\Sigma_g$. It replaces the inner product $\langle h_i, h_j\rangle_{\Sigma}$ by $\lVert h_i\rVert_\Sigma \lVert h_j\rVert_\Sigma\, k_\tau(\cos_\Sigma(h_i, h_j))$, a known convex increasing function of the same quantities. What changes is which fixed points the rule has, not what information it has.</p></aside>
 
-<details class="more" id="rates-dual-maths"><summary>The maths: $k_\tau$ for any $\tau$, and the rule it gives</summary>
+<details class="more" id="rates-gauss"><summary>The maths: the rule, $k_\tau$ in closed form, and why it is convex</summary>
+<p>The rule, with the threshold in the fast limit ($b_i$ computed from the exact moments of $u_i = h_i^\top g$ at the current weights):</p>
+<div class="eq" id="eq-rates-rule" data-num="1">$$\boxed{\begin{aligned}\frac{dw_{ij}}{dt} &= w_0 - \lambda w_{ij} + \gamma\eta\,\mathrm{Cov}(r_i, r_j)\\[2pt] \frac{dw_{ib}}{dt} &= w_0 - \lambda w_{ib} + \eta\,\mathrm{Cov}(r_i, s_b)\end{aligned}}$$</div>
+<p>$\tau = 0$ rectifies deviations from the mean. If $(u_i, u_j)$ are jointly Gaussian with standard deviations $s_i, s_j$ and correlation $\rho$, then exactly</p>
+<div class="eq" id="eq-rates-dual" data-num="2">$$\mathrm{Cov}(r_i, r_j) = c^2\, s_i s_j\, k_\tau(\rho).$$</div>
+<p>$k_\tau$ is one scalar function for every pair, because the threshold is measured in each neuron's own standard deviation. At $\tau = 0$ it is the degree-1 arc-cosine kernel minus the product of the means,</p>
+$$\begin{aligned}k_0(\rho) &= \frac{\sin\varphi + (\pi - \varphi)\cos\varphi - 1}{2\pi}, \quad \varphi = \arccos\rho\\ &= \frac{\rho}{4} + \frac{\rho^2}{4\pi} + \frac{\rho^4}{48\pi} + \dots\end{aligned}$$
+<p>its slope is the probability that both neurons fire, so it is increasing and convex.</p>
 <p>With $X, Y$ standard normal with correlation $\rho$, $k_\tau(\rho) = \mathbb E[(X-\tau)_+(Y-\tau)_+] - m_\tau^2$, where $m_\tau = \varphi(\tau) - \tau\Phi(-\tau)$. By Price's theorem $k_\tau'(\rho) = \Phi_2(-\tau,-\tau;\rho) = P(X &gt; \tau, Y &gt; \tau)$ and $k_\tau''(\rho) = \varphi_2(\tau,\tau;\rho) &gt; 0$; $k_\tau(0) = 0$, $k_\tau(1) = \mathrm{Var}((X-\tau)_+)$, $k_\tau(-1) = -m_\tau^2$. Integrating twice from $\rho = 0$ (substituting $s = \sin t$ to remove the endpoint singularity):</p>
 $$k_\tau(\rho) = \rho\,\Phi(-\tau)^2 + \frac{1}{2\pi}\int_0^{\arcsin\rho} (\rho - \sin t)\, e^{-\tau^2/(1+\sin t)}\,dt .$$
 <p>$\tilde k_\tau$ lies below the diagonal on $(0,1)$, further below for larger $\tau$: $\tilde k(0.5) = 0.43, 0.38, 0.31$ at $\tau = 0, 0.5, 1$, and negative correlations are squashed towards $\tilde k(-1) = -0.47, -0.23, -0.10$. For Gaussian $g$ the lateral drift is therefore $\gamma\eta c^2\,\lVert h_i\rVert_\Sigma\lVert h_j\rVert_\Sigma\,k_\tau\big(h_i^\top\Sigma_g h_j/\lVert h_i\rVert_\Sigma\lVert h_j\rVert_\Sigma\big) + w_0 - \lambda w_{ij}$, and the input drift is the same expression with $h_j = e_b$. Checked against Monte Carlo ($10^6$ samples) and the sampled rate covariances in <code>hebb/nonlin/test_nonlin.py</code>.</p>
 </details>
 
-<h3 id="rates-ring">Not a remap of θ: more, narrower clusters</h3>
-
+<details class="more" id="rates-ring"><summary>Live, on a synthetic ring: not a remap of $\theta$, but more and narrower clusters at the same pairwise threshold</summary>
 <p>Is the Gaussian rectified rule just the linear rule with $\theta$ moved? Take unit-variance inputs and a correlation threshold $\rho^\ast$. The linear rule at $\theta = \rho^\ast$ and the rectified rule at $\theta = \tilde k_0(\rho^\ast)$ (gain $c^2 = 1/k_0(1)$) bind exactly the same <em>pairs of inputs</em>. If rectification were a remap, the two networks would end in the same place. Run them:</p>
 
 <figure class="fig full card" id="fig-rates-ring">
@@ -48,10 +40,11 @@ $$k_\tau(\rho) = \rho\,\Phi(-\tau)^2 + \frac{1}{2\pi}\int_0^{\arcsin\rho} (\rho 
 
 <p>At the same pairwise threshold the rectified rule populates more and narrower clusters, and keeps some alive where the linear population has gone extinct. The reason is convexity together with the two norms. Interior neurons have $s_i &lt; 1$, because averaging lowers variance. Partially correlated pairs, which are the bonds <em>between</em> prospective clusters, are discounted by $\tilde k(\rho)/\tilde k(\rho^\ast) &lt; \rho/\rho^\ast$, while perfectly correlated pairs within a cluster need only $s^2 &gt; \tilde k(\rho^\ast)$ instead of $s^2 &gt; \rho^\ast$. So the rule prunes between-cluster bonds harder and keeps lower-variance clusters alive: coincidence detection, which is what $k_\tau' = P(\text{both fire})$ says.</p>
 <div data-n="ring-python"></div>
+</details>
 
 <h2 id="rates-digits">Real digits: a different part</h2>
 
-<p>Now the real question: 14×14 MNIST pixels ($B = 196$, scaled to mean pixel variance 1), $N = 980$, dense random initial weights, $\gamma = 1$, 3,000 minibatch steps (batch 256), weights averaged over the last 20%. To compare rules fairly, each sits at the same quantile $q$ of the off-diagonal input covariance <em>it</em> sees: $\Sigma_g$ for the linear rule, $c^2\,\mathrm{Cov}(s_b, s_c)$ for the rectified one.</p>
+<p>14×14 MNIST pixels ($B = 196$, scaled to mean pixel variance 1), $N = 980$, dense random initial weights, $\gamma = 1$, 3,000 minibatch steps (batch 256), weights averaged over the last 20%. To compare rules fairly, each sits at the same quantile $q$ of the off-diagonal input covariance <em>it</em> sees: $\Sigma_g$ for the linear rule, $c^2\,\mathrm{Cov}(s_b, s_c)$ for the rectified one.</p>
 
 <figure class="fig wide card" id="fig-rates-parts">
   <div class="fig-title">The learned parts, linear against rectified, across the threshold</div>
@@ -62,7 +55,7 @@ $$k_\tau(\rho) = \rho\,\Phi(-\tau)^2 + \frac{1}{2\pi}\int_0^{\arcsin\rho} (\rho 
 
 <p>At $q = 0.980$ the linear rule's dominant part is a short slanted "/" stroke (at lower $q$, two slanted strokes). The rectified rule's is <b>two vertical bars, the left and right sides of a "0"</b>, at every $q$ and $\tau$. The difference grows with $q$ and with $\tau$, and it replicates with a second seed, with $\gamma = 0$, and at 28×28 ($N = 3920$: cosine to the linear part 0.05–0.10). It also shows in how the networks get there: both pass through the same transient "0-ring" (the global Perron part), but the linear rule stays on it until about step 500, while the rectified rule leaves it by step 40.</p>
 
-<figure class="fig wide card" id="fig-rates-film">
+<figure class="fig full card" id="fig-rates-film">
   <div class="fig-title">Training, side by side: sixteen neurons and the two similarity matrices</div>
   <div class="fig-sub">Drag the slider through the ten snapshots; choose what the linear rule is compared with.</div>
   <div data-slot="film"><p class="mute">loading…</p></div>
@@ -71,39 +64,42 @@ $$k_\tau(\rho) = \rho\,\Phi(-\tau)^2 + \frac{1}{2\pi}\int_0^{\arcsin\rho} (\rho 
 
 <h3 id="rates-control">The control: Gaussian pixels with the same covariance</h3>
 
-<p>To see whether the new part comes from higher moments, I replaced the digits by Gaussian samples with the same mean and covariance and kept everything else. At its own quantile the surrogate learns the linear part. With the rectified network's exact $\theta$ and $c$ it is worse off: at the lowest $q$ it learns a non-skewed part, then it loses 931 of 980 neurons at $q = 0.967$, and dies entirely above. <b>Everything the rectified rule does differently on MNIST comes from moments beyond the second.</b> The direction it finds is the heavy-tailed one, which is the classical result that nonlinear Hebbian rules do projection pursuit, here appearing inside the resistor network:</p>
+<p>To see whether the new part comes from higher moments, I replaced the digits by Gaussian samples with the same mean and covariance and kept everything else. At its own quantile the surrogate learns the linear part. With the rectified network's exact $\theta$ and $c$ it is worse off: at the lowest $q$ it learns a non-skewed part, then it loses 931 of 980 neurons at $q = 0.967$, and dies entirely above. <b>Everything the rectified rule does differently on MNIST comes from moments beyond the second.</b> The direction it finds is the heavy-tailed one, which is the classical result that nonlinear Hebbian rules do projection pursuit, here appearing inside the resistor network.</p>
 
+<details class="more" id="rates-control-table"><summary>The parts in numbers: cosine to the linear part, skewness, kurtosis and rate-variance excess, per rule and for the control</summary>
 <div class="table-scroll"><table class="data" id="tab-rates-parts">
   <thead><tr><th>rule (14×14, seed 0)</th><th class="num">cosine to the linear part, $q$ = 0.946 / 0.967 / 0.980</th><th class="num">skewness of the part's voltage</th><th class="num">excess kurtosis</th><th class="num">rate variance / Gaussian value</th></tr></thead>
   <tbody data-slot="parts-table"><tr><td colspan="5" class="mute">loading…</td></tr></tbody>
 </table></div>
 <p class="mute" style="font-size:14px">Ranges are over the three $q$. Skewness and kurtosis are of the part's voltage $h^\top g$ over the 60,000 training digits; the last column is $\mathrm{Var}_{\rm emp}(r)/(k_\tau(1)\,h^\top\Sigma_g h)$, measured on real digits for every row (so the linear row's rates are post hoc at $\tau = 0$). Read from <code>data/nonlin/index.json</code>.</p>
+</details>
 
 <h2 id="rates-score">The scorecard</h2>
 
-<div class="table-scroll"><table class="data" id="tab-rates-score">
-  <thead><tr><th style="width:24%"></th><th>What rectified output does</th><th style="width:34%">Evidence (14×14 MNIST unless stated)</th></tr></thead>
+<div class="fig wide"><div class="table-scroll" style="margin:0"><table class="data" id="tab-rates-score">
+  <thead><tr><th style="width:22%"></th><th>What rectified output does</th><th style="width:40%">Evidence (14×14 MNIST unless stated)</th></tr></thead>
   <tbody data-slot="score"><tr><td colspan="3" class="mute">loading…</td></tr></tbody>
-</table></div>
+</table></div></div>
 
-<div class="fig-row">
-  <figure class="fig card" id="fig-rates-probe">
-    <div class="fig-title">How useful is the code? Linear probes against cluster count</div>
-    <div data-slot="probe"><p class="mute">loading…</p></div>
-    <figcaption><b>Plotted:</b> test accuracy of a multinomial logistic probe (60,000 train / 10,000 test digits, z-scored features) on the $\tau = 0$ rates of all 980 neurons of each trained network, against its number of live clusters (dots offset slightly by rule). Dashed: the same probe on the 196 raw pixels, on the untrained network's rates (mean over seeds) and on 980 random ReLU features of the centred pixels. <b>Values:</b> every 14×14 pixel run, $\gamma \in \{0, 1\}$, both seeds, all $q$.</figcaption>
-  </figure>
-  <figure class="fig card" id="fig-rates-readout">
-    <div class="fig-title">Reading $\Sigma_g$ back by inverting $k_\tau$: the bias is the gap</div>
-    <div data-slot="readout"><p class="mute">loading…</p></div>
-    <figcaption><b>Plotted:</b> $y$, the energy of the learned part in the readout, $c_k^\top\hat C c_k / c_k^\top\Sigma_g c_k$ (1 = unbiased), with $\hat C$ from the Gaussian inversion of the weights (parameters known); $x$, the measured rate-variance excess $\mathrm{Var}_{\rm emp}(r)/(k_\tau(1)s^2)$ of the part over the network's training inputs (exactly 1 for Gaussian inputs). Dashed: $y = x$. <b>Values:</b> 14×14, $\gamma = 1$, every seed and $q$ with a major live cluster.</figcaption>
-  </figure>
-</div>
+<details class="more" id="rates-probes"><summary>Linear probes: every trained network is a redundant code, and the cluster count, not the nonlinearity, decides how much it keeps</summary>
+<figure class="fig card" id="fig-rates-probe">
+  <div class="fig-title">How useful is the code? Linear probes against cluster count</div>
+  <div data-slot="probe"><p class="mute">loading…</p></div>
+  <figcaption><b>Plotted:</b> test accuracy of a multinomial logistic probe (60,000 train / 10,000 test digits, z-scored features) on the $\tau = 0$ rates of all 980 neurons of each trained network, against its number of live clusters (dots offset slightly by rule). Dashed: the same probe on the 196 raw pixels, on the untrained network's rates (mean over seeds) and on 980 random ReLU features of the centred pixels. <b>Values:</b> every 14×14 pixel run, $\gamma \in \{0, 1\}$, both seeds, all $q$.</figcaption>
+</figure>
+<p>Every trained network, under either rule, is a highly redundant code, and the cluster count, not the nonlinearity, decides how much it keeps: a one-cluster linear network probes at about 0.22, like the rectified ones, and the linear rule does better only when it fragments on its way to extinction. All are below the pixels and the <em>untrained</em> network, and far below random ReLU features.</p>
+</details>
 
-<p><b>The probes.</b> Every trained network, under either rule, is a highly redundant code, and the cluster count, not the nonlinearity, decides how much it keeps: a one-cluster linear network probes at about 0.22, like the rectified ones, and the linear rule does better only when it fragments on its way to extinction. All are below the pixels and the <em>untrained</em> network, and far below random ReLU features.</p>
+<details class="more" id="rates-readout"><summary>Reading $\Sigma_g$ back by inverting $k_\tau$: within a few per cent on Gaussian inputs, biased on digits by exactly the measured excess</summary>
+<figure class="fig card" id="fig-rates-readout">
+  <div class="fig-title">Reading $\Sigma_g$ back by inverting $k_\tau$: the bias is the gap</div>
+  <div data-slot="readout"><p class="mute">loading…</p></div>
+  <figcaption><b>Plotted:</b> $y$, the energy of the learned part in the readout, $c_k^\top\hat C c_k / c_k^\top\Sigma_g c_k$ (1 = unbiased), with $\hat C$ from the Gaussian inversion of the weights (parameters known); $x$, the measured rate-variance excess $\mathrm{Var}_{\rm emp}(r)/(k_\tau(1)s^2)$ of the part over the network's training inputs (exactly 1 for Gaussian inputs). Dashed: $y = x$. <b>Values:</b> 14×14, $\gamma = 1$, every seed and $q$ with a major live cluster.</figcaption>
+</figure>
+<p>Inverting $k_\tau$ recovers $\Sigma_g$ on synthetic Gaussian data (contrast cosine 0.9995 when the clusters span the blocks), and nets trained on Gaussian pixels read back their part's energy within a few per cent, with lateral plasticity ($\gamma = 1$; at $\gamma = 0$ they give 0.74–0.91). On digits it inflates the part's energy by exactly the measured excess, and inverting the exact expected rate covariance gives the same bias, so it comes from the Gaussian closure, not from non-equilibrium. What is identifiable changes too: the rectified equations also involve the input variances $C_{bb}$, so they can see directions the linear readout cannot (one cloned cluster $h = (\tfrac12, \tfrac12)$, $C = I$, two input and one lateral equation: local Jacobian rank 3 against 2). Identifiability has to be judged by that local rank, and an unknown $\theta$ or $\lambda/\eta$ is no longer a simple gauge, though a fitted $\theta$ comes back near 0 whatever the truth.</p>
+</details>
 
-<p><b>The readout.</b> Inverting $k_\tau$ recovers $\Sigma_g$ on synthetic Gaussian data (contrast cosine 0.9995 when the clusters span the blocks), and nets trained on Gaussian pixels read back their part's energy within a few per cent, with lateral plasticity ($\gamma = 1$; at $\gamma = 0$ they give 0.74–0.91). On digits it inflates the part's energy by exactly the measured excess, and inverting the exact expected rate covariance gives the same bias, so it comes from the Gaussian closure, not from non-equilibrium. What is identifiable changes too: the rectified equations also involve the input variances $C_{bb}$, so they can see directions the linear readout cannot (one cloned cluster $h = (\tfrac12, \tfrac12)$, $C = I$, two input and one lateral equation: local Jacobian rank 3 against 2). Identifiability has to be judged by that local rank, and an unknown $\theta$ or $\lambda/\eta$ is no longer a simple gauge, though a fitted $\theta$ comes back near 0 whatever the truth.</p>
-
-<details class="more" id="rates-samples"><summary>Sample synthesis from the read-back covariance</summary>
+<details class="more" id="rates-samples"><summary>Sample synthesis from the read-back covariance: blurry blobs on the one learned part, not digits</summary>
 <p>Gaussian samples $x = \mu + \hat C_+^{1/2} z$, with the same $z$ in every row and $\mu$ the training-data mean, which is <em>assumed</em>: the weights do not determine the mean. This is moment-based synthesis under an explicit Gaussian assumption. The weight-derived rows are blurry blobs on the single learned part (the rectified rows on the two bars, the linear row on the stroke); none resembles digits. That is the identifiability limit of a one-cluster network, not a property of rectification.</p>
 <div data-slot="samples"><p class="mute">loading…</p></div>
 <p class="mute" style="font-size:14px"><b>Plotted:</b> 16 samples per row, 14×14, grey scale clipped to [0, 1], enlarged without smoothing; $\hat C$ in absolute units (parameters known) with negative eigenvalues clipped (the clipped share is given per row). Image: <code>data/nonlin/samples.png</code>.</p>
@@ -122,17 +118,17 @@ $$k_\tau(\rho) = \rho\,\Phi(-\tau)^2 + \frac{1}{2\pi}\int_0^{\arcsin\rho} (\rho 
   </ul>
 </aside>
 
-<p><b>Why I have not stacked it.</b> On raw MNIST a second layer fed by these rates would see 980 copies of one function of the input: one effective input. That is a fact about this first layer on digits, not about depth. On the synthetic ring above, rectification keeps 7–9 parts populated where the linear rule keeps 1 (live figure, $\rho^\ast = 0.6$, three seeds), so whether a hierarchy helps is still open; it needs a first layer that keeps several parts populated on real data.</p>
+<p><b>Why I have not stacked it.</b> On raw MNIST a second layer fed by these rates would see 980 copies of one function of the input: one effective input. That is a fact about this first layer on digits, not about depth. On the <a href="#rates/rates-ring">synthetic ring</a>, rectification keeps 7–9 parts populated where the linear rule keeps 1 (live figure, $\rho^\ast = 0.6$, three seeds), so whether a hierarchy helps is still open; it needs a first layer that keeps several parts populated on real data.</p>
 
+<details class="more" id="rates-depth"><summary>Speculation, not tested: what might make depth worth trying</summary>
 <aside class="callout caveat"><p class="callout-title">Speculation, not tested</p><p>What might make depth worth trying. Each item attacks one of the two failures above, collapse to one cluster or clones within it. <b>Private noise</b> per synapse breaks the permutation symmetry that keeps clones identical, but in the linear model it gave only jitter that averages out, not distinct functions (<a href="#homeo/reservoir">Homeostasis</a>). <b>Sparse random wiring</b> without lateral plasticity gave a few distinct functions per mode in the linear model. <b>Per-neuron thresholds</b> (different $\tau_i$) would make members of one part fire on different subsets of stimuli. And something must stop the dense population binding into one blob on the first, loudest part: switching lateral plasticity off ($\gamma = 0$) did not, so a heavy-tailed initial input weighting or a smaller leak would be the next things to try.</p></aside>
+</details>
 
-<h2 id="rates-decisions">Design decisions</h2>
-
-<div class="fig wide"><div class="table-scroll" style="margin:0"><table class="data" style="min-width:760px;font-size:13.5px">
+<details class="more" id="rates-decisions"><summary>Design decisions: comparable $\theta$, the gain, the leak, the control, the readout fit, the network</summary>
+<div class="table-scroll" style="margin:0"><table class="data" style="min-width:760px;font-size:13.5px">
   <thead><tr><th style="width:17%">Decision</th><th style="width:22%">Default</th><th style="width:22%">Alternative</th><th>Why, and what the alternative would change</th></tr></thead>
   <tbody>
-    <tr><td>The threshold</td><td>$b_i = \mathbb E[u_i] + \tau\,\mathrm{sd}(u_i)$, inputs likewise; intrinsic-excitability homeostasis in the fast limit</td><td>$b_i = 0$; the median; a fixed $b$; a slow running average</td><td>At $b = 0$ nothing changes. The neuron's own sd makes the Gaussian theory one function $k_\tau$, and $\rho(w)$ stays weight-only. A running average would add a third timescale; not studied.</td></tr>
-    <tr><td>$\tau$</td><td>0, also 0.5 and 1</td><td>larger $\tau$</td><td>$\tau$ is a sparsity knob (50%/31%/16% firing for a Gaussian voltage). Larger $\tau$ made the part more skewed and the population harder to kill, never more clusters.</td></tr>
+    <tr><td>The threshold and $\tau$</td><td>$b_i = \mathbb E[u_i] + \tau\,\mathrm{sd}(u_i)$, inputs likewise, in the fast limit; $\tau = 0$, also 0.5 and 1</td><td>$b_i = 0$; the median; a fixed $b$; a slow running average; larger $\tau$</td><td>As in <a href="#method/row-relu">Choices &amp; caveats</a>. A running average would add a third timescale; not studied.</td></tr>
     <tr><td>$\theta$ in comparable units</td><td>the same quantile $q$ of the off-diagonal input covariance each rule sees</td><td>the same raw $\theta$</td><td>Rate covariances are distributed differently from $\Sigma_g$; the same raw $\theta$ would compare a lenient rule with a strict one. The linear grid $\theta \in \{0.3, 0.45, 0.6, 0.75, 0.9\}$ sits at $q$ = 0.946–0.992. In the ring figure the matching is exact instead: $\theta = \tilde k_0(\rho^\ast)$.</td></tr>
     <tr><td>Rate gain $c$</td><td>one constant per $\tau$: mean input-rate variance 1 on the pixels</td><td>none</td><td>Keeps $\theta$, $w_{\min}$ and the initial weights on the same numerical scale for both rules.</td></tr>
     <tr><td>Leak $\omega = N w_{\min}$</td><td>0.5 ($w_{\min} = 5.1\times10^{-4}$), as the linear MNIST runs</td><td>$\omega \approx 1$ ($w_{\min} = 10^{-3}$)</td><td>The first grid, at $\omega \approx 1$, went from one cluster straight to extinction and was uninformative (the floor as a knob, as in the linear findings); it was rerun at 0.5 and not exported.</td></tr>
@@ -140,6 +136,7 @@ $$k_\tau(\rho) = \rho\,\Phi(-\tau)^2 + \frac{1}{2\pi}\int_0^{\arcsin\rho} (\rho 
     <tr><td>Readout</td><td>joint nonlinear least squares over symmetric $\hat C$ through $k_\tau$ (both edge families), L-BFGS from the chord start $\hat C_0$ = linear readout of $Q/k_\tau(1)$, ridge $10^{-4}\times$ the operator norm</td><td>alternate "guess variances, invert to correlations, re-solve"; a small ridge</td><td>The alternating scheme stalls when a guessed variance is too small. The ridge matters more than in the linear case: at $10^{-7}$ the data are fit to $10^{-6}$ but the contrast cosine on synthetic blocks is −0.36 (0.9995 at the default), because the data do not pin $\hat C$ inside a block and the ridge picks the minimum-norm solution. Identifiability is judged by the local Jacobian rank: rectification brings in the input variances and can reveal more than the linear readout (rank 3 vs 2 in a small example). $\theta$ and $\lambda/\eta$ are no longer simple gauges; $\theta$ is formally identifiable but not in practice (fitted $\hat\theta \approx 0$ for true 0.22–0.54).</td></tr>
     <tr><td>Network</td><td>$N = 5B = 980$, dense random init, $\gamma = 1$, 3,000 steps, batch 256, $dt = 0.1$, last 20% averaged</td><td>sparse wiring, heavy-tailed init</td><td>As the linear MNIST runs, for paired seeds. The θ sweep never spans "one cluster → many": a different init or a smaller leak might; not run.</td></tr>
   </tbody>
-</table></div></div>
+</table></div>
+</details>
 
 <p class="mute" style="font-size:14px">Source: <code>docs/nonlin.md</code>; code <code>hebb/nonlin/</code>; data <code>data/nonlin/</code> (89 exported runs; 1.64 GPU-hours on Modal in all, including a superseded first grid). Stationarity of the minibatch runs is at the SGD noise floor (max residual 0.07–0.34, active-edge mean 0.002–0.03), not the $10^{-4}$ of mean-field; the readout conclusions do not hinge on it.</p>
