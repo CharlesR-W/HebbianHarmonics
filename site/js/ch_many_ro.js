@@ -60,12 +60,24 @@ export function partsSum(H, Wib, Mib, N, B, P, labels, K) {
   return { C, K: parts.length, parts };
 }
 
-// Masked least-squares readout, theta known and theta unknown ('project' is exact for γ = 1; otherwise fitted).
+// θ-unknown readout options. 'project' (θ absorbed by the 1-directions, ridge on PCP) for γ ∈ {0, 1}, as before;
+// otherwise θ is fitted as a free unknown, except when no I–I equation is active (as at many converged states, and for
+// the I–B-only row): then θ is not identifiable, 'fit' is singular (warm-started CG wanders: contrast cosines from −0.01
+// to 0.96 along one run at γ = 0.5), and any fixed θ gives the same P Ĉ P, so θ = 0 is used. The caller projects with P.
+export function thetaFreeOpts(Wii, Mii, N, gamma, wmin, use = "both") {
+  if (gamma === 1 || gamma === 0) return { thetaMode: "project" };
+  if (use === "ib") return { thetaMode: "known", theta: 0 };
+  const thr = wmin * (1 + 1e-6);
+  for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (Mii[i * N + j] && Wii[i * N + j] > thr) return { thetaMode: "fit" };
+  return { thetaMode: "known", theta: 0 };
+}
+
+// Masked least-squares readout, theta known and theta unknown (see thetaFreeOpts).
 export function readPair(H, Wii, Wib, Mii, Mib, N, B, P, opts = {}, warm = null, key = "") {
   const base = { theta: P.theta, lam: P.lam, eta: P.eta, gamma: P.gamma, wmin: P.wmin, maxIter: 300, ...opts };
   const rk = E.readoutLS(H, Wii, Wib, Mii, Mib, N, B, { ...base, thetaMode: "known", x0: warm ? warm.get(key + ":k") : undefined });
-  const mode = P.gamma === 1 || P.gamma === 0 ? "project" : "fit";   // γ = 0: I–B equations only, the θ11ᵀ shift is exact too
-  const rp = E.readoutLS(H, Wii, Wib, Mii, Mib, N, B, { ...base, thetaMode: mode, x0: warm ? warm.get(key + ":p") : undefined });
+  const tf = thetaFreeOpts(Wii, Mii, N, P.gamma, P.wmin, opts.use), mode = tf.thetaMode === "known" ? "θ = 0 (not identifiable)" : tf.thetaMode;
+  const rp = E.readoutLS(H, Wii, Wib, Mii, Mib, N, B, { ...base, ...tf, x0: warm ? warm.get(key + ":p") : undefined });
   if (warm) { warm.set(key + ":k", rk.C); warm.set(key + ":p", rp.C); }
   return { rk, rp, mode };
 }
@@ -82,7 +94,7 @@ export function runAndScore({ Sigma, B, N, theta, gamma, wmin, seed, k, p, iiSca
     E.advance(s, Sigma, P, n); steps += n;
     if (steps <= track) {
       const H = E.harmonicFrom(s.Wii, s.Wib, N, B);
-      const rp = E.readoutLS(H, s.Wii, s.Wib, s.Mii, s.Mib, N, B, { theta, lam: P.lam, eta: P.eta, gamma, wmin, maxIter: 200, thetaMode: gamma === 1 || gamma === 0 ? "project" : "fit", x0: warm.get("t") });
+      const rp = E.readoutLS(H, s.Wii, s.Wib, s.Mii, s.Mib, N, B, { theta, lam: P.lam, eta: P.eta, gamma, wmin, maxIter: 200, ...thetaFreeOpts(s.Wii, s.Mii, N, gamma, wmin), x0: warm.get("t") });
       warm.set("t", rp.C);
       const c = E.compareCov(rp.C, Sigma, B, { setting: "contrast", k }).cosine;
       if (c > peak) { peak = c; peakStep = steps; }
