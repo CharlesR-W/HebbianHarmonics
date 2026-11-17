@@ -24,7 +24,7 @@ import modal
 BACKEND = os.environ.get("MNIST_BACKEND", "gpu")      # "gpu" (L4) or "cpu" (twin app, 8 cores)
 APP_NAME = "crw-hebbian-mnist" + ("" if BACKEND == "gpu" else "-cpu")
 VOL_NAME = "crw-hebbian-mnist-results"
-GPU = "L4" if BACKEND == "gpu" else None
+GPU = ["L4", "A10G", "T4"] if BACKEND == "gpu" else None   # fallback list: L4 capacity was scarce
 TIMEOUT_S = 60 * 60
 MAX_CONCURRENCY = 20
 HERE = Path(__file__).resolve().parent
@@ -88,7 +88,7 @@ def cmd_launch(cfg_path: str):
     run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + Path(cfg_path).stem
     call = modal.Function.from_name(APP_NAME, "coordinator").spawn(run_id, cfg)
     rec = {"run_id": run_id, "call_id": call.object_id, "cfg": cfg_path,
-           "n_units": len(cfg["units"]), "gpu": GPU, "launched": time.ctime()}
+           "n_units": len(cfg["units"]), "gpu": str(GPU), "launched": time.ctime()}
     (_runs_dir() / f"{run_id}.json").write_text(json.dumps(rec, indent=1))
     print(json.dumps(rec, indent=1))
 
