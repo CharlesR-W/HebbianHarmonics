@@ -1,8 +1,0 @@
-{
- "run_id": "20261117-000703-final_retry",
- "call_id": "fc-01M7M8Q4T178RHC9KWWPEXV02T",
- "cfg": "configs/final_retry.json",
- "n_units": 9,
- "gpu": "['L4', 'A10G', 'T4']",
- "launched": "Tue Nov 17 00:07:03 2026"
-}

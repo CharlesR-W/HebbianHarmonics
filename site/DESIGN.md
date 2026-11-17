@@ -1,8 +1,33 @@
 # HebbianHarmonics site: design contract for chapter authors
 
-Read this file and `SPEC.md`; nothing else is needed. The `#three` tab is a living style guide
-(`content/three.html` + `js/ch_three.js`, fake data) that shows every component below in use. It is a placeholder
-for Chapter 1 and will be replaced by it.
+Read this file and `SPEC.md`; nothing else is needed. Section 0 says what changed for v2; the rest is the
+contract every chapter follows. Code examples below were written for v1 and use its names (`engine.js`, `theta`,
+`data/mnist/...`); the APIs they show are unchanged. The `#old` chapter (`content/old.html`, `js/ch_old.js`,
+`js/ch_old_model.js`) is a complete chapter that uses most components (sim layout, transport, tours, controls,
+stat tiles, legend, linked heatmap, side notes, callouts, a disclosure) and is the nearest working example.
+
+## 0. What changed in v2 (2026-11-17)
+
+- **Model.** The page is rebuilt around SPEC.md v2: on-site potentials, response functions $F_i$, the distance
+  rule $dw_{ij}/dt = b - \alpha w_{ij} - \tfrac12 D_{ij}^2$. New chapters simulate with **`js/onsite_engine.js`**
+  (pure ES module; reference `hebb/onsite.py`; parity tests `tests/onsite_*`) and load precomputed sweeps from
+  `data/sweeps2/*.json` (each file carries its config). Use SPEC §1 notation in new chapters ($F_i$, $D_{ij}$,
+  $b$, $\alpha$, $V_i$, $t_i$, $k_{lo}$, $k_{hi}$, $\sigma_t$, $s$, attachments $a_{ib}$); the v1 notation paragraph
+  in section 4 applies to the old-rule chapter only.
+- **Tabs**, in order (id: label): `idea` The idea · `fusion` Fusion (centrepiece, marked with three squares) ·
+  `many` Many inputs · `diversity` Diversity · `allocation` Allocation · `readout` Readout · `old` The old rule ·
+  `method` Choices & caveats. Kickers: "Chapter 1 · live simulation" (fusion) to "Chapter 7" (method); the page
+  title, subtitle and the kicker/title of each chapter are in `index.html` and the labels in `ui.js` `tabsMeta`
+  (`main.js` routes from `tabsMeta`, so adding a tab means editing those two places only).
+- **v1 survives only in `#old`.** `js/engine.js` (with `ENGINE.md`, `hebb/core.py` and
+  `tests/test_engine_parity.py`) is kept for that chapter's one live figure; no new chapter should import it.
+  The other v1 chapters, their data (`data/mnist`, `data/nonlin`, `data/sweeps`, `data/homeo`) and the v1
+  experiment code were removed (git history keeps them); the v1 write-ups are in `docs/v1/`.
+- **Placeholders.** Each new chapter starts as `content/<tab>.html` (the chapter's question and an
+  "In preparation" note) and an empty `js/ch_<tab>.js`. Each author owns one disjoint pair of files, plus
+  optional helper modules named `js/ch_<tab>_*.js` imported by `ch_<tab>.js` (as `ch_old_model.js`).
+- **Ids are page-global.** Every chapter is loaded into the same document, so prefix element ids with the tab
+  (`id="fusion-bistable"`, `id="readout-eq-rank"`); `#old` uses `old-`.
 
 ## 1. Files and who owns what
 
@@ -17,29 +42,29 @@ site/
   js/charts.js          heatmap, filmstrip, lineChart, scatter, barChart, barMultiples, imageGrid (section 8)
   js/view3d.js          3D point/line viewer + simplex helpers (section 9)
   js/palette.js         colour grammar for JS (reads css/tokens.css) (section 6)
-  js/engine.js          the simulation engine (separate owner; see SPEC.md)
+  js/onsite_engine.js   the v2 simulation engine (separate owner; see SPEC.md §5)
+  js/engine.js          the v1 engine, used only by the old-rule chapter (see ENGINE.md)
   vendor/               KaTeX 0.16 and fonts (Source Serif 4, Inter, JetBrains Mono); nothing from a CDN
   content/<tab>.html    chapter prose fragment                                               (chapter author)
   js/ch_<tab>.js        chapter module                                                       (chapter author)
-  data/                 precomputed data (MNIST)                                             (data owner)
+  data/sweeps2/         precomputed v2 sweeps (hebb/sweeps2/*.py)                            (data owner)
 ```
 
 A chapter author edits only `content/<tab>.html`, `js/ch_<tab>.js` and their own data files. If you need a new
 component or a style change, ask for it to be added here rather than writing one-off CSS; small chapter-local
 layout (a grid inside one figure) is fine as inline `style` or a `<style>`-free class built from existing ones.
 
-Tabs, in order (id: label): `idea` The idea · `three` Three inputs (centrepiece, marked with three squares) ·
-`many` Many inputs · `mnist` Real data · `rates` Rectified neurons · `homeo` Homeostasis · `method` Choices & caveats.
+Tabs: see section 0.
 The chapter title and kicker ("Chapter 2 · live simulation") are in `index.html`; do not repeat them in the fragment.
 
 ### Running it
 
 ```bash
-python3 -m http.server 8765 --bind 127.0.0.1 -d site      # then http://127.0.0.1:8765/#three
+python3 -m http.server 8765 --bind 127.0.0.1 -d site      # then http://127.0.0.1:8765/#fusion
 ```
 No build step. Everything is fetched with relative URLs, so it must be served over HTTP (not `file://`).
 `http.server` sends no cache headers: after editing JS, reload with the cache disabled or add `?v=<n>` before the
-`#` (e.g. `http://127.0.0.1:8765/?v=2#three`). Zero console errors is a requirement; check with
+`#` (e.g. `http://127.0.0.1:8765/?v=2#fusion`). Zero console errors is a requirement; check with
 `playwright-cli console` (see the screenshot recipe in section 11).
 
 ## 2. How a chapter loads

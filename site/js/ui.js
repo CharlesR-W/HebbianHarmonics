@@ -6,13 +6,14 @@ import { gradientCss } from "./palette.js";
 
 export const tabsMeta = [
   { id: "idea", label: "The idea" },
-  { id: "three", label: "Three inputs" },
+  { id: "fusion", label: "Fusion" },
   { id: "many", label: "Many inputs" },
-  { id: "mnist", label: "Real data" },
-  { id: "rates", label: "Rectified neurons" },
-  { id: "homeo", label: "Homeostasis" },
+  { id: "diversity", label: "Diversity" },
+  { id: "allocation", label: "Allocation" },
+  { id: "readout", label: "Readout" },
+  { id: "old", label: "The old rule" },
   { id: "method", label: "Choices & caveats" },
-].map(t => ({ ...t, title: t.id === "idea" ? "Hebbian Learning on a Resistor Network" : `${t.label} · Hebbian Learning on a Resistor Network` }));
+].map(t => ({ ...t, title: t.id === "idea" ? "Hebbian Learning on a Nonlinear Resistor Network" : `${t.label} · Hebbian Learning on a Nonlinear Resistor Network` }));
 
 // ---------------------------------------------------------------- basics
 // #tab/anchor?k=v  ->  { tab, anchor, params: URLSearchParams }

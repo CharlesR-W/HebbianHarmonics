@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hebbian Learning on a Resistor Network</title>
-<meta name="description" content="An exploratory, live-simulated explorer of Hebbian plasticity on a resistor network: harmonic embeddings, pruning, clusters, and reading the input covariance back out of the weights.">
+<title>Hebbian Learning on a Nonlinear Resistor Network</title>
+<meta name="description" content="An exploratory, live-simulated explorer of Hebbian plasticity as energy descent on a resistor network with nonlinear neurons: response functions, a distance-based rule, clusters, allocation, and reading the input statistics back out of the weights.">
 <link rel="preload" href="vendor/fonts/inter-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="vendor/fonts/source-serif-4-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
@@ -17,26 +17,27 @@
 <a class="skip" href="#main">Skip to content</a>
 <div class="banner" role="note">
   <span class="banner-tag">Exploratory report</span>
-  <span>Most chapters simulate live in your browser; the MNIST results are precomputed. All covariances outside MNIST are synthetic.</span>
+  <span>Being rebuilt around a new model: most chapters are in preparation. Simulations run live in your browser; all inputs are synthetic.</span>
 </div>
 <header class="masthead">
   <div class="masthead-inner">
-    <h1 class="title">Hebbian Learning on a Resistor Network</h1>
-    <p class="subtitle">or, Ohm Is Where the Hebb Is</p>
-    <p class="byline"><span>Charles R-W</span><span class="dot">·</span><time datetime="2026-11-16">16 November 2026</time><span class="dot">·</span><span>work in progress</span></p>
-    <p class="cta"><a class="explore-link big" href="#three">Watch three inputs organise a network</a></p>
+    <h1 class="title">Hebbian Learning on a Nonlinear Resistor Network</h1>
+    <p class="subtitle">or, The Path of Least Resistance</p>
+    <p class="byline"><span>Charles R-W</span><span class="dot">·</span><time datetime="2026-11-17">17 November 2026</time><span class="dot">·</span><span>work in progress</span></p>
+    <p class="cta"><a class="explore-link big" href="#fusion">Watch neurons fuse</a></p>
   </div>
 </header>
 <nav class="tabs" aria-label="Chapters">
   <div class="tabs-inner">
-    <a class="tabs-home" href="#idea" title="Hebbian Learning on a Resistor Network: back to the start">Ohm Is Where the Hebb Is</a>
+    <a class="tabs-home" href="#idea" title="Hebbian Learning on a Nonlinear Resistor Network: back to the start">The Path of Least Resistance</a>
     <div class="tablist" role="tablist">
       <a role="tab" href="#idea" data-tab="idea">The idea</a>
-      <a role="tab" href="#three" data-tab="three" class="tab-mark">Three inputs</a>
+      <a role="tab" href="#fusion" data-tab="fusion" class="tab-mark">Fusion</a>
       <a role="tab" href="#many" data-tab="many">Many inputs</a>
-      <a role="tab" href="#mnist" data-tab="mnist">Real data</a>
-      <a role="tab" href="#rates" data-tab="rates">Rectified neurons</a>
-      <a role="tab" href="#homeo" data-tab="homeo">Homeostasis</a>
+      <a role="tab" href="#diversity" data-tab="diversity">Diversity</a>
+      <a role="tab" href="#allocation" data-tab="allocation">Allocation</a>
+      <a role="tab" href="#readout" data-tab="readout">Readout</a>
+      <a role="tab" href="#old" data-tab="old">The old rule</a>
       <a role="tab" href="#method" data-tab="method">Choices &amp; caveats</a>
     </div>
   </div>
@@ -45,28 +46,32 @@
   <section class="tab-panel" id="tab-idea" data-tab="idea">
     <article class="prose"></article>
   </section>
-  <section class="tab-panel" id="tab-three" data-tab="three" hidden>
-    <header class="page-head"><p class="kicker">Chapter 1 · live simulation</p><h1>Three inputs</h1></header>
+  <section class="tab-panel" id="tab-fusion" data-tab="fusion" hidden>
+    <header class="page-head"><p class="kicker">Chapter 1 · live simulation</p><h1>Fusion</h1></header>
     <article class="prose"></article>
   </section>
   <section class="tab-panel" id="tab-many" data-tab="many" hidden>
-    <header class="page-head"><p class="kicker">Chapter 2 · live simulation</p><h1>Many inputs, random statistics</h1></header>
+    <header class="page-head"><p class="kicker">Chapter 2 · live simulation and precomputed sweeps</p><h1>Many inputs</h1></header>
     <article class="prose"></article>
   </section>
-  <section class="tab-panel" id="tab-mnist" data-tab="mnist" hidden>
-    <header class="page-head"><p class="kicker">Chapter 3 · precomputed</p><h1>Real data: MNIST</h1></header>
+  <section class="tab-panel" id="tab-diversity" data-tab="diversity" hidden>
+    <header class="page-head"><p class="kicker">Chapter 3</p><h1>Diversity within a cluster</h1></header>
     <article class="prose"></article>
   </section>
-  <section class="tab-panel" id="tab-rates" data-tab="rates" hidden>
-    <header class="page-head"><p class="kicker">Chapter 4</p><h1>Rectified neurons</h1></header>
+  <section class="tab-panel" id="tab-allocation" data-tab="allocation" hidden>
+    <header class="page-head"><p class="kicker">Chapter 4</p><h1>Who gets the neurons?</h1></header>
     <article class="prose"></article>
   </section>
-  <section class="tab-panel" id="tab-homeo" data-tab="homeo" hidden>
-    <header class="page-head"><p class="kicker">Chapter 5 · live simulation and precomputed sweeps</p><h1>Homeostasis</h1></header>
+  <section class="tab-panel" id="tab-readout" data-tab="readout" hidden>
+    <header class="page-head"><p class="kicker">Chapter 5</p><h1>Reading the weights</h1></header>
+    <article class="prose"></article>
+  </section>
+  <section class="tab-panel" id="tab-old" data-tab="old" hidden>
+    <header class="page-head"><p class="kicker">Chapter 6 · the first model, condensed</p><h1>The old rule</h1></header>
     <article class="prose"></article>
   </section>
   <section class="tab-panel" id="tab-method" data-tab="method" hidden>
-    <header class="page-head"><p class="kicker">Chapter 6</p><h1>Choices &amp; caveats</h1></header>
+    <header class="page-head"><p class="kicker">Chapter 7</p><h1>Choices &amp; caveats</h1></header>
     <article class="prose"></article>
   </section>
 </main>

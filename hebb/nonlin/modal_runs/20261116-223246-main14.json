@@ -1,8 +1,0 @@
-{
- "run_id": "20261116-223246-main14",
- "call_id": "fc-01M7M3AGG4X4YAKV0TJ4Q8W47K",
- "cfg": "hebb/nonlin/configs/main14.json",
- "n_units": 50,
- "gpu": "L4",
- "launched": "Mon Nov 16 22:32:46 2026"
-}

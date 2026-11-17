@@ -1,6 +1,6 @@
 # HebbianHarmonics — spec v2 (on-site potentials, distance rule)
 
-v1 (`docs/spec_v1.md`) studied the raw covariance rule `dw = w0 − λw + η Cov(u_i,u_j)` on a
+v1 (`docs/v1/spec_v1.md`) studied the raw covariance rule `dw = w0 − λw + η Cov(u_i,u_j)` on a
 linear resistor network. Its results were largely degenerate: one-cluster collapse unless
 pruned, exact clones inside a cluster, allocation inherited from the transient, rectified
 output adding nothing structural. v2 rebuilds the explorer around a model in which the
@@ -76,8 +76,9 @@ Conventions for every experiment (from the plan review, 2026-11-17):
 
 - **Q-fusion.** Is the fixed point the stated one (w vs D^2 on the curve; envelope identity
   checked numerically)? Calibration: the analytic two-neuron case, `D^2(w) = D0^2/(1+2w)^2`
-  for unit attachments, `dw/dt = b − alpha w − D^2(w)/2`, which is BISTABLE (e.g. b = 0.2,
-  alpha = 0.1: w = 0 and w ≈ 1.754 both stable). Then N neurons: cluster count, diameter
+  for unit attachments, `dw/dt = b − alpha w − D^2(w)/2`, which is BISTABLE for
+  `b_sn < b < D0^2/2` (e.g. D0^2 = 2, b = 0.4, alpha = 0.2: w = 0 and w ≈ 1.754 both stable;
+  closed form in findings G2). Then N neurons: cluster count, diameter
   vs `b` and `alpha`; continuation in b up and down (hysteresis); is refinement nested?
 - **Q-resolution (eq. 10–11).** Three separate statements, not to be conflated:
   (1) the frozen-response anisotropic law `D^2 = sum_a lambda_a (Delta h_a)^2` (exact);
@@ -142,7 +143,7 @@ Conventions for every experiment (from the plan review, 2026-11-17):
 5. **readout** — Q-readout.
 6. **old rule** — one chapter condensing v1: the covariance rule, why it collapses, parts
    not eigenvectors, clones, transient allocation, rectified output; with the corrections
-   of `docs/review_corrections.md` applied. Reuses at most one live v1 figure.
+   of `docs/v1/review_corrections.md` applied. Reuses at most one live v1 figure.
 7. **method** — engineering choices table and caveats; what was not done (stability
    Hessian eq. 12, lagged statistics, generative phase, real data).
 

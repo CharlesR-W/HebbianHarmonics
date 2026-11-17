@@ -1,8 +1,0 @@
-{
- "run_id": "20261116-224934-pilot4",
- "call_id": "fc-01M7M498X6NZFY71H4RCFW0FXG",
- "cfg": "configs/pilot4.json",
- "n_units": 14,
- "gpu": "L4",
- "launched": "Mon Nov 16 22:49:34 2026"
-}

@@ -1,2 +1,3 @@
-// Chapter "method" (Choices & caveats): static prose and tables only; nothing to simulate.
-export function init(panel, ctx) {}
+// Chapter "method": placeholder until its author fills it. Contract: site/DESIGN.md (section 0 for v2, section 2
+// for the module API). A chapter owns content/method.html and js/ch_method*.js; simulate with ./onsite_engine.js.
+export async function init(panel, ctx) {}
