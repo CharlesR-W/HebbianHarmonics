@@ -69,6 +69,11 @@
    "bytes": 30540,
    "description": "Verified explorer presets (chapters 1, 2, 4): exact parameters and per-seed outcomes.",
    "script": "hebb/sweeps/s7_tours.py"
+  },
+  {
+   "file": "alloc_private_noise.json",
+   "description": "Allocation under private (per-synapse) noise: additive, multiplicative, input/covariance-estimation noise; stationary allocation vs energy with fits, hopping rates, diversity, networks at gamma 0/1. See docs/findings_private_noise.md (F11-F17).",
+   "script": "hebb/sweeps/s8_private_noise.py"
   }
  ]
 }
