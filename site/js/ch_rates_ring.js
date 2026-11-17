@@ -23,7 +23,7 @@ function analyse(s, H) {
     dead[i] = mx <= 2 * WMIN ? 1 : 0;
   }
   const cl = E.clustersAuto(H, N, B);
-  if (!cl.robust && cl.K > N / 4) {   // no clear gap yet: still unclustered (early transient)
+  if (cl.K > N / 4) {   // no clear gap yet: still unclustered (early transient)
     const vals = new Float32Array(N * B); vals.set(H);
     return { K: null, nDead: dead.reduce((a, x) => a + x, 0), sizes: [], vals, groups: [], order: Array.from({ length: N }, (_, i) => i) };
   }

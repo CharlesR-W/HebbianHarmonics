@@ -94,7 +94,7 @@ function initLive(ctx, data) {
   }
   makeThetaSlider();
   const gammaS = ui.slider({ label: "lateral gain $\\gamma = \\eta_{II}/\\eta$", min: 0, max: 3, step: 0.05, value: p.gamma, fmt: f2,
-    help: "Not part of $\\rho$: the lateral learning rate. The population binds into one blob when $\\theta < \\gamma\\kappa_0$.",
+    help: "Not part of $\\rho$: the lateral learning rate. The population tends to bind into one blob when $\\theta < \\gamma\\kappa_0$ (a heuristic crossover, accurate to 0.03–0.08 where tested).",
     onInput: x => { p.gamma = x; refreshMarks(); liveChange(); } });
   const omegaS = ui.slider({ label: "floor leak $\\omega = N w_{\\min}\\lambda/\\eta$", min: 1e-4, max: 1, log: true, sig: 2, value: p.omega, fmt: x => ui.fmt(x, 2),
     help: "", onChange: x => { p.omega = x; liveChange(); } });
@@ -152,14 +152,16 @@ function initLive(ctx, data) {
     if (c.image) {
       const im = c.image, w = im.w;
       imageBox = ui.h("div");
-      L.below.append(ui.h("div", { class: "chart-title", html: "(e) The real covariance as images: mean digit, pixel variances $\\Sigma_{bb}$, and the top eight eigenvectors of $\\Sigma_g$" }), imageBox);
+      const wrap = ui.h("div", { style: { gridColumn: "1 / -1", minWidth: "0" } });
+      L.below.append(wrap);
+      wrap.append(ui.h("div", { class: "chart-title", html: "(e) The real covariance as images: mean digit, pixel variances $\\Sigma_{bb}$, and the top eight eigenvectors of $\\Sigma_g$" }), imageBox);
       const vari = Float32Array.from({ length: B }, (_, b) => S[b * B + b]);
       imageGrid(imageBox, { arrays: [Float32Array.from(im.mean_image), vari], w, h: w, map: "seq", range: "tile", tile: 64, labels: ["mean", "variance"],
         tooltip: i => ui.tipRows(i ? "pixel variance (scaled)" : "mean pixel intensity", []) });
       const eg = ui.h("div", { style: { marginTop: "8px" } }); imageBox.append(eg);
       imageGrid(eg, { arrays: im.eigvecs.map(v => Float32Array.from(v)), w, h: w, map: "div", range: "tile", tile: 64, labels: im.eigvecs.map((_, k) => `v${sub(k + 1)}`),
         tooltip: k => ui.tipRows(`eigenvector ${k + 1} of Σ_g`, [{ name: "eigenvalue", value: f3(im.eigvals[k]) }], "signed (red +, blue −), its own symmetric scale") });
-      L.below.append(ui.h("div", { class: "u-help", html: `Computed by <code>hebb/homeo_cov.py</code> from the ${ui.fmtInt(im.n_images)} MNIST training images, average-pooled $28\\times28 \\to 7\\times7$; one global scale so the mean variance is 1. Eigenvectors are signed and global; compare the clusters' parts in (d), which are non-negative and local.` }));
+      wrap.append(ui.h("div", { class: "u-help", html: `Computed by <code>hebb/homeo_cov.py</code> from the ${ui.fmtInt(im.n_images)} MNIST training images, average-pooled $28\\times28 \\to 7\\times7$; one global scale so the mean variance is 1. Eigenvectors are signed and global; compare the clusters' parts in (d), which are non-negative and local.` }));
       ui.renderMath(L.below);
     }
   }
@@ -432,7 +434,7 @@ function thetaStrip(el, { height = 180, onPick } = {}) {
     const X = scale("linear", lo, hi, m.l, W - m.r), Y = scale("linear", 0, nmax * 1.08, Hh - m.b, m.t);
     const svg = svgEl("svg", { width: W, height: Hh, viewBox: `0 0 ${W} ${Hh}`, role: "img", "aria-label": "number of stable parts against theta" }, hostEl);
     const k0 = c.stats.kappa0 * gamma, vmax = c.stats.var_max;
-    if (k0 > lo) { const xb = X(Math.min(k0, hi)); svgEl("rect", { x: m.l, y: m.t, width: Math.max(0, xb - m.l), height: Hh - m.t - m.b, fill: P.seq[1], opacity: 0.55 }, svg); if (xb - m.l > 54) text(svg, m.l + 4, m.t + 11, "collective", { fill: P.ink2, "font-size": 10.5 }); }
+    if (gamma > 0 && k0 > lo) { const xb = X(Math.min(k0, hi)); svgEl("rect", { x: m.l, y: m.t, width: Math.max(0, xb - m.l), height: Hh - m.t - m.b, fill: P.seq[1], opacity: 0.55 }, svg); if (xb - m.l > 110) text(svg, m.l + 4, m.t + 11, "collective (heuristic)", { fill: P.ink2, "font-size": 10.5 }); else if (xb - m.l > 54) text(svg, m.l + 4, m.t + 11, "collective", { fill: P.ink2, "font-size": 10.5 }); }
     if (vmax < hi) { const xa = X(vmax); svgEl("rect", { x: xa, y: m.t, width: W - m.r - xa, height: Hh - m.t - m.b, fill: P.wash }, svg); if (W - m.r - xa > 40) text(svg, xa + 4, m.t + 11, "extinct", { fill: P.ink2, "font-size": 10.5 }); }
     const g = svgEl("g", { class: "grid" }, svg);
     const yt = niceTicks(0, nmax, 3).filter(v => Number.isInteger(v));
@@ -443,12 +445,13 @@ function thetaStrip(el, { height = 180, onPick } = {}) {
     // reference levels, labels staggered on two rows above the plot
     const marks = [[c.stats.offdiag_min, "cov↓"], [c.stats.offdiag_max, "cov↑"], [c.stats.var_min, "var↓"], [vmax, "var↑"], [c.stats.kappa0, "κ₀"], [k0, "γκ₀"]]
       .filter(([v]) => v >= lo && v <= hi).sort((x, y) => x[0] - y[0]);
-    let lastX = [-99, -99];
+    let lastX = [-99, -99, -99];
     marks.forEach(([v, lab]) => {
       const xv = X(v), dashed = lab.startsWith("κ") || lab.startsWith("γ");
       svgEl("line", { x1: xv, x2: xv, y1: m.t - 4, y2: Hh - m.b, stroke: dashed ? P.ink2 : P.mute2, "stroke-width": 1, "stroke-dasharray": dashed ? "4 3" : "1.5 2.5" }, svg);
-      const rowI = xv - lastX[0] > 30 ? 0 : xv - lastX[1] > 30 ? 1 : 0; lastX[rowI] = xv;
-      text(svg, xv, m.t - 8 - rowI * 11, lab, { "text-anchor": "middle", "font-size": 10, fill: P.ink2 });
+      let rowI = lastX.findIndex(x => xv - x > 30); if (rowI < 0) return;      // no room: the tick stays, the label goes
+      lastX[rowI] = xv;
+      text(svg, xv, m.t - 6 - rowI * 10, lab, { "text-anchor": "middle", "font-size": 10, fill: P.ink2 });
     });
     // n(theta) step line
     // step line; a grid value exactly on a correlation level (marginal parts, `tie`) is left as a gap

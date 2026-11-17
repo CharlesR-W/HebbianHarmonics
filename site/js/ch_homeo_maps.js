@@ -134,8 +134,8 @@ function phaseFigure(el, phase, data, live) {
       onClick: q => live.load({ cov, theta: q.theta, gamma: q.gamma, omega: +(meta.base.N * meta.base.wmin).toPrecision(2), n: meta.base.N, seed: 1 }, `phase diagram cell θ = ${f2(q.theta)}, γ = ${ui.fmt(q.gamma, 2)}`),
       overlays });
     keyEl.replaceChildren(ui.legend({ items: [
-      { label: `θ = γκ₀ (κ₀ = ${f3(k0)}): one blob below it`, color: P.fg, shape: "dash" },
-      ...parents.map(pp => ({ label: `θ = ${pp.lab} (E = ${f3(pp.E)}): coarse parts stay bound below it`, color: P.ink2, shape: "line" })),
+      { label: `θ = γκ₀, heuristic crossover (κ₀ = ${f3(k0)}): one blob below it`, color: P.fg, shape: "dash" },
+      ...parents.map(pp => ({ label: `θ = ${pp.lab}, heuristic (E = ${f3(pp.E)}): coarse parts stay bound below it`, color: P.ink2, shape: "line" })),
       { label: `levels where finer parts start to exist: θ = ${levels.join(", ")}`, color: P.mute, shape: "dash" },
       { label: "† every neuron dead · * seeds disagree (median shown)", color: P.wash, shape: "square" },
     ] }).el);
@@ -309,6 +309,8 @@ async function privateNoise(slots, index) {
   }
   const d = await get("alloc_private_noise.json");
   const v = d.meta.diag_sigma.v, st = d.stationary_diag;
+  const rev = d.meta.revision != null ? `revision ${d.meta.revision}` : "first run (no revision stated in the file)";
+  document.querySelectorAll("[data-v='pn-rev']").forEach(e => { e.textContent = rev; });
   noiseLaw(slots.law, d, v, st);
   noiseTime(slots.time, d);
   noiseBeta(slots.beta, st);
@@ -339,7 +341,7 @@ function noiseTime(el, d) {
   let kind = "inp", sig = 0.3, th = 0.2;
   const sigmas = k => [...new Set(d.alloc_vs_time.filter(r => r.kind === k && r.theta === th).map(r => r.sigma))].sort((a, b) => a - b);
   const sHost = ui.h("div");
-  const kS = ui.segmented({ label: "noise model", options: [{ value: "inp", label: "input" }, { value: "add", label: "additive" }, { value: "mul", label: "multiplicative" }], value: kind,
+  const kS = ui.segmented({ label: "noise model", options: [{ value: "inp", label: "input" }, { value: "add", label: "additive" }], value: kind,
     onChange: x => { kind = x; const ss = sigmas(kind); if (!ss.includes(sig)) sig = ss[Math.min(ss.length - 1, Math.floor(ss.length / 2))]; buildSigma(); draw(); } });
   const tS = ui.segmented({ label: "θ", options: [0.05, 0.2, 0.4].map(x => ({ value: x, label: String(x) })), value: th, onChange: x => { th = x; buildSigma(); draw(); } });
   function buildSigma() {

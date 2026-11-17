@@ -14,12 +14,14 @@ const NEURONS = [
   { id: "D", x: 138, y: 168 }, { id: "E", x: 360, y: 250 },
 ];
 const N = NEURONS.length;
-// synapses: [kind, a, b, w0]; "ib" = interior a to input b, "ii" = interior a to interior b
+// synapses: [kind, a, b, w0]; "ib" = interior a to input b, "ii" = interior a to interior b. Weights are in the units
+// of the rule (η/λ times covariance), so figure 2 can compare them with a covariance. The defaults are chosen so that
+// at θ = 0.4 the selected synapse A–B is growing, B–E is being pruned, and others shrink towards a positive weight.
 const EDGES = [
-  ["ib", 0, 0, 2.5], ["ib", 1, 0, 0.5], ["ib", 3, 1, 2.0], ["ib", 2, 1, 0.4], ["ib", 4, 2, 2.0], ["ib", 2, 2, 0.7],
-  ["ii", 0, 1, 1.5], ["ii", 0, 3, 1.0], ["ii", 1, 4, 1.2], ["ii", 3, 2, 0.8], ["ii", 2, 4, 0.6], ["ii", 1, 2, 0.5],
+  ["ib", 0, 0, 0.25], ["ib", 1, 0, 0.05], ["ib", 3, 1, 0.2], ["ib", 2, 1, 0.04], ["ib", 4, 2, 0.2], ["ib", 2, 2, 0.07],
+  ["ii", 0, 1, 0.15], ["ii", 0, 3, 0.1], ["ii", 1, 4, 0.03], ["ii", 3, 2, 0.08], ["ii", 2, 4, 0.06], ["ii", 1, 2, 0.05],
 ];
-const W_LO = 0.05, W_HI = 5;
+const W_LO = 0.005, W_HI = 1, W_REF = 0.25;   // W_REF: the default largest weight (sets the line-width scale)
 const SIGMA = [1, 0.6, 0, 0.6, 1, 0, 0, 0, 1];   // unit variances, g1-g2 correlated 0.6, g3 independent
 const WMIN = 1e-4;
 const clampW = w => Math.min(W_HI, Math.max(W_LO, w));
@@ -119,7 +121,7 @@ export async function init(panel, ctx) {
     compute();
     const wmax = Math.max(...w);
     EDGES.forEach((e, k) => {
-      const el = edgeEls[k], width = 1 + 3.2 * Math.sqrt(w[k] / wmax) * Math.sqrt(wmax / 2.5);
+      const el = edgeEls[k], width = 1 + 3.2 * Math.sqrt(w[k] / wmax) * Math.sqrt(Math.min(2, wmax / W_REF));
       el.line.setAttribute("stroke-width", width.toFixed(2));
       el.halo.setAttribute("stroke-width", (width + 9).toFixed(2));
       el.halo.setAttribute("opacity", k === syn ? 1 : 0);
@@ -202,15 +204,27 @@ export async function init(panel, ctx) {
   }
   const op = (txt, big) => ui.h("span", { style: { fontSize: big ? "22px" : "15px", color: P.mute, lineHeight: "1" }, html: txt });
 
-  function drawDrift() {
-    const [kind, a, b] = EDGES[syn];
+  // the rule with λ = η = γ = 1: dw/dt = −θ − w + cov, clipped at w ≥ w_min; heading (covariance held fixed):
+  // w* = max(w_min, cov − θ). Status follows the sign of the actual drift, not the comparison cov vs θ.
+  function covOf(k) {
+    const [kind, a, b] = EDGES[k];
     const hi = hRow(a), hj = kind === "ib" ? [0, 1, 2].map(c => (c === b ? 1 : 0)) : hRow(b);
-    const li = NEURONS[a].id, lj = kind === "ib" ? gName(b) : NEURONS[b].id;
     let cov = 0;
     for (let x = 0; x < 3; x++) for (let y = 0; y < 3; y++) cov += hi[x] * SIGMA[x * 3 + y] * hj[y];
-    const gamma = 1, thr = kind === "ib" ? theta : theta / gamma;
-    const target = Math.max(WMIN, gamma * cov - theta);
-    const grows = gamma * cov - theta > WMIN;
+    return { cov, hi, hj };
+  }
+  function driftOf(k) {
+    const { cov } = covOf(k), d = -theta - w[k] + cov, atFloor = w[k] <= WMIN * (1 + 1e-9);
+    const target = Math.max(WMIN, cov - theta);
+    const status = atFloor && d <= 0 ? "floor" : d > 0 ? "grows" : target > WMIN ? "shrinks" : "pruned";
+    return { cov, d: atFloor && d < 0 ? 0 : d, target, status };
+  }
+  function drawDrift() {
+    const [kind, a, b] = EDGES[syn];
+    const { hi, hj } = covOf(syn), dr = driftOf(syn), cov = dr.cov;
+    const li = NEURONS[a].id, lj = kind === "ib" ? gName(b) : NEURONS[b].id;
+    const thr = theta;   // γ = 1, so the lateral threshold θ/γ equals θ
+    const survives = cov - theta > WMIN;
     const rhsTex = kind === "ib" ? `h_{${li}}^\\top\\Sigma_g e_{${b + 1}}` : `h_{${li}}^\\top\\Sigma_g h_{${lj}}`;
     chain.replaceChildren(
       miniBars(hi, "h", li), op("ᵀ"),
@@ -219,16 +233,38 @@ export async function init(panel, ctx) {
       ui.h("div", { style: { textAlign: "center" } },
         ui.h("div", { style: { font: "600 22px/1.2 var(--sans)", color: P.fg }, text: ui.fmtFixed(cov, 3) }),
         ui.h("div", { class: "u-help", html: `$${rhsTex}$` })),
-      op(grows ? "&gt;" : "≤", true),
+      op(survives ? "&gt;" : "≤", true),
       ui.h("div", { style: { textAlign: "center" } },
         ui.h("div", { style: { font: "600 22px/1.2 var(--sans)", color: P.fg }, text: ui.fmtFixed(thr, 2) }),
         ui.h("div", { class: "u-help", html: kind === "ib" ? "threshold $\\theta$" : "threshold $\\theta/\\gamma$" })),
     );
-    verdict.innerHTML = grows
-      ? `<b>Synapse ${edgeName(syn)} grows</b> towards $w^\\ast = \\tfrac{\\eta}{\\lambda}(${kind === "ib" ? "" : "\\gamma\\,"}${rhsTex} - \\theta) = ${ui.fmtFixed(target, 3)}$: the two ends covary by more than the threshold, and that surplus is what the weight will store.`
-      : `<b>Synapse ${edgeName(syn)} is pruned</b> to the floor $w_{\\min}$: the two ends do not covary by more than the threshold.`;
+    const sg = x => (x < 0 ? "−" : "+") + ui.fmtFixed(Math.abs(x), 3);
+    const name = edgeName(syn);
+    const now = {
+      grows: `<b>Synapse ${name} is growing</b>`,
+      shrinks: `<b>Synapse ${name} is shrinking</b>`,
+      pruned: `<b>Synapse ${name} is being pruned</b>`,
+      floor: `<b>Synapse ${name} stays at the floor</b> $w_{\\min}$`,
+    }[dr.status];
+    const driftTex = `\\tfrac{dw}{dt} = -\\theta - w + ${rhsTex} = -${ui.fmtFixed(theta, 2)} - ${ui.fmtFixed(w[syn], 3)} + ${ui.fmtFixed(cov, 3)} = ${sg(-theta - w[syn] + cov).replace("−", "-")}`;
+    const head = survives
+      ? `If the covariance stayed fixed, it would head for $w^\\ast = ${rhsTex} - \\theta = ${ui.fmtFixed(dr.target, 3)}$ (${dr.target > w[syn] ? "above" : "below"} its current $w = ${ui.fmtFixed(w[syn], 3)}$): the surplus of covariance over the threshold is what a surviving weight stores.`
+      : `If the covariance stayed fixed, it would head for the floor $w^\\ast = w_{\\min}$: its two ends do not covary by more than the threshold.`;
+    // every synapse at this θ, grouped by what it is doing now; click a name to select it
+    const groups = { grows: [], shrinks: [], pruned: [] };
+    EDGES.forEach((_, k) => { const s0 = driftOf(k).status; (groups[s0] || groups.pruned).push(k); });
+    const link = k => `<a href="#" data-syn="${k}"${k === syn ? ' style="font-weight:650"' : ""}>${edgeName(k)}</a>`;
+    const list = [["growing", groups.grows], ["shrinking towards a positive weight", groups.shrinks], ["being pruned to the floor", groups.pruned]]
+      .filter(([, ks]) => ks.length).map(([lab, ks]) => `${lab}: ${ks.map(link).join(", ")}`).join("; ");
+    verdict.innerHTML = `<p style="margin:0 0 6px">${now} now: $${driftTex}$ (with $\\lambda = \\eta = \\gamma = 1$).</p>`
+      + `<p style="margin:0 0 6px">${head} But the covariance does not stay fixed: as the weights change, the embeddings move, and with them the covariance.</p>`
+      + `<p class="u-help" style="margin:0">All synapses at this $\\theta$: ${list}.</p>`;
     ui.renderMath(chain); ui.renderMath(verdict);
   }
+  verdict.addEventListener("click", ev => {
+    const a = ev.target.closest("a[data-syn]"); if (!a) return;
+    ev.preventDefault(); syn = +a.dataset.syn; redraw(); writeUrl();
+  });
 
   function writeUrl() {
     const edited = w.some((x, k) => Math.abs(x - EDGES[k][3]) > 1e-9);

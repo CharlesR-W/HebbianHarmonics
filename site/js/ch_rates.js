@@ -117,10 +117,10 @@ ${[["linear rule", "linear", 0], ["rectified, $\\tau = 0$", "rect", 0], ["rectif
 function partsTable(tbody, S) {
   tbody.replaceChildren(...S.partRows.map(r => ui.h("tr", {},
     ui.h("td", { html: r.label }),
-    ui.h("td", { class: "num", text: r.cos.map(f3).join(" / ") }),
-    ui.h("td", { class: "num", text: rg(r.skew) }),
+    ui.h("td", { class: "num", text: r.cos.map(f3).join(" / "), style: { whiteSpace: "nowrap" } }),
+    ui.h("td", { class: "num", text: rg(r.skew), style: { whiteSpace: "nowrap" } }),
     ui.h("td", { class: "num", text: rg(r.kurt), style: { whiteSpace: "nowrap" } }),
-    ui.h("td", { class: "num", text: rg(r.excess) }))));
+    ui.h("td", { class: "num", text: rg(r.excess), style: { whiteSpace: "nowrap" } }))));
 }
 
 function scoreTable(tbody, S) {

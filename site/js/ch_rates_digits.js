@@ -31,14 +31,23 @@ export async function partsFigure(host, index) {
     { label: "Gaussian pixels, rectified $\\tau = 0$, own $q$", f: r => r.exp === "Bown_rect" && r.tau === 0 },
     { label: "Gaussian pixels, rectified $\\tau = 0$, digits' $\\theta$", f: r => r.exp === "B_rect" && r.tau === 0 },
   ];
-  const narrow = host.clientWidth < 600;
-  const grid = ui.h("div", { style: { display: "grid", gridTemplateColumns: narrow ? "repeat(5, minmax(0, 1fr))" : "minmax(150px, 190px) repeat(5, minmax(0, 1fr))", gap: narrow ? "4px 6px" : "8px 12px", alignItems: "start", maxWidth: "860px" } });
+  const grid = ui.h("div", { style: { display: "grid", alignItems: "start", maxWidth: "860px" } });
   host.replaceChildren(grid);
   const small = { font: "11.5px/1.3 var(--sans)", color: P.ink2 };
-  if (!narrow) grid.append(ui.h("div"));
-  D.Q_GRID.forEach(q => grid.append(ui.h("div", { style: { ...small, fontWeight: 600, textAlign: "center" }, text: `q = ${q.toFixed(3)}` })));
+  const corner = ui.h("div"), labels = [];
+  grid.append(corner);
+  D.Q_GRID.forEach(q => grid.append(ui.h("div", { style: { ...small, fontWeight: 600, textAlign: "center" }, html: `q = ${q.toFixed(3)}` })));
+  // wide: labels in a left column; narrow: each label spans the row above its tiles
+  const layout = () => {
+    const narrow = host.clientWidth > 0 && host.clientWidth < 600;
+    Object.assign(grid.style, { gridTemplateColumns: narrow ? "repeat(5, minmax(0, 1fr))" : "minmax(150px, 190px) repeat(5, minmax(0, 1fr))", gap: narrow ? "4px 6px" : "8px 12px" });
+    corner.style.display = narrow ? "none" : "";
+    labels.forEach(l => Object.assign(l.style, narrow ? { gridColumn: "1 / -1", marginTop: "8px", textAlign: "left", paddingTop: "0" } : { gridColumn: "auto", marginTop: "0", textAlign: "right", paddingTop: "22px" }));
+  };
+  new ResizeObserver(layout).observe(host);
   for (const row of ROWS) {
-    const lab = ui.h("div", { style: { font: "560 12.5px/1.35 var(--sans)", color: P.ink2, ...(narrow ? { gridColumn: "1 / -1", marginTop: "8px" } : { textAlign: "right", paddingTop: "22px" }) }, html: row.label });
+    const lab = ui.h("div", { style: { font: "560 12.5px/1.35 var(--sans)", color: P.ink2 }, html: row.label });
+    labels.push(lab);
     grid.append(lab);
     const runs = g1.filter(row.f);
     for (let k = 0; k < D.Q_GRID.length; k++) {
@@ -46,7 +55,7 @@ export async function partsFigure(host, index) {
       const cell = ui.h("div", { style: { minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" } });
       grid.append(cell);
       if (!r) { cell.append(ui.h("div", { style: small, text: "not run" })); continue; }
-      const f = r.final, nParts = r.parts_final?.layout?.n || 0, main = Math.min(84, narrow ? 64 : 84);
+      const f = r.final, nParts = r.parts_final?.layout?.n || 0, main = 84;
       if (f.n_live_clusters === 0 || nParts === 0) {
         cell.append(ui.h("div", { style: { width: "100%", maxWidth: main + "px", aspectRatio: "1", background: P.wash, borderRadius: "3px", display: "grid", placeItems: "center", ...small, color: P.mute }, text: "all dead" }));
       } else {
@@ -59,11 +68,12 @@ export async function partsFigure(host, index) {
           cell.append(strip);
         }
       }
-      cell.append(ui.h("div", { style: { ...small, textAlign: "center", fontVariantNumeric: "tabular-nums" }, text: `${f.n_live_clusters} live · ${ui.fmtInt(f.n_dead)} dead` }));
+      cell.append(ui.h("div", { style: { ...small, textAlign: "center", fontVariantNumeric: "tabular-nums" }, html: `${f.n_live_clusters} live<br>${ui.fmtInt(f.n_dead)} dead` }));
       cell.addEventListener("pointermove", ev => ui.showTip(ev.clientX, ev.clientY, cellTip(row, r)));
       cell.addEventListener("pointerleave", () => ui.hideTip());
     }
   }
+  layout();
   ui.renderMath(grid);
 }
 

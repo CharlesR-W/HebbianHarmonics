@@ -4,7 +4,7 @@
 
 <p>Kirchhoff is untouched, so $u = Hg$ and the harmonic embeddings are the same functions of the weights as before. What changes is what plasticity correlates: the rate $r_i = c\,f(u_i - b_i)$ with $f = \mathrm{ReLU}$, and likewise $s_b = c\,f(g_b - b_b)$ for the inputs:</p>
 
-<div class="eq" id="eq-rates-rule" data-num="1">$$\boxed{\;\frac{dw_{ij}}{dt} = w_0 - \lambda w_{ij} + \gamma\eta\,\mathrm{Cov}(r_i, r_j), \qquad \frac{dw_{ib}}{dt} = w_0 - \lambda w_{ib} + \eta\,\mathrm{Cov}(r_i, s_b)\;}$$</div>
+<div class="eq" id="eq-rates-rule" data-num="1">$$\boxed{\begin{aligned}\frac{dw_{ij}}{dt} &= w_0 - \lambda w_{ij} + \gamma\eta\,\mathrm{Cov}(r_i, r_j)\\[2pt] \frac{dw_{ib}}{dt} &= w_0 - \lambda w_{ib} + \eta\,\mathrm{Cov}(r_i, s_b)\end{aligned}}$$</div>
 
 <p><b>Where the threshold sits is the whole question.</b> An interior voltage is a convex combination of the inputs, and pixels are non-negative, so with $b_i = 0$ the ReLU is the identity and nothing changes. The nonlinearity only bites relative to a threshold, so I set it from the neuron's own statistics, $b_i = \mathbb E[u_i] + \tau\,\mathrm{sd}(u_i)$<span class="sidenote">For a Gaussian voltage the neuron fires for 50%, 31% and 16% of stimuli at $\tau = 0$, 0.5 and 1. The gain $c$ is one constant per $\tau$ (1.46, 1.99, 2.91), chosen so that the mean input-rate variance on the pixels is 1, which keeps $\theta$ and $w_{\min}$ on the same scale for both rules.</span>: $\tau = 0$ rectifies deviations from the mean, and larger $\tau$ makes firing sparser. Because $b_i$ tracks the neuron's own activity, it is <b>intrinsic-excitability homeostasis</b>, not part of the synaptic regulariser: $\rho(w) = w_0 - \lambda w$ still depends on the weight only, as the note wants. I use the fast limit, with $b_i$ computed from the exact moments of $u_i = h_i^\top g$ at the current weights.</p>
 
@@ -15,7 +15,7 @@
 <div class="eq" id="eq-rates-dual" data-num="2">$$\mathrm{Cov}(r_i, r_j) = c^2\, s_i s_j\, k_\tau(\rho).$$</div>
 
 <p>$k_\tau$ is <em>one</em> scalar function for every pair, because the threshold is measured in each neuron's own standard deviation. At $\tau = 0$ it is the degree-1 arc-cosine kernel minus the product of the means,</p>
-$$k_0(\rho) = \frac{\sin\varphi + (\pi - \varphi)\cos\varphi - 1}{2\pi} = \frac{\rho}{4} + \frac{\rho^2}{4\pi} + \frac{\rho^4}{48\pi} + \dots,\qquad \varphi = \arccos\rho ;$$
+$$\begin{aligned}k_0(\rho) &= \frac{\sin\varphi + (\pi - \varphi)\cos\varphi - 1}{2\pi}, \quad \varphi = \arccos\rho\\ &= \frac{\rho}{4} + \frac{\rho^2}{4\pi} + \frac{\rho^4}{48\pi} + \dots\end{aligned}$$
 <p>its slope is the probability that both neurons fire, so it is increasing and convex. Normalised, $\tilde k_\tau = k_\tau/k_\tau(1)$ is the rate correlation as a function of the voltage correlation:</p>
 
 <figure class="fig wide card" id="fig-rates-dual">

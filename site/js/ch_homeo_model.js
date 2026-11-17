@@ -46,7 +46,7 @@ export const TOURS = [
   { id: "filter-soft", group: "f", label: "Soft filter", params: { cov: "graded6", theta: 0.4, gamma: 0, omega: 0.02, n: 200 },
     note: "Same, $\\theta = 0.4$, just below the smallest variance. Five inputs populated, roughly 101–114, 46–53, 24–25, 7–18 and 3–11 neurons from loud to quiet (seeds 1–3); fitted $\\beta$ 1.6–2.2. The $v = 0.5$ part exists ($c = 0.1$) but gets nobody." },
   { id: "filter-collective", group: "f", label: "Collective", params: { cov: "graded6", theta: 0.2, gamma: 1, omega: 0.02, n: 200 },
-    note: "Lateral plasticity on ($\\gamma = 1$), $\\theta = 0.2$, below $\\gamma\\kappa_0 = 0.243$: the population binds before anyone chooses, and 195–198 of 200 neurons land on the loudest input (seeds 1–3). Six parts exist; one is populated." },
+    note: "Lateral plasticity on ($\\gamma = 1$), $\\theta = 0.2$, below the heuristic crossover $\\gamma\\kappa_0 = 0.243$: the population binds before anyone chooses, and 195–198 of 200 neurons land on the loudest input (seeds 1–3). Six parts exist; one is populated." },
   { id: "floor-leak", group: "f", label: "Floor too high", params: { cov: "block12", theta: 0.65, gamma: 1, omega: 0.15, n: 150 },
     note: "<code>block12</code>, $\\theta = 0.65$ (twelve single-input parts exist), floor $\\omega = N w_{\\min} = 0.15$ ($w_{\\min} = 10^{-3}$): every neuron dies (seeds 1–3)." },
   { id: "floor-leak-ok", group: "f", label: "Floor lowered", params: { cov: "block12", theta: 0.65, gamma: 1, omega: 0.0015, n: 150 },
@@ -60,11 +60,11 @@ export const TOURS = [
   { id: "mnist", group: "m", label: "MNIST parts", params: { cov: "mnist49", theta: 0.6, gamma: 1, omega: 0.02, n: 150 },
     note: "Real covariance: MNIST digits at $7\\times7$, $\\theta = 0.6$, $\\gamma = 1$. Eight parts exist, each a small set of 1–5 pixels that brighten together; four are populated, the two most energetic ($\\lambda \\approx 5.3$) with 56–76 neurons each and two quieter ones with 5–15 (seeds 1–3). Compare (d) with the eigenvectors in (e)." },
   { id: "noise-wta", group: "n", label: "Noise: winner", params: { cov: "graded6", theta: 0.2, gamma: 0, omega: 0.02, n: 200, noise: "inp:0.2" },
-    note: "Private input noise $\\sigma = 0.2$ (each synapse estimates its covariance from its own 25 samples per unit time), $\\gamma = 0$. Neurons now hop, and the allocation forgets the start; the law it settles to is winner-take-all: by $t = 200$, 186–192 of 200 neurons sit on $v = 3$ and 7–13 are in transit (seeds 1–3)." },
+    note: "Private input noise $\\sigma = 0.2$ (each synapse estimates its covariance from its own 25 samples per unit time), $\\gamma = 0$. Neurons now hop, and the allocation forgets the start; the law it settles to is winner-take-all: by $t \\approx 200$, about 186–192 of 200 neurons sit on $v = 3$ and 7–13 are in transit (seeds 1–3; the numbers fluctuate)." },
   { id: "noise-graded", group: "n", label: "Noise: graded", params: { cov: "graded6", theta: 0.2, gamma: 0, omega: 0.02, n: 200, noise: "inp:0.4" },
-    note: "The same with $\\sigma = 0.4$: a graded allocation, but about half the neurons (92–117 of 200) are between parts at any moment; of the rest, 70–85 sit on $v = 3$ and 11–17 on $v = 2$ at $t = 200$ (seeds 1–3). That is the price of the graded law (findings F14, F17)." },
+    note: "The same with $\\sigma = 0.4$: a graded allocation, but about half the neurons (roughly 90–120 of 200) are between parts at any moment; of the rest, roughly 70–95 sit on $v = 3$ and up to about 17 on $v = 2$ around $t = 200$ (seeds 1–3; the numbers fluctuate). That is the price of the graded law (findings F14, F17)." },
   { id: "noise-bound", group: "n", label: "Noise + lateral", params: { cov: "planted_energy", theta: 0.35, gamma: 1, omega: 0.02, n: 120, noise: "inp:0.3" },
-    note: "Four planted blocks of unequal energy, $\\gamma = 1$, $\\theta = 0.35$ (above $\\gamma\\kappa_0 = 0.234$), input noise $\\sigma = 0.3$: all 120 neurons end in one cluster on the loudest block (seeds 1–3, $t = 200$). Without noise the same start populates all four blocks (67–72, 31–36, 9–18, 3–4)." },
+    note: "Four planted blocks of unequal energy, $\\gamma = 1$, $\\theta = 0.35$ (above the heuristic crossover $\\gamma\\kappa_0 = 0.234$), input noise $\\sigma = 0.3$: all 120 neurons end in one cluster on the loudest block (seeds 1–3, $t = 200$). Without noise the same start populates all four blocks (67–72, 31–36, 9–18, 3–4)." },
 ];
 export const tourById = id => TOURS.find(t => t.id === id) || null;
 export const tourParams = t => ({ ...DEFAULTS, ...t.params });
@@ -280,9 +280,10 @@ export function regime(c, p, nStable) {
   if (nStable === 0) return { id: "extinct", name: "no stable part", text: "No part is strictly stable at this exact θ (it sits on a correlation level); move θ slightly." };
   const extra = th < st.offdiag_min ? ` θ is below every covariance (min ${f(st.offdiag_min)}), so exactly one part exists, with full support.`
     : (th > st.offdiag_max && th < st.var_min ? ` θ lies between the largest covariance (${f(st.offdiag_max)}) and the smallest variance (${f(st.var_min)}): the parts are exactly the ${c.B} single inputs.` : "");
-  if (g * k0 > th) return { id: "collective", name: "collective", text: `θ < γκ₀ = ${f(g * k0)}: lateral synapses grow before neurons can choose, the population binds into one blob and lands in one part (the loudest).${extra}` };
+  if (g * k0 > th) return { id: "collective", name: "collective", text: `θ < γκ₀ = ${f(g * k0)} (the heuristic crossover): lateral synapses grow before neurons can choose, so the population tends to bind into one blob and land in one part, the loudest.${extra}` };
   if (nStable === 1) return { id: "one", name: "one part", text: `Only one stable part exists at this θ, so every surviving neuron ends up in it.${extra}` };
-  return { id: "independent", name: "independent", text: `θ > γκ₀ = ${f(g * k0)}: neurons pick parts on their own; louder parts get more of them (n ∝ λ^β, β set by θ and the initial spread).${extra}` };
+  const why = g > 0 ? `θ > γκ₀ = ${f(g * k0)} (the heuristic crossover)` : "No lateral plasticity (γ = 0)";
+  return { id: "independent", name: "independent", text: `${why}: neurons pick parts on their own; in the families tested, louder parts get more of them (n ∝ λ^β, β set by θ and the initial spread).${extra}` };
 }
 
 // ---------------------------------------------------------------- headless verification (node)
