@@ -23,6 +23,19 @@ export function deadMask(Wib, Mib, N, B, wmin) {
   return dead;
 }
 
+// Cluster count, as in docs/findings.md and chapter three: dead neurons are split off (they all share the floor's
+// embedding and carry no learned structure); a cluster counts when it has at least max(2, 2% N) live members;
+// smaller live groups are stragglers; groups with no live member are not clusters.
+export function liveClusters(labels, K, dead, N) {
+  const live = new Int32Array(K);
+  let nDead = 0;
+  for (let i = 0; i < N; i++) { if (dead[i]) nDead++; else live[labels[i]]++; }
+  const minPop = Math.max(2, Math.ceil(0.02 * N));
+  let Klive = 0, kStrag = 0, nStrag = 0;
+  for (let k = 0; k < K; k++) { if (live[k] >= minPop) Klive++; else if (live[k] > 0) { kStrag++; nStrag += live[k]; } }
+  return { K: Klive, live, minPop, kStrag, nStrag, nDead };
+}
+
 // Parts-sum (findings F10): C = θ11ᵀ + Σ_k c_k h_k h_kᵀ/|h_k|², over clusters with at least one live member;
 // h_k = member mean of h, c_k = (λ/η)·Σ_b w_ib of a member (mean over live members). Returns {C, K, parts:[{h, c, n}]}.
 export function partsSum(H, Wib, Mib, N, B, P, labels, K) {
@@ -78,7 +91,7 @@ export function runAndScore({ Sigma, B, N, theta, gamma, wmin, seed, k, p, iiSca
   const r = E.stationarity(s, Sigma, P).r / P.eta;
   const H = E.harmonicFrom(s.Wii, s.Wib, N, B);
   const cl = E.clustersAuto(H, N, B);
-  const dead = deadMask(s.Wib, s.Mib, N, B, wmin).reduce((a, x) => a + x, 0);
+  const lc = liveClusters(cl.labels, cl.K, deadMask(s.Wib, s.Mib, N, B, wmin), N), dead = lc.nDead;
   const pr = readPair(H, s.Wii, s.Wib, s.Mii, s.Mib, N, B, P, { maxIter: 2000 });
   const sc = scoreAll(pr.rk.C, pr.rp.C, Sigma, B, k);
   const ps = partsSum(H, s.Wib, s.Mib, N, B, P, cl.labels, cl.K);
@@ -86,7 +99,7 @@ export function runAndScore({ Sigma, B, N, theta, gamma, wmin, seed, k, p, iiSca
   const eq = E.readoutEquations(s.Wii, s.Wib, s.Mii, s.Mib, N, B, { theta, lam: P.lam, eta: P.eta, gamma, wmin });
   const G = measurementGram(H, eq, N, B, { families: ["both"] });
   const dir = summarise(eigvalsSym(G.both, G.p), 1e-5).rank;
-  return { p, wmin, K: cl.K, dead, dir, pdim: G.p, steps, resid: r,
+  return { p, wmin, K: lc.K, nStrag: lc.nStrag, dead, dir, pdim: G.p, steps, resid: r,
     cosK: sc.known.cos, cosC: sc.contrast.cos, bwC: sc.contrast.bw, sub: sc.contrast.sub,
     psC: sp.contrast.cos, psBW: sp.contrast.bw, peak, peakT: peakStep * dt };
 }

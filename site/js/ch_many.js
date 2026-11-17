@@ -6,6 +6,7 @@ import { heatmap, lineChart, barMultiples } from "./charts.js";
 import { view3d } from "./view3d.js";
 import { P as PAL, catColor } from "./palette.js";
 import * as E from "./engine.js";
+import { deadMask, liveClusters } from "./ch_many_ro.js";
 
 // ------------------------------------------------------------------------------------------------ constants
 const BS = [8, 12, 16, 24, 32, 48];
@@ -76,6 +77,20 @@ function blockSizes(B, nb, uneq, cs) {
   while (d !== 0) { const k = d > 0 ? s.indexOf(Math.min(...s)) : s.indexOf(Math.max(...s)); s[k] += Math.sign(d); d -= Math.sign(d); }
   return s.sort((a, b) => b - a);
 }
+// Ring: the wrapped (periodised) Gaussian kernel, built as a circulant from its non-negative Fourier spectrum
+// λ_k ∝ Σ_m exp(−2π²ℓ²(k/B + m)²) (Poisson summation of Σ_m exp(−(d + mB)²/2ℓ²)) and normalised to a unit diagonal,
+// so it is positive semi-definite for every B and ℓ. (The plain Gaussian of the shortest ring distance is not: e.g.
+// B = 12, ℓ = 4 has a negative eigenvalue −0.247.) For ℓ ≪ B the two agree: B = 16, ℓ = 1.5 differ by < 10⁻⁶.
+function ringSigma(B, ell) {
+  const lam = new Float64Array(B), a = 2 * Math.PI * Math.PI * ell * ell;
+  for (let k = 0; k < B; k++) { let s = 0; for (let m = -6; m <= 6; m++) { const f = k / B + m; s += Math.exp(-a * f * f); } lam[k] = s; }
+  let tot = 0; for (let k = 0; k < B; k++) tot += lam[k];
+  const c = new Float64Array(B);
+  for (let d = 0; d < B; d++) { let s = 0; for (let k = 0; k < B; k++) s += lam[k] * Math.cos(2 * Math.PI * k * d / B); c[d] = s / tot; }
+  const S = new Float64Array(B * B);
+  for (let b = 0; b < B; b++) for (let q = 0; q < B; q++) S[b * B + q] = c[(q - b + B) % B];
+  return S;
+}
 function makeSigma(st) {
   const B = st.b;
   let Sigma, labels = null, groups = null, desc = "";
@@ -102,9 +117,8 @@ function makeSigma(st) {
     Sigma = E.covPowerLaw({ B, alpha: st.alpha, seed: st.cs, nonneg: st.fam === "powpos" });
     desc = `random orthogonal eigenbasis, eigenvalues ∝ k^−${f2(st.alpha)}${st.fam === "powpos" ? ", plus the smallest c·11ᵀ making all correlations ≥ 0" : ""}, mean variance 1`;
   } else if (st.fam === "ring") {
-    Sigma = new Float64Array(B * B);
-    for (let b = 0; b < B; b++) for (let c = 0; c < B; c++) { let d = Math.abs(b - c); d = Math.min(d, B - d); Sigma[b * B + c] = Math.exp(-d * d / (2 * st.ell * st.ell)); }
-    labels = null; desc = `ring: (Σ_g)_bc = exp(−d(b,c)²/2ℓ²) with d the distance around a ring of ${B} inputs, ℓ = ${f2(st.ell)}`;
+    Sigma = ringSigma(B, st.ell);
+    labels = null; desc = `ring: wrapped Gaussian (Σ_g)_bc ∝ Σ_m exp(−(b − c + mB)²/2ℓ²) around a ring of ${B} inputs, unit variances, ℓ = ${f2(st.ell)}`;
   } else {
     const dof = Math.max(1, Math.round(st.dofr * B));
     Sigma = E.covWishart({ B, dof, seed: st.cs });
@@ -257,7 +271,7 @@ export async function init(panel, ctx) {
   };
   showFamControls();
   const stats = ui.stats({ parent: L.side, items: [
-    { key: "k", label: "clusters $K$", fmt: String },
+    { key: "k", label: "clusters $K$ (live)", fmt: String },
     { key: "dead", label: "dead neurons", fmt: String },
     { key: "er", label: "effective rank of $H$", fmt: x => ui.fmt(x, 3) },
     { key: "r", label: "stationarity $r/\\eta$", fmt: sci },
@@ -266,7 +280,7 @@ export async function init(panel, ctx) {
     { key: "dir", label: "directions pinned down", fmt: String },
     { key: "fps", label: "frame rate", unit: "fps", fmt: x => x.toFixed(0) }] });
   ui.legend({ parent: L.side, items: [
-    { label: "interior neuron; colour = cluster", color: PAL.cat[0], shape: "dot" }, { label: "other / not clustered yet", color: PAL.other, shape: "dot" },
+    { label: "interior neuron; colour = cluster", color: PAL.cat[0], shape: "dot" }, { label: "other: dead, straggler, past the 8th cluster, or not clustered yet", color: PAL.other, shape: "dot" },
     { label: "boundary neuron $e_b$, projected", color: PAL.boundary, shape: "square" }, { label: "synapse, opacity $\\propto w/\\max w$", color: PAL.edge, shape: "line" }] });
 
   // below: Σ_g, similarity, parts, time series
@@ -309,11 +323,29 @@ export async function init(panel, ctx) {
   function analyse() {
     pca = E.pca3(H, N, B, pca);
     if (!cl || frameNo % 3 === 0) {
-      cl = E.clustersAuto(H, N, B);
+      cl = clusterWithDead(H, deadMask(s.Wib, s.Mib, N, B, PP.wmin));
       cstats = E.clusterStats(H, N, B, cl.labels, cl.K, Sigma);
       assignColours();
     }
   }
+  // Clusters of the embeddings with the dead neurons (every I–B weight at the floor) split off into one group of
+  // their own (index cl.deadK, -1 if none): they share the floor's embedding and are not a learned cluster.
+  // cl.K counts every group (for drawing); cl.Klive is the headline count (findings convention, see liveClusters).
+  function clusterWithDead(Hm, dead) {
+    const c0 = E.clustersAuto(Hm, N, B), map = new Int32Array(c0.K + 1).fill(-1), labels = new Int32Array(N);
+    let K = 0, nDead = 0;
+    for (let i = 0; i < N; i++) {
+      if (dead[i]) { nDead++; continue; }
+      const k = c0.labels[i]; if (map[k] < 0) map[k] = K++; labels[i] = map[k];
+    }
+    const deadK = nDead ? K++ : -1;
+    for (let i = 0; i < N; i++) if (dead[i]) labels[i] = deadK;
+    const lc = liveClusters(labels, K, dead, N);
+    return { labels, K, deadK, dead, robust: c0.robust, gap: c0.gap, Klive: lc.K, kStrag: lc.kStrag, nStrag: lc.nStrag, nDead, minPop: lc.minPop };
+  }
+  const countable = k => k !== cl.deadK && cstats.sizes[k] >= cl.minPop;
+  // headline count: live clusters (NaN before the embeddings are clustered, unless every neuron is dead)
+  const headK = () => (cl.robust || cl.nDead === N ? cl.Klive : NaN);
   // colours: clusters keep their colour across frames (majority vote of the previous colours of their members);
   // new clusters get the lowest free colour in order of size (largest first); past 8, and before the cluster count is
   // robust, neurons are grey ("other").
@@ -328,16 +360,18 @@ export async function init(panel, ctx) {
     votes.forEach((m, k) => m.forEach((n, c) => cand.push([n, k, c])));
     cand.sort((a, b) => b[0] - a[0] || sizes[b[1]] - sizes[a[1]]);
     const used = new Set();
-    for (const [n, k, c] of cand) if (clusterColour[k] < 0 && !used.has(c) && n * 2 > Math.min(sizes[k], 2)) { clusterColour[k] = c; used.add(c); }
-    const rest = Array.from({ length: K }, (_, k) => k).filter(k => clusterColour[k] < 0).sort((a, b) => sizes[b] - sizes[a]);
-    for (const k of rest) { let c = 0; while (used.has(c)) c++; if (c < 8 && (sizes[k] > 1 || K <= 8)) { clusterColour[k] = c; used.add(c); } }
+    // only counted clusters get a colour: the dead group and stragglers stay grey
+    for (const [n, k, c] of cand) if (countable(k) && clusterColour[k] < 0 && !used.has(c) && n * 2 > Math.min(sizes[k], 2)) { clusterColour[k] = c; used.add(c); }
+    const rest = Array.from({ length: K }, (_, k) => k).filter(k => clusterColour[k] < 0 && countable(k)).sort((a, b) => sizes[b] - sizes[a]);
+    for (const k of rest) { let c = 0; while (used.has(c)) c++; if (c < 8) { clusterColour[k] = c; used.add(c); } }
     for (let i = 0; i < N; i++) neuronColour[i] = clusterColour[cl.labels[i]];
     colourOf = Array.from({ length: N }, (_, i) => catColor(neuronColour[i]));
   }
-  // cluster order for sorted views: coloured clusters by colour index, then grey ones by size
+  // cluster order for sorted views: coloured clusters by colour index, then grey ones by size, the dead group last
   function clusterOrder() {
     const K = cl.K, sizes = cstats.sizes;
     return Array.from({ length: K }, (_, k) => k).sort((a, b) => {
+      if (a === cl.deadK || b === cl.deadK) return (a === cl.deadK) - (b === cl.deadK);
       const ca = clusterColour[a], cb = clusterColour[b];
       if (ca >= 0 && cb >= 0) return ca - cb; if (ca >= 0) return -1; if (cb >= 0) return 1; return sizes[b] - sizes[a];
     });
@@ -417,12 +451,12 @@ export async function init(panel, ctx) {
     const M = E.similarity(H, N, B, Sigma), S2 = new Float32Array(N * N);
     for (let a = 0; a < N; a++) for (let c = 0; c < N; c++) S2[a * N + c] = M[perm[a] * N + perm[c]];
     const groups = []; let o = 0;
-    byC.forEach((list, q) => { const k = ordC[q], c = clusterColour[k]; if (list.length) groups.push({ start: o, end: o + list.length, color: catColor(c), label: c >= 0 ? `c${c + 1}` : "" }); o += list.length; });
-    simHM.update({ values: S2, rows: N, cols: N, range: [-SG.maxVar, SG.maxVar], groups: cl.robust && groups.length <= 40 ? { rows: groups } : null,
+    byC.forEach((list, q) => { const k = ordC[q], c = clusterColour[k]; if (list.length) groups.push({ start: o, end: o + list.length, color: catColor(c), label: c >= 0 ? `c${c + 1}` : k === cl.deadK ? "dead" : "" }); o += list.length; });
+    simHM.update({ values: S2, rows: N, cols: N, range: [-SG.maxVar, SG.maxVar], groups: (cl.robust || cl.deadK >= 0) && groups.length <= 40 ? { rows: groups } : null,
       tooltip: (i, j, val) => ui.tipRows(`neurons ${perm[i]} and ${perm[j]}`, [{ name: "h_iᵀΣh_j", value: f3(val) },
         { name: "clusters", value: cl.robust ? `${clusterLabel(cl.labels[perm[i]])}, ${clusterLabel(cl.labels[perm[j]])}` : "not clustered yet" }]) });
   }
-  const clusterLabel = k => (clusterColour[k] >= 0 ? `c${clusterColour[k] + 1}` : `other (${cstats.sizes[k]})`);
+  const clusterLabel = k => (k === cl.deadK ? `dead (${cstats.sizes[k]} neurons)` : clusterColour[k] >= 0 ? `c${clusterColour[k] + 1}` : `${cstats.sizes[k] < cl.minPop ? "straggler" : "other"} (${cstats.sizes[k]})`);
   function drawParts() {
     if (!cl.robust) { partsC.update({ labels: [], panels: [] }); partsNote.innerHTML = "Not clustered yet: the merge heights of the embeddings show no clear gap (ratio < 3)."; return; }
     const ordC = clusterOrder().filter(k => clusterColour[k] >= 0);
@@ -462,7 +496,7 @@ export async function init(panel, ctx) {
     });
     let lo = -0.25; panels.forEach(pn => pn.overlay.forEach(x => { if (x < lo) lo = x; }));
     partsC.update({ labels, panels, yrange: [Math.floor(lo * 4) / 4, 1], overlayName: partsLine === "perron" ? "Perron vector of (Σ_g − θ11ᵀ) on the cluster's support" : "nearest eigenvector of Σ_g" });
-    const hidden = cl.K - ordC.length;
+    const hidden = cl.K - ordC.length - (cl.deadK >= 0 ? 1 : 0);
     // packing (F3): coexisting clusters need γ h_kᵀΣh_l ≤ θ (+ floor terms)
     let xc = -Infinity, pair = null;
     for (let a = 0; a < panels.length; a++) for (let c = a + 1; c < panels.length; c++) {
@@ -471,7 +505,10 @@ export async function init(panel, ctx) {
       if (q > xc) { xc = q; pair = [a, c]; }
     }
     const pack = pair && st.gamma > 0 ? `Largest cross-covariance between two shown clusters: <i>h</i><sub>k</sub><sup>⊤</sup>Σ<sub>g</sub><i>h</i><sub>l</sub> = ${f3(xc)} (${panels[pair[0]].title.split(" ·")[0]}, ${panels[pair[1]].title.split(" ·")[0]}); packing bound θ/γ = ${f2(st.theta / st.gamma)}. ` : "";
-    partsNote.innerHTML = !panels.length ? "No cluster with more than one member yet." : pack + (hidden > 0 ? `${hidden} further cluster${hidden > 1 ? "s" : ""} (grey in the views) not shown.` : "");
+    const deadTxt = cl.nDead ? ` ${cl.nDead} dead neuron${cl.nDead > 1 ? "s" : ""} (every I–B weight at the floor; grey, sorted last in the voltage covariance) not counted as a cluster.` : "";
+    const strTxt = cl.kStrag ? ` ${cl.nStrag} straggler${cl.nStrag > 1 ? "s" : ""} in group${cl.kStrag > 1 ? "s" : ""} of fewer than ${cl.minPop} (grey) not counted.` : "";
+    partsNote.innerHTML = (!panels.length ? (cl.nDead === N ? "Every neuron is dead." : `No cluster with at least ${cl.minPop} live members yet.`) : pack)
+      + (hidden - cl.kStrag > 0 ? ` ${hidden - cl.kStrag} further cluster${hidden - cl.kStrag > 1 ? "s" : ""} (grey in the views) not shown.` : "") + strTxt + (cl.nDead === N ? "" : deadTxt);
 
   }
   function drawSeries() {
@@ -483,12 +520,14 @@ export async function init(panel, ctx) {
   }
   function drawStats() {
     const r = residual();
-    stats.set("k", cl.K, cl.robust ? (cl.gap > 1000 ? "clear-cut (gap > 1000×)" : `gap ${ui.fmt(cl.gap, 2)}×`) : "not clustered yet");
+    drawK();
     stats.set("er", Number.isFinite(effRank) ? effRank : E.effectiveRank(H, N, B), `of B = ${B}`);
     stats.set("r", r, Number.isFinite(r) ? (r < EQ_TOL ? "equilibrium: yes" : "equilibrium: not yet") : "");
-    let nd = 0; const thr = 1.5 * PP.wmin;
-    for (let i = 0; i < N; i++) { let m = 0; for (let b = 0; b < B; b++) if (s.Mib[i * B + b] && s.Wib[i * B + b] > m) m = s.Wib[i * B + b]; if (m <= thr) nd++; }
-    stats.set("dead", nd, "every I–B weight at the floor");
+    stats.set("dead", cl.nDead, "every I–B weight at the floor; not a cluster");
+  }
+  function drawK() {
+    const k = headK(), strag = cl.kStrag ? ` · ${cl.nStrag} straggler${cl.nStrag > 1 ? "s" : ""}` : "";
+    stats.set("k", Number.isFinite(k) ? k : null, cl.nDead === N ? "every neuron is dead" : cl.robust ? (cl.gap > 1000 ? "clear-cut (gap > 1000×)" : `gap ${ui.fmt(cl.gap, 2)}×`) + strag : "not clustered yet");
   }
   function drawAll(heavy, force) {
     lastEdges = buildEdges();
@@ -507,7 +546,7 @@ export async function init(panel, ctx) {
   }
   function drawCaption() {
     drawThetaInfo();
-    simCap.innerHTML = `<b>Plotted:</b> top: each circle is an interior neuron's harmonic embedding $h_i \\in \\mathbb{R}^{B}$ projected orthogonally onto the top three principal axes of the current set of embeddings (centred; the frame is rotated within that subspace to match the previous frame, so it never flips); colour = cluster (single linkage in $L_1$, cut at the largest gap of merge heights; ordered by size, largest blue; grey: past the eighth cluster, or before the count is robust). Squares: the corners $e_b$ of the simplex (the boundary neurons) under the same projection, labelled when far from the centre. Lines: active synapses (above $1.5\\,w_{\\min}$), opacity $w/\\max w$, strongest ${MAX_EDGES.toLocaleString("en-GB")}. Below, left to right: $\\Sigma_g$ (diverging, symmetric range), boundary neurons ${SG.labels ? "in planted order" : st.fam === "ring" ? "in ring order" : "sorted by angle in the plane of the top two eigenvectors"}; $h_i^\\top\\Sigma_g h_j$ for neurons sorted by cluster (bands: cluster colour), fixed range $\\pm\\max_b(\\Sigma_g)_{bb}$; eigenvalues of $\\Sigma_g$, log scale. Parts: for each coloured cluster, the member mean $h$ of $h_i$ scaled to unit length (bars, same input order as $\\Sigma_g$), and as ink dots either the eigenvector of $\\Sigma_g$ with the largest $|\\cos|$ to it (sign flipped to agree) or the Perron vector of $A_{SS}$, $A = \\Sigma_g - \\theta\\mathbf 1\\mathbf 1^\\top$, $S$ = the inputs with $h_b > 0.02$; title: $c = (h^\\top\\Sigma_g h - \\theta)/\\lVert h\\rVert^2$; sub-line: the cosines of the part with that eigenvector, with the Perron vector of $A_{SS}$ and with that of $\\Sigma_{SS}$, and $\\max_{b \\notin S}(Ah)_b$ for $h$ summing to 1 (stable part: negative, and $c$ the strict top eigenvalue of $A_{SS}$). Note under the panels: the largest $h_k^\\top\\Sigma_g h_l$ between two shown clusters. Time series: $K$, effective rank $\\lVert H\\rVert_F^4/\\lVert H^\\top H\\rVert_F^2$, and the projected residual $r/\\eta = \\max|dw/dt|/\\eta$ (floor edges with negative drift count 0); orange: the time shown; dashed: tour steps. <b>Values:</b> ${SG.desc}; $B = ${B}$, $N = ${st.n}$, $\\theta = ${f2(st.theta)}$, $\\gamma = ${st.gamma}$, $w_{\\min} = ${ui.fmt(st.wmin, 2)}$, $p = ${st.p}$, $\\lambda = \\eta = 1$, init seed ${st.seed}, initial $W_{IB} \\sim \\mathrm{Exp}(\\text{mean } 0.2)$, $W_{II} \\sim U(0, ${II_SCALE})$ clipped at $w_{\\min}$; Euler $dt = ${DT}$; ${st.mode === "mf" ? "mean-field (plasticity sees the exact $\\Sigma_g$)" : `minibatch: plasticity sees the covariance of ${st.batch} Gaussian samples per step`}${st.jit ? `; private jitter $\\sigma = ${JITTER}$` : ""}.`;
+    simCap.innerHTML = `<b>Plotted:</b> top: each circle is an interior neuron's harmonic embedding $h_i \\in \\mathbb{R}^{B}$ projected orthogonally onto the top three principal axes of the current set of embeddings (centred; the frame is rotated within that subspace to match the previous frame, so it never flips); colour = cluster (single linkage in $L_1$, cut at the largest gap of merge heights; ordered by size, largest blue; grey: dead neurons (every I–B weight at most $1.5\\,w_{\\min}$), stragglers (live groups of fewer than $\\max(2, 2\\%\\,N)$), clusters past the eighth, or everything before the count is robust). Squares: the corners $e_b$ of the simplex (the boundary neurons) under the same projection, labelled when far from the centre. Lines: active synapses (above $1.5\\,w_{\\min}$), opacity $w/\\max w$, strongest ${MAX_EDGES.toLocaleString("en-GB")}. Below, left to right: $\\Sigma_g$ (diverging, symmetric range), boundary neurons ${SG.labels ? "in planted order" : st.fam === "ring" ? "in ring order" : "sorted by angle in the plane of the top two eigenvectors"}; $h_i^\\top\\Sigma_g h_j$ for neurons sorted by cluster, dead neurons last (bands: cluster colour), fixed range $\\pm\\max_b(\\Sigma_g)_{bb}$; eigenvalues of $\\Sigma_g$, log scale. Parts: for each coloured cluster, the member mean $h$ of $h_i$ scaled to unit length (bars, same input order as $\\Sigma_g$), and as ink dots either the eigenvector of $\\Sigma_g$ with the largest $|\\cos|$ to it (sign flipped to agree) or the Perron vector of $A_{SS}$, $A = \\Sigma_g - \\theta\\mathbf 1\\mathbf 1^\\top$, $S$ = the inputs with $h_b > 0.02$; title: $c = (h^\\top\\Sigma_g h - \\theta)/\\lVert h\\rVert^2$; sub-line: the cosines of the part with that eigenvector, with the Perron vector of $A_{SS}$ and with that of $\\Sigma_{SS}$, and $\\max_{b \\notin S}(Ah)_b$ for $h$ summing to 1 (stable part: negative, and $c$ the strict top eigenvalue of $A_{SS}$). Note under the panels: the largest $h_k^\\top\\Sigma_g h_l$ between two shown clusters. Time series: $K$ = clusters with at least $\\max(2, 2\\%\\,N)$ live members (dead neurons split off first), effective rank $\\lVert H\\rVert_F^4/\\lVert H^\\top H\\rVert_F^2$, and the projected residual $r/\\eta = \\max|dw/dt|/\\eta$ (floor edges with negative drift count 0); orange: the time shown; dashed: tour steps. <b>Values:</b> ${SG.desc}; $B = ${B}$, $N = ${st.n}$, $\\theta = ${f2(st.theta)}$, $\\gamma = ${st.gamma}$, $w_{\\min} = ${ui.fmt(st.wmin, 2)}$, $p = ${st.p}$, $\\lambda = \\eta = 1$, init seed ${st.seed}, initial $W_{IB} \\sim \\mathrm{Exp}(\\text{mean } 0.2)$, $W_{II} \\sim U(0, ${II_SCALE})$ clipped at $w_{\\min}$; Euler $dt = ${DT}$; ${st.mode === "mf" ? "mean-field (plasticity sees the exact $\\Sigma_g$)" : `minibatch: plasticity sees the covariance of ${st.batch} Gaussian samples per step`}${st.jit ? `; private jitter $\\sigma = ${JITTER}$` : ""}.`;
     ui.renderMath(simCap);
   }
   function groupsOf() {
@@ -536,10 +575,11 @@ export async function init(panel, ctx) {
   let effRank = NaN;
   function pushSeries() {
     if (frameNo % 4 === 0 || !Number.isFinite(effRank)) effRank = E.effectiveRank(H, N, B);
-    series.t.push(simTime()); series.K.push(cl.robust ? cl.K : NaN); series.er.push(effRank); series.r.push(residual());
+    const k = headK();
+    series.t.push(simTime()); series.K.push(k > 0 ? k : NaN);   // live clusters only (log axis: no point at K = 0) series.er.push(effRank); series.r.push(residual());
     if (series.t.length > 1500) for (const k of ["t", "K", "er", "r"]) series[k] = series[k].filter((_, i) => i % 2 === 0);
   }
-  const frameOf = () => ({ t: simTime(), H: Float32Array.from(H), edges: lastEdges ? { pairs: lastEdges.pairs.slice(0, 2 * 2500), alpha: lastEdges.alpha.slice(0, 2500) } : null });
+  const frameOf = () => ({ t: simTime(), H: Float32Array.from(H), dead: deadMask(s.Wib, s.Mib, N, B, PP.wmin), edges: lastEdges ? { pairs: lastEdges.pairs.slice(0, 2 * 2500), alpha: lastEdges.alpha.slice(0, 2500) } : null });
   function stepOnce() {
     prevWii.set(s.Wii); prevWib.set(s.Wib); prevValid = true;
     if (st.mode === "mf") E.step(s, Sigma, PP); else E.stepStochastic(s, sampler, PP, st.batch);
@@ -598,13 +638,13 @@ export async function init(panel, ctx) {
   }
   function showFrame(f) {
     H = Float64Array.from(f.H); pca = E.pca3(H, N, B, pca);
-    cl = E.clustersAuto(H, N, B); cstats = E.clusterStats(H, N, B, cl.labels, cl.K, Sigma); assignColours();
+    cl = clusterWithDead(H, f.dead || new Uint8Array(N)); cstats = E.clusterStats(H, N, B, cl.labels, cl.K, Sigma); assignColours();
     const xyz = Float32Array.from(pca.coords);
     v.setPoints(xyz, colourOf || PAL.other); v.setAnchors(anchorsOf());
     if (f.edges) v.setEdges(f.edges.pairs, f.edges.alpha);
     drawSim(); drawParts();
     kC.setCursor(f.t); rC.setCursor(f.t); RO.cursor(f.t);
-    stats.set("k", cl.K, cl.robust ? "" : "not clustered yet"); stats.set("er", E.effectiveRank(H, N, B), `of B = ${B}`);
+    drawK(); stats.set("dead", cl.nDead, "every I–B weight at the floor; not a cluster"); stats.set("er", E.effectiveRank(H, N, B), `of B = ${B}`);
   }
 
   // ------------------------------------------------------------------------------------------------ worker
@@ -795,7 +835,7 @@ export async function init(panel, ctx) {
       if (!last) { hmC.update({ values: new Float32Array(B * B).fill(NaN), rows: B, cols: B, range: [-m, m], groups }); hmD.update({ values: new Float32Array(B * B).fill(NaN), rows: B, cols: B, range: [-m, m], groups }); return; }
       const est = estSeg.get(), x = last.rows[est][mode === "contrast" ? "contrast" : "known"];
       const C = est === "parts" ? (mode === "contrast" ? E.project1(last.Cps, B).map(v0 => v0 * x.scale) : last.Cps)
-        : (mode === "contrast" ? last.Cp.map(v0 => v0 * x.scale) : last.Ck);
+        : (mode === "contrast" ? last.CpP.map(v0 => v0 * x.scale) : last.Ck);   // CpP = P Ĉ P (projected in the worker)
       const D = new Float64Array(B * B); for (let q = 0; q < B * B; q++) D[q] = C[q] - S[q];
       hmC.update({ values: perm(C), rows: B, cols: B, range: [-m, m], groups, rowLabels: lab, colLabels: clab, zlabel: mode === "contrast" ? "$s\\,P\\hat C P$ (best scale $s$)" : "$\\hat C$" });
       hmD.update({ values: perm(D), rows: B, cols: B, range: [-m, m], groups, rowLabels: lab, colLabels: clab, zlabel: "difference" });

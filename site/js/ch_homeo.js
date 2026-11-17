@@ -62,9 +62,9 @@ function initLive(ctx, data) {
   ui.renderMath(L.view);
 
   // ------------------------------------------------------------ tours
-  const groupA = M.TOURS.filter(t => t.group === "f"), groupB = M.TOURS.filter(t => t.group !== "f");
-  const chipsA = ui.chips({ parent: L.side, label: "Tours (findings, chapter 4)", items: groupA, active: tour && tour.group === "f" ? tour.id : null, onPick: t => { chipsB.clear(); applyTour(t); } });
-  const chipsB = ui.chips({ parent: L.side, label: "More tours", items: groupB, active: tour && tour.group !== "f" ? tour.id : null, onPick: t => { chipsA.clear(); applyTour(t); } });
+  const GROUPS = [["f", "Tours: the filter and the floor"], ["m", "More tours"], ["n", "With private noise"]];
+  const chipSets = GROUPS.map(([g, label]) => ui.chips({ parent: L.side, label, items: M.TOURS.filter(t => t.group === g), active: tour && tour.group === g ? tour.id : null,
+    onPick: t => { chipSets.forEach(c => { if (c !== chipSets[GROUPS.findIndex(x => x[0] === t.group)]) c.clear(); }); applyTour(t); } }));
 
   // ------------------------------------------------------------ controls
   const covIds = Object.keys(data.covs);
@@ -106,17 +106,18 @@ function initLive(ctx, data) {
   const lamS = ui.segmented({ label: "decay $\\lambda$ (with $\\eta = 1$)", options: [0.25, 0.5, 1, 2, 4].map(x => ({ value: x, label: String(x) })), value: p.lam,
     help: "Weights, $w_{\\min}$, the initial weights and the time step all scale with $1/\\lambda$; watch the max weight and the clock change and nothing else.",
     onChange: x => { p.lam = x; resetChange(); } });
-  const seedS = ui.slider({ label: "seed (initial weights, samples, jitter)", min: 1, max: 20, step: 1, value: p.seed, fmt: String, onChange: x => { p.seed = x; resetChange(); } });
+  const seedS = ui.slider({ label: "seed (initial weights, samples, noise)", min: 1, max: 20, step: 1, value: p.seed, fmt: String, onChange: x => { p.seed = x; resetChange(); } });
   const iiS = ui.slider({ label: "initial lateral weights $\\sim U(0, s_{II})$", min: 0, max: 1, step: 0.01, value: p.ii, fmt: f2,
     help: "$s_{II} = 0$: lateral synapses start at the floor (the sweeps' default).", onChange: x => { p.ii = x; resetChange(); } });
   const batchS = ui.segmented({ label: "covariance seen by plasticity", options: M.BATCHES.map(x => ({ value: x, label: x ? `batch ${x}` : "exact" })), value: p.batch, stack: true,
     help: "Minibatch: every neuron sees the same samples (shared noise).", onChange: x => { p.batch = x; liveChange(); } });
-  const jitS = ui.segmented({ label: "private jitter $\\sigma$: $w \\leftarrow w\\,e^{\\sigma\\xi}$ per step", options: M.JITTERS.map(x => ({ value: x, label: x ? ui.fmt(x, 1) : "off" })), value: p.jit,
-    help: "Independent noise on every synapse: breaks the symmetry that keeps clones identical.", onChange: x => { p.jit = x; liveChange(); } });
+  const noiseS = ui.select({ label: "private noise (independent per synapse)", options: M.NOISES.map(x => ({ value: x.id, label: x.label })), value: p.noise,
+    help: "Input noise: each synapse estimates its covariance from its own samples, $1/\\sigma^2$ per unit time. Additive: $w \\mathrel{+}= \\sigma\\sqrt{dt}\\,\\xi$. With noise, a neuron counts as in a part when its embedding has cosine $\\ge 0.9$ with it, otherwise as in transit.",
+    onChange: x => { p.noise = x; liveChange(); } });
 
   ui.controls({ parent: L.side, title: "Inputs", primary: [covS, sigmaBox] });
   ui.controls({ parent: L.side, title: "Knobs", primary: [thetaHost, gammaS, omegaS, initS],
-    advanced: [nS, lamS, seedS, iiS, batchS, jitS], advancedLabel: "More controls ($N$, $\\lambda$, seed, noise)" });
+    advanced: [noiseS, batchS, nS, lamS, seedS, iiS], advancedLabel: "More controls ($N$, $\\lambda$, seed, noise)" });
 
   // ------------------------------------------------------------ readouts
   const stats = ui.stats({ parent: L.side, items: [
@@ -178,9 +179,9 @@ function initLive(ctx, data) {
     setStat("ns", a.nStable, a.tie ? `marginal here: ${a.tie[0]} just below, ${a.tie[1]} just above` : c.method === "enum" ? "exact enumeration of supports" : "lone-neuron flow, checked exactly");
     const fit = xMode === "c" ? a.fitC : a.fitL;
     setStat("beta", a.K >= 3 && fit ? +fit.beta.toFixed(2) : NaN, a.K >= 3 && fit ? `over ${fit.n} clusters, r = ${ui.fmtFixed(fit.r, 2)}` : "needs ≥ 3 clusters");
-    setStat("dead", a.nDead, `of ${a.N}`);
+    setStat("dead", a.nDead, a.noise !== "none" ? `of ${a.N} · in transit ${a.transit} (${ui.fmtPct(a.transit / a.N, 0)})` : `of ${a.N}`);
     setStat("t", Math.round(a.t * 10) / 10, `dt = ${ui.fmt(M.DT / a.lam, 2)}${fps && tp.playing ? ` · ${fps.toFixed(0)} fps` : ""} · max w ${ui.fmt(a.wmax, 2)}`);
-    setStat("r", +a.resid.toPrecision(2), a.mode !== "mf" || a.jit ? "mean-field drift at these weights" : a.resid < M.RES_TOL ? "converged (below 10⁻⁶)" : "still moving");
+    setStat("r", +a.resid.toPrecision(2), a.mode !== "mf" || a.noise !== "none" ? "mean-field drift at these weights" : a.resid < M.RES_TOL ? "converged (below 10⁻⁶)" : "still moving");
   }
   function showRegime() {
     const c = sim.c, pt = M.partsAt(c, p.theta), rg = M.regime(c, p, pt.n);
@@ -190,7 +191,7 @@ function initLive(ctx, data) {
   }
   function showMode() {
     const wmin = M.wminOf(p);
-    modeLine.innerHTML = `${p.batch ? `minibatch: plasticity sees the covariance of ${p.batch} Gaussian samples per step (shared by all neurons)` : "mean-field: plasticity sees the exact $\\Sigma_g$"}${p.jit ? `, plus private jitter $\\sigma = ${ui.fmt(p.jit, 1)}$` : ""} · $N = ${p.n}$, $w_{\\min} = \\omega/N = ${ui.fmt(wmin, 2)}$${p.lam !== 1 ? `/$\\lambda$` : ""} · Euler $dt = ${ui.fmt(M.DT / p.lam, 2)}$`;
+    modeLine.innerHTML = `${p.batch ? `minibatch: plasticity sees the covariance of ${p.batch} Gaussian samples per step (shared by all neurons)` : "mean-field: plasticity sees the exact $\\Sigma_g$"}${p.noise !== "none" ? `, plus private ${M.NOISES.find(x => x.id === p.noise).label}` : ""} · $N = ${p.n}$, $w_{\\min} = \\omega/N = ${ui.fmt(wmin, 2)}$${p.lam !== 1 ? `/$\\lambda$` : ""} · Euler $dt = ${ui.fmt(M.DT / p.lam, 2)}$`;
     ui.renderMath(modeLine);
     omegaHelp.innerHTML = `A synapse at the floor still conducts $w_{\\min}$; together they pull every cluster towards the population mean. Here $w_{\\min} = ${ui.fmt(wmin, 2)}$ for $N = ${p.n}$.`;
     ui.renderMath(omegaHelp);
@@ -232,11 +233,11 @@ function initLive(ctx, data) {
     fpsN++; const now = performance.now();
     if (now - fpsT > 1000) { fps = fpsN * 1000 / (now - fpsT); fpsN = 0; fpsT = now; }
     const done = !sim.noisy() && a.resid < M.RES_TOL;
-    const capped = sim.noisy() && a.t > 4000 / p.lam;
+    const capped = sim.noisy() && a.t > 1000 / p.lam;
     show(a, false);
     if (done || capped || tickN % 8 === 0) { drawParts(a); river.update(tp.frames.concat([a])); river.setCursor(a.t); }
     if (done) { a.done = true; a.doneLabel = "converged: r < 10⁻⁶"; }
-    if (capped) { a.done = true; a.doneLabel = "stopped at t = 4000 (noisy run)"; }
+    if (capped) { a.done = true; a.doneLabel = "stopped at t = 1000 (noisy run)"; }
     return a;
   }
   function restart() {
@@ -256,9 +257,9 @@ function initLive(ctx, data) {
   function resetChange() { untour(); renderSigma(); showRegime(); showMode(); writeURL(); tp.reset(); tp.play(); }
   function syncAll() {
     covS.set(p.cov); makeThetaSlider(); gammaS.set(p.gamma); omegaS.set(p.omega); initS.set(p.init); nS.set(p.n); lamS.set(p.lam);
-    seedS.set(p.seed); iiS.set(p.ii); batchS.set(p.batch); jitS.set(p.jit);
+    seedS.set(p.seed); iiS.set(p.ii); batchS.set(p.batch); noiseS.set(p.noise);
   }
-  function untour() { if (!tourActive) return; tourActive = null; chipsA.moved(); chipsB.moved(); }
+  function untour() { if (!tourActive) return; tourActive = null; chipSets.forEach(c => c.moved()); }
   function writeURL() {
     const d = M.DEFAULTS, o = { tour: tourActive ? tourActive.id : null };
     for (const k of M.KEYS) o[k] = tourActive || p[k] === d[k] ? null : p[k];
@@ -269,12 +270,12 @@ function initLive(ctx, data) {
     tp.reset(); tp.play();
   }
   function applyParams(np) {
-    tourActive = null; chipsA.clear(); chipsB.clear();
+    tourActive = null; chipSets.forEach(c => c.clear());
     p = np; syncAll(); renderSigma(); showRegime(); showMode(); tp.reset(); tp.play();
   }
   ctx.onParams(() => {
     const r = readParams(ctx, data);
-    if (r.tour) { (r.tour.group === "f" ? chipsB : chipsA).clear(); (r.tour.group === "f" ? chipsA : chipsB).set(r.tour.id); applyTour(r.tour); return; }
+    if (r.tour) { GROUPS.forEach(([g], k) => { if (g === r.tour.group) chipSets[k].set(r.tour.id); else chipSets[k].clear(); }); applyTour(r.tour); return; }
     applyParams(r.p);
   });
 
@@ -305,7 +306,7 @@ function readParams(ctx, data) {
   if (!M.INITS.some(x => x.id === p.init)) p.init = d.init;
   p.n = Math.max(60, Math.min(250, Math.round(p.n / 10) * 10)); p.seed = Math.max(1, Math.round(p.seed));
   if (![0.25, 0.5, 1, 2, 4].includes(p.lam)) p.lam = 1;
-  if (!M.BATCHES.includes(p.batch)) p.batch = 0; if (!M.JITTERS.includes(p.jit)) p.jit = 0;
+  if (!M.BATCHES.includes(p.batch)) p.batch = 0; if (!M.NOISES.some(x => x.id === p.noise)) p.noise = "none";
   p.ii = Math.max(0, Math.min(1, p.ii));
   return { p, tour: null };
 }
@@ -324,8 +325,7 @@ function thetaMarks(c, gamma, lo, hi) {
   // a label only when it is clear of the previous labelled tick; coincident ticks share one label ("κ₀=γκ₀")
   let last = null;
   for (const m of raw) {
-    if (last && Math.abs(m.value - last.value) / (hi - lo) < 0.004) { last.label += "=" + m.label; last.title += "; " + m.title; m.label = ""; }
-    else if (last && (m.value - last.value) / (hi - lo) < 0.075) m.label = "";
+    if (last && (m.value - last.value) / (hi - lo) < 0.17) { last.title += "; " + m.title; m.label = ""; }
     else last = m;
   }
   return raw;
@@ -412,9 +412,8 @@ function allocPlot(el, { height = 320 } = {}) {
   return { update(an, md) { a = an; mode = md || mode; draw(); } };
 }
 function xTicks(x0, x1) {
-  const out = [];
-  for (let e = Math.floor(Math.log10(x0)) - 1; e <= Math.ceil(Math.log10(x1)); e++) for (const k of [1, 2, 5]) { const v = k * Math.pow(10, e); if (v >= x0 && v <= x1) out.push(v); }
-  if (out.length < 3) { const extra = []; for (let e = Math.floor(Math.log10(x0)) - 1; e <= Math.ceil(Math.log10(x1)); e++) for (const k of [1.5, 3, 4, 7]) { const v = k * Math.pow(10, e); if (v >= x0 && v <= x1) extra.push(v); } out.push(...extra); out.sort((a, b) => a - b); }
+  const out = [], span = Math.log10(x1 / x0), mant = span > 1.6 ? [1, 2, 5] : [1, 1.5, 2, 3, 5, 7];
+  for (let e = Math.floor(Math.log10(x0)) - 1; e <= Math.ceil(Math.log10(x1)); e++) for (const k of mant) { const v = k * Math.pow(10, e); if (v >= x0 && v <= x1) out.push(v); }
   return out;
 }
 function text(parent, x, y, s, attrs = {}) { const t = svgEl("text", { x, y, ...attrs }, parent); t.textContent = s; return t; }
@@ -452,8 +451,13 @@ function thetaStrip(el, { height = 180, onPick } = {}) {
       text(svg, xv, m.t - 8 - rowI * 11, lab, { "text-anchor": "middle", "font-size": 10, fill: P.ink2 });
     });
     // n(theta) step line
-    let d = "";
-    rows.forEach((r, i) => { const xa = X(r.theta - 0.005 < lo ? lo : r.theta - 0.005), xb = X(r.theta + 0.005 > hi ? hi : r.theta + 0.005), y = Y(r.n); d += (i ? "L" : "M") + xa.toFixed(1) + "," + y.toFixed(1) + "L" + xb.toFixed(1) + "," + y.toFixed(1); });
+    // step line; a grid value exactly on a correlation level (marginal parts, `tie`) is left as a gap
+    let d = "", pen = false;
+    rows.forEach(r => {
+      if (r.tie) { pen = false; return; }
+      const xa = X(r.theta - 0.005 < lo ? lo : r.theta - 0.005), xb = X(r.theta + 0.005 > hi ? hi : r.theta + 0.005), y = Y(r.n);
+      d += (pen ? "L" : "M") + xa.toFixed(1) + "," + y.toFixed(1) + "L" + xb.toFixed(1) + "," + y.toFixed(1); pen = true;
+    });
     svgEl("path", { d, fill: "none", stroke: P.fg, "stroke-width": 1.6, "stroke-linejoin": "round" }, svg);
     // now
     const xt = X(theta);
@@ -492,6 +496,7 @@ function riverChart(el, { height = 190 } = {}) {
       for (const gr of f.major) col(gr.n, gr.color);
       let small = 0; for (const gr of f.minor) small += gr.n;
       if (small) col(small, P.other, 0.8);
+      if (f.transit) col(f.transit, P.other, 0.55);
       if (f.nDead) col(f.nDead, P.other, 0.35);
     }
     g.strokeStyle = "#c9c8c1"; g.beginPath(); g.moveTo(m.l, height - m.b + .5); g.lineTo(W - m.r, height - m.b + .5); g.stroke();
@@ -518,6 +523,7 @@ function riverChart(el, { height = 190 } = {}) {
     const r = cv.getBoundingClientRect(), t = X.inv(ev.clientX - r.left);
     let f = frames[0]; for (const q of frames) if (q.t <= t) f = q;
     const rows = f.major.slice(0, 8).map((g, k) => ({ name: `c${k + 1} (λ = ${ui.fmt(g.lam, 3)})`, value: String(g.n), color: g.color }));
+    if (f.transit) rows.push({ name: "in transit (noise)", value: String(f.transit), color: P.other });
     if (f.nDead) rows.push({ name: "dead", value: String(f.nDead), color: P.other });
     ui.showTip(ev.clientX, ev.clientY, ui.tipRows(`t = ${ui.fmtFixed(f.t, 1)}: K = ${f.K}`, rows));
   });

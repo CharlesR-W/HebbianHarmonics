@@ -62,7 +62,10 @@ function onJob(msg) {
   Object.assign(rows, run.base);
   // spectra of Sigma and of the readouts (for the overlay chart), contrast setting = P·P
   const eS = E.eigh(Sigma, B).values, eSp = E.eigh(E.project1(Sigma, B), B).values;
-  const eK = E.eigh(main.rk.C, B).values, eP = E.eigh(main.rp.C, B).values;
+  // the θ-free estimate is displayed as P Ĉ P (the contrast setting): 'project' mode already returns PCP, but 'fit'
+  // (γ ∉ {0, 1}) returns the full fitted matrix, so project it here; the full matrix stays in Cp
+  const CpP = E.project1(main.rp.C, B);
+  const eK = E.eigh(main.rk.C, B).values, eP = E.eigh(CpP, B).values;
   // measurement operator: rank / spectrum (expensive; only when asked)
   let spec = null;
   if (wantSpec) {
@@ -78,7 +81,7 @@ function onJob(msg) {
   }
   return {
     t, rows, mode: main.mode,
-    Ck: main.rk.C, Cp: main.rp.C, Ctr, Cps: ps.C, partsK: ps.K, robust: cl.robust,
+    Ck: main.rk.C, Cp: main.rp.C, CpP, Ctr, Cps: ps.C, partsK: ps.K, robust: cl.robust,
     mII: main.rk.mII, mIB: main.rk.mIB, iters: main.rk.iters, relRes: main.rk.relResidual,
     eig: { sigma: eS, sigmaP: eSp, known: eK, proj: eP }, spec, ms: performance.now() - t0,
   };
