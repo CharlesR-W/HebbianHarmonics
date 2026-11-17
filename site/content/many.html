@@ -3,8 +3,8 @@
 <h2 id="setup">The set-up</h2>
 
 <p>Same model as before: $B$ boundary neurons clamped to $g$, $N$ interior neurons with voltages $u = Hg$, and the rule</p>
-<div class="eq" id="eq-many-rule" data-num="1">$$\frac{dw_{ij}}{dt} = -\eta\,\theta - \lambda w_{ij} + \eta_{ij}\,h_i^\top \Sigma_g h_j, \qquad w_{ij} \ge w_{\min},$$</div>
-<p>with $\eta_{ij} = \eta$ for interior–boundary (I–B) synapses and $\gamma\eta$ for interior–interior (I–I) ones. A synapse survives where the covariance of its two ends beats the pruning threshold $\theta$. The start is generic and dense: every potential synapse exists, I–B weights are drawn from an exponential distribution (mean 0.2), and lateral weights start at the floor. By default plasticity sees the exact $\Sigma_g$ (mean-field); under <i>More controls</i> it can instead see the covariance of a minibatch of samples.</p>
+<div class="eq" id="eq-many-rule" data-num="1">$$\frac{dw_{ij}}{dt} = -\eta\,\theta - \lambda w_{ij} + \eta_{ij}\,h_i^\top \Sigma_g h_j,$$</div>
+<p>clipped at $w_{ij} \ge w_{\min}$, with $\eta_{ij} = \eta$ for interior–boundary (I–B) synapses and $\gamma\eta$ for interior–interior (I–I) ones. A synapse survives where the covariance of its two ends beats the pruning threshold $\theta$. The start is generic and dense: every potential synapse exists, I–B weights are drawn from an exponential distribution (mean 0.2), and lateral weights start at the floor. By default plasticity sees the exact $\Sigma_g$ (mean-field); under <i>More controls</i> it can instead see the covariance of a minibatch of samples.</p>
 
 <p>The covariance families, all synthetic <span class="synthetic-tag">synthetic Σ</span>:</p>
 <ul>
@@ -36,7 +36,7 @@
 <h2 id="readout-live">Pretend you only have the weights</h2>
 
 <p>The note's boldest claim is that you can do <em>weight-space interpretability</em>: given only the weights, compute $H$ and solve for the input covariance. At a fixed point every active synapse satisfies a linear equation in the unknown $C$:</p>
-<div class="eq" id="eq-many-readout" data-num="2">$$\text{I–B: } (HC)_{ib} = \theta + \tfrac{\lambda}{\eta} w_{ib}, \qquad \text{I–I: } \gamma\, h_i^\top C h_j = \theta + \tfrac{\lambda}{\eta} w_{ij}.$$</div>
+<div class="eq" id="eq-many-readout" data-num="2">$$\begin{aligned} \text{I–B:}\quad (HC)_{ib} &= \theta + \tfrac{\lambda}{\eta} w_{ib}, \\ \text{I–I:}\quad \gamma\, h_i^\top C h_j &= \theta + \tfrac{\lambda}{\eta} w_{ij}. \end{aligned}$$</div>
 <p>The panel below solves these equations by masked ridge least squares, from the current weights of the run above, about twice a second (in a background thread). It scores the estimate $\hat C$ in the three settings that should be kept apart. <b>Parameters known</b>: $\theta$, $\lambda/\eta$ and $\gamma$ are given, and the full covariance is scored. <b>Unknown scale</b>: $\lambda/\eta$ is unknown, so the best scale is fitted. <b>$\theta$ unknown</b>: then $\hat C$ is only defined up to $\theta\,\mathbf 1\mathbf 1^\top$, so both matrices are projected with $P = I - \mathbf 1\mathbf 1^\top/B$ (the contrast-subspace score). Each setting reports the Frobenius cosine and the Bures–Wasserstein distance, and the contrast setting adds the overlap of the top eigenspaces. Bures–Wasserstein on its own misleads (see below), so it is never shown alone.</p>
 
 <figure class="fig full card" id="fig-many-readout">

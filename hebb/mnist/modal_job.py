@@ -109,7 +109,7 @@ def cmd_status(run_id: str):
         print("  FAILED", f)
 
 
-def cmd_fetch(run_id: str, out: str):
+def cmd_fetch(run_id: str, out: str, with_weights: bool = False):
     dest = Path(out) / run_id
     dest.mkdir(parents=True, exist_ok=True)
     n = 0
@@ -117,6 +117,8 @@ def cmd_fetch(run_id: str, out: str):
         if e.type != modal.volume.FileEntryType.FILE:
             continue
         target = dest / Path(e.path).relative_to(run_id)
+        if "/weights/" in e.path and not with_weights:
+            continue
         if target.exists() and target.stat().st_size == e.size:
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -134,6 +136,6 @@ if __name__ == "__main__":
     elif a[0] == "status":
         cmd_status(a[1])
     elif a[0] == "fetch":
-        cmd_fetch(a[1], a[2] if len(a) > 2 else "/var/tmp/hebb-mnist/runs")
+        cmd_fetch(a[1], a[2] if len(a) > 2 else "/var/tmp/hebb-mnist/runs", "--weights" in a)
     else:
         sys.exit(__doc__)

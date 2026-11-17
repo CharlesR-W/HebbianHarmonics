@@ -25,11 +25,15 @@ def snapshot_steps(steps: int, n: int) -> list[int]:
 
 
 def run_name(c: Cfg) -> str:
-    lift = c.lift if c.lift != "rff" else f"rff{c.B}" + ("" if c.bw_mult == 1 else f"bw{c.bw_mult:g}")
-    if c.lift == "relu":
-        lift = f"relu{c.B}"
-    init = "" if (c.ib_shape == 1.0 and c.ii_scale == 0.2) else f"_init{c.ib_shape:g}-{c.ii_scale:g}"
-    return f"{lift}_N{c.N}_th{c.theta:g}_wmin{c.wmin:g}{init}_{c.mode}_s{c.seed}"
+    """e.g. pixels_N2048_th0.75_nw0.5_heavy_sgd_s0  (nw = N * w_min)."""
+    if c.lift == "pixels":
+        lift = "pixels"
+    else:
+        lift = f"{c.lift}{c.B}" + ("" if c.bw_mult == 1 else f"bw{c.bw_mult:g}")
+    init = "generic" if c.ib_shape == 1.0 else f"heavy" if c.ib_shape == 0.1 else f"gamma{c.ib_shape:g}"
+    if abs(c.ii_scale - 0.2 * 512 / c.N) > 1e-9:
+        init += f"-ii{c.ii_scale:g}"
+    return f"{lift}_N{c.N}_th{c.theta:g}_nw{c.N * c.wmin:.3g}_{init}_{c.mode}_s{c.seed}"
 
 
 def train(cfg: Cfg, out_dir: Path, device=None, verbose=True) -> dict:
@@ -40,6 +44,7 @@ def train(cfg: Cfg, out_dir: Path, device=None, verbose=True) -> dict:
     gen = torch.Generator(device=device).manual_seed(1000 + cfg.seed)
     name = run_name(cfg)
     out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "weights").mkdir(exist_ok=True)
 
     # ---- data and exact statistics
     x_tr, y_tr = load_mnist("train")
@@ -175,14 +180,16 @@ def train(cfg: Cfg, out_dir: Path, device=None, verbose=True) -> dict:
         out_dir / f"{name}.npz",
         sub=sub, H_sub=np.stack(H_sub), Wii_g=np.stack(Wii_g), Wib_g=np.stack(Wib_g), g_steps=np.array(g_steps),
         hist_ii=np.stack(hist_ii), hist_ib=np.stack(hist_ib), hist_edges=A.HIST_EDGES,
-        dense=np.array(dense), labels=lab, cent=cent.float().cpu().numpy(), H_final=Ha.float().cpu().numpy(),
-        Wii_avg=Aii.float().cpu().numpy(), Wib_avg=Aib.float().cpu().numpy(),
-        Wii_final=Wii.to(torch.float16).cpu().numpy(), Wib_final=Wib.to(torch.float16).cpu().numpy(),
+        dense=np.array(dense), labels=lab, cent=cent.float().cpu().numpy(), H_final=Ha.to(torch.float16).cpu().numpy(),
         Sigma=Sigma_np.astype(np.float32), mu_g=mu_g.astype(np.float32),
         sizes_snap=np.array([np.pad(s, (0, max(0, 4096 - len(s))))[:4096] for s in sizes_l], dtype=np.int32),
         **{f"C_{k}": f16(v) for k, v in C_store.items()},
         **{f"spec_{k}": v for k, v in spectra.items()},
     )
+    # full weight matrices: separate file, kept on the Modal Volume (not fetched by default)
+    np.savez_compressed(out_dir / "weights" / f"{name}_weights.npz",
+                        Wii_avg=Aii.to(torch.float16).cpu().numpy(), Wib_avg=Aib.to(torch.float16).cpu().numpy(),
+                        Wii_init=Wii0.to(torch.float16).cpu().numpy(), Wib_init=Wib0.to(torch.float16).cpu().numpy())
     energy_snap = [e.tolist() for e in energy_l]
     res["cluster_energy_snap"] = energy_snap
     (out_dir / f"{name}.json").write_text(json.dumps(res, default=float))

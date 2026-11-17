@@ -14,12 +14,16 @@ const FAMS = [
   { value: "hier", label: "hierarchical blocks" },
   { value: "pow", label: "power-law spectrum, signed" },
   { value: "powpos", label: "power-law spectrum, correlations ≥ 0" },
+  { value: "ring", label: "ring (stationary, Fourier eigenvectors)" },
   { value: "wish", label: "Wishart (random sample covariance)" },
 ];
 const HIER = { 8: [2, 2, 2], 12: [2, 2, 3], 16: [2, 2, 4], 24: [2, 3, 4], 32: [2, 4, 4], 48: [3, 4, 4] };
 const HIER_CORR = [0.05, 0.3, 0.6];
 const DEF = { fam: "blocks", b: 24, theta: 0.3, p: 1, n: 150, gamma: 1, wmin: 1e-4, alpha: 1, dofr: 1, nb: 4, win: 0.5, btw: 0.1,
-  uneq: false, cs: 1, seed: 1, mode: "mf", batch: 32, cont: false };
+  uneq: false, cs: 1, seed: 1, mode: "mf", batch: 32, cont: false, ell: 1.5, jit: false };
+const II_SCALE = 0.03;    // initial lateral weights ~ U(0, 0.03) (docs/findings.md default; ≤ 0.03 behaves like the floor)
+const DT = 0.05;          // Euler step (docs/findings.md default; the readout's mid-training peak needs the finer path)
+const JITTER = 1e-3;      // optional private multiplicative jitter per step, w ← w·exp(σξ)
 const KEYS = Object.keys(DEF);
 const EQ_TOL = 1e-6;      // the equilibrium readout is claimed only when r/η < EQ_TOL
 const DONE_TOL = 1e-8;    // the run pauses ("converged") when r/η < DONE_TOL
@@ -87,6 +91,10 @@ function makeSigma(st) {
   } else if (st.fam === "pow" || st.fam === "powpos") {
     Sigma = E.covPowerLaw({ B, alpha: st.alpha, seed: st.cs, nonneg: st.fam === "powpos" });
     desc = `random orthogonal eigenbasis, eigenvalues ∝ k^−${f2(st.alpha)}${st.fam === "powpos" ? ", plus the smallest c·11ᵀ making all correlations ≥ 0" : ""}, mean variance 1`;
+  } else if (st.fam === "ring") {
+    Sigma = new Float64Array(B * B);
+    for (let b = 0; b < B; b++) for (let c = 0; c < B; c++) { let d = Math.abs(b - c); d = Math.min(d, B - d); Sigma[b * B + c] = Math.exp(-d * d / (2 * st.ell * st.ell)); }
+    labels = null; desc = `ring: (Σ_g)_bc = exp(−d(b,c)²/2ℓ²) with d the distance around a ring of ${B} inputs, ℓ = ${f2(st.ell)}`;
   } else {
     const dof = Math.max(1, Math.round(st.dofr * B));
     Sigma = E.covWishart({ B, dof, seed: st.cs });
@@ -95,7 +103,7 @@ function makeSigma(st) {
   // display order of boundary neurons: planted order, or by angle in the plane of the top two eigenvectors
   const eg = E.eigh(Sigma, B);
   let order = Array.from({ length: B }, (_, i) => i);
-  if (!labels) {
+  if (!labels && st.fam !== "ring") {
     const ang = order.map(b => Math.atan2(eg.vectors[b * B + 1], eg.vectors[b * B]));
     order.sort((a, c) => ang[a] - ang[c]);
   }
@@ -136,8 +144,9 @@ export async function init(panel, ctx) {
 
   // ---------- simulation state
   let SG = makeSigma(st), Sigma = SG.Sigma, B = SG.B, N = st.n;
-  const Pm = () => ({ ...E.defaultParams(), theta: st.theta, gamma: st.gamma, wmin: st.wmin, dt: st.mode === "mf" ? 0.2 : 0.05 });
+  const Pm = () => ({ ...E.defaultParams(), theta: st.theta, gamma: st.gamma, wmin: st.wmin, dt: DT });
   let PP = Pm();
+  let jrng = null;
   let s = null, sampler = null, prevWii = null, prevWib = null, prevValid = false, runId = 0, version = 0;
   let pca = null, H = null, cl = null, colourOf = null, neuronColour = null, clusterColour = [], cstats = null;
   let tOff = 0, seq = null, seqIdx = 0, holdT = 0, seqSteps = 0, frameNo = 0, mbResid = NaN;
@@ -150,7 +159,8 @@ export async function init(panel, ctx) {
 
   function newState() {
     N = st.n; PP = Pm();
-    s = E.createState({ N, B, seed: st.seed, p: st.p });
+    s = E.createState({ N, B, seed: st.seed, p: st.p, iiScale: II_SCALE });
+    jrng = E.makeRng(7000 + st.seed);
     sampler = st.mode === "mb" ? E.makeSampler(Sigma, B, 1000 + st.seed) : null;
     prevWii = new Float64Array(N * N); prevWib = new Float64Array(N * B); prevValid = false;
     edgeBuf = { pairs: new Uint32Array(2 * (N * (N - 1) / 2 + N * B)), w: new Float32Array(N * (N - 1) / 2 + N * B) };
@@ -184,13 +194,15 @@ export async function init(panel, ctx) {
   const thetaHost = ui.h("div");
   const makeTheta = () => {
     // marks in priority order; a mark too close to an earlier one is dropped so labels never collide
-    const marks = [{ value: SG.kappa0, label: "κ₀", title: "mean covariance of the initial neurons, ≈ 1ᵀΣ1/B²" }];
+    const gk = st.gamma * SG.kappa0;
+    const marks = st.gamma === 1 ? [{ value: SG.kappa0, label: "γκ₀", title: "collective threshold γκ₀; κ₀ = 1ᵀΣ1/B²" }]
+      : [{ value: gk, label: "γκ₀", title: "collective threshold γκ₀" }, { value: SG.kappa0, label: "κ₀", title: "κ₀ = 1ᵀΣ1/B², mean covariance of two initial neurons" }];
     if (st.fam === "blocks") marks.push({ value: st.btw, label: "between" }, { value: st.win, label: "within" });
     if (st.fam === "hier") HIER_CORR.forEach(c => marks.push({ value: c, label: f2(c) }));
     marks.push({ value: 0, label: "0" });
     const seen = [], mk = marks.filter(m => { if (m.value < -0.1 || m.value > 1 || seen.some(x => Math.abs(x - m.value) < 0.11)) return false; seen.push(m.value); return true; });
     const sl = ui.slider({ label: "pruning threshold $\\theta$", min: -0.1, max: 1, step: 0.01, value: st.theta, fmt: x => f2(x), marks: mk,
-      help: "Synapses survive where $\\mathrm{Cov}(u_i,u_j) > \\theta$. κ₀: mean covariance of the initial neurons.",
+      help: `Synapses survive where $\\mathrm{Cov}(u_i,u_j) > \\theta$. κ₀ = 1ᵀΣ1/B² = ${f2(SG.kappa0)} is the mean covariance of two initial neurons; below γκ₀ = ${f2(st.gamma * SG.kappa0)} the population starts bound together.`,
       onInput: x => { if (st.cont) { st.theta = x; PP.theta = x; moved(); postRun(); } },
       onChange: x => change({ theta: x }) });
     thetaHost.replaceChildren(sl.el); thetaS = sl;
@@ -200,7 +212,11 @@ export async function init(panel, ctx) {
     help: "$p < 1$: a fixed random mask; each neuron can only ever touch a random subset of inputs and neurons.", onChange: x => change({ p: x }) });
   const nS = ui.slider({ label: "interior neurons $N$", min: 60, max: 250, step: 10, value: st.n, fmt: String, onChange: x => change({ n: x }) });
   const gS = ui.segmented({ label: "lateral gain $\\gamma$", options: [0, 0.5, 1, 2].map(x => ({ value: x, label: String(x) })), value: st.gamma, onChange: x => change({ gamma: x }) });
-  const wS = ui.slider({ label: "floor $w_{\\min}\\lambda/\\eta$", min: 1e-6, max: 1e-2, log: true, value: st.wmin, fmt: x => ui.fmt(x, 2), onChange: x => change({ wmin: x }) });
+  const wS = ui.slider({ label: "floor $w_{\\min}\\lambda/\\eta$", min: 1e-6, max: 1e-2, log: true, value: st.wmin, fmt: x => `${ui.fmt(x, 2)} · ω = ${ui.fmt(x * st.n, 2)}`,
+    help: "ω = N·w_min: the floor's total leak toward the population mean; keep ω ≲ 0.02 (docs/findings.md F5).", onChange: x => change({ wmin: x }) });
+  const ellS = ui.slider({ label: "ring correlation length $\\ell$", min: 0.5, max: 4, step: 0.1, value: st.ell, fmt: f2, onChange: x => change({ ell: x }) });
+  const jitT = ui.toggle({ label: "private jitter, $w \\leftarrow w\\,e^{\\sigma\\xi}$, $\\sigma = 10^{-3}$", value: st.jit,
+    help: "Breaks exact symmetries: a tiny residual can be an unstable symmetric state (docs/findings.md F8).", onChange: x => change({ jit: x }) });
   const aS = ui.slider({ label: "spectrum exponent $\\alpha$", min: 0.25, max: 2.5, step: 0.05, value: st.alpha, fmt: f2, help: "eigenvalues $\\propto k^{-\\alpha}$", onChange: x => change({ alpha: x }) });
   const dS = ui.segmented({ label: "Wishart degrees of freedom / $B$", options: [0.25, 0.5, 1, 2].map(x => ({ value: x, label: String(x) })), value: st.dofr, onChange: x => change({ dofr: x }) });
   const nbS = ui.segmented({ label: "number of blocks", options: [2, 3, 4, 6, 8], value: st.nb, onChange: x => change({ nb: x }) });
@@ -213,11 +229,11 @@ export async function init(panel, ctx) {
   const batchS = ui.segmented({ label: "minibatch size", options: [8, 32, 128], value: st.batch, onChange: x => change({ batch: x }) });
   const contT = ui.toggle({ label: "keep weights when $\\theta$ changes", value: st.cont, help: "Off: a new $\\theta$ restarts from the same initial weights. On: the run continues from the current weights (hysteresis).", onChange: x => change({ cont: x }) });
   const trailT = ui.toggle({ label: "fading trails", value: false, onChange: on => v.setTrails(on ? 10 : 0) });
-  const famOnly = { blocks: [nbS, wiS, btS, uqT], pow: [aS, csS], powpos: [aS, csS], wish: [dS, csS], hier: [] };
+  const famOnly = { blocks: [nbS, wiS, btS, uqT], pow: [aS, csS], powpos: [aS, csS], wish: [dS, csS], hier: [], ring: [ellS] };
   ui.controls({ parent: L.side, title: "Parameters", primary: [famS, bS, thetaHost, pS],
-    advanced: [nS, gS, wS, nbS, wiS, btS, uqT, aS, dS, csS, seedS, modeS, batchS, contT, trailT], advancedLabel: "More controls" });
+    advanced: [nS, gS, wS, nbS, wiS, btS, uqT, aS, dS, ellS, csS, seedS, modeS, batchS, contT, jitT, trailT], advancedLabel: "More controls" });
   const showFamControls = () => {
-    for (const c of [aS, dS, nbS, wiS, btS, uqT, csS]) c.el.style.display = famOnly[st.fam].includes(c) ? "" : "none";
+    for (const c of [aS, dS, nbS, wiS, btS, uqT, csS, ellS]) c.el.style.display = famOnly[st.fam].includes(c) ? "" : "none";
     batchS.el.style.display = st.mode === "mb" ? "" : "none";
   };
   showFamControls();
@@ -238,7 +254,12 @@ export async function init(panel, ctx) {
   const bxSim = box("Voltage covariance $H\\Sigma_g H^\\top$, neurons sorted by cluster");
   const bxSpec = box("Eigenvalues of $\\Sigma_g$");
   L.below.append(bxSigma.wrap, bxSim.wrap, bxSpec.wrap);
-  const bxParts = box("Cluster parts: mean embedding over boundary neurons, against the nearest eigenvector of $\\Sigma_g$");
+  const bxParts = box("Cluster parts: mean embedding over boundary neurons");
+  let partsLine = "eig";
+  const partsSeg = ui.segmented({ label: "line", options: [{ value: "eig", label: "nearest eigenvector of $\\Sigma_g$" }, { value: "perron", label: "Perron vector of $(\\Sigma_g - \\theta\\mathbf{1}\\mathbf{1}^\\top)$ on the support" }],
+    value: "eig", onChange: x => { partsLine = x; drawParts(); } });
+  partsSeg.el.style.margin = "2px 0 8px";
+  bxParts.t.after(partsSeg.el);
   bxParts.wrap.style.gridColumn = "1 / -1";
   const partsNote = ui.h("div", { class: "u-help" });
   bxParts.wrap.append(partsNote);
@@ -389,16 +410,24 @@ export async function init(panel, ctx) {
       let bi = 0, bc = 0;
       for (let q = 0; q < B; q++) { let d = 0; for (let b = 0; b < B; b++) d += u[b] * SG.eig.vectors[b * B + q]; if (Math.abs(d) > Math.abs(bc)) { bc = d; bi = q; } }
       const sgn = bc < 0 ? -1 : 1, ev = SG.order.map(b => sgn * SG.eig.vectors[b * B + bi]);
-      // fixed-point check of the working hypothesis h ∝ (Σh − θ)₊
-      const fp = new Float64Array(B); for (let b = 0; b < B; b++) { let a = 0; for (let c = 0; c < B; c++) a += Sigma[b * B + c] * part[c]; fp[b] = Math.max(0, a - st.theta); }
-      let num = 0, n2 = 0; for (let b = 0; b < B; b++) { num += part[b] * fp[b]; n2 += fp[b] * fp[b]; }
-      const cfp = n2 > 0 ? num / (nrm * Math.sqrt(n2)) : NaN;
-      const supp = part.filter(x => x > 0.02).length;
-      return { title: `c${clusterColour[k] + 1} · ${cstats.sizes[k]} neurons · ${supp} inputs`, color: catColor(clusterColour[k]), values: SG.order.map(b => part[b] / nrm), overlay: ev,
-        sub: `cos with v${sub(bi + 1)}: ${f2(Math.abs(bc))} · cos with (Σh−θ)₊: ${f3(cfp)}` };
+      // the part's own Perron vector: top eigenvector of A_SS, A = Σ − θ11ᵀ, on the cluster's support S (F1)
+      const S = []; for (let b = 0; b < B; b++) if (part[b] > 0.02) S.push(b);
+      const m = S.length, A = new Float64Array(m * m);
+      for (let a = 0; a < m; a++) for (let c = 0; c < m; c++) A[a * m + c] = Sigma[S[a] * B + S[c]] - st.theta;
+      const ea = E.eigh(A, m), pv = new Float64Array(B);
+      let ps = 0; for (let a = 0; a < m; a++) ps += ea.vectors[a * m];
+      for (let a = 0; a < m; a++) pv[S[a]] = (ps < 0 ? -1 : 1) * ea.vectors[a * m];
+      let num = 0; for (let b = 0; b < B; b++) num += u[b] * pv[b];
+      // c_k = (hᵀΣh − θ)/|h|² = a member's summed input conductance (λ = η = 1)
+      let q = 0; for (let a = 0; a < B; a++) for (let c = 0; c < B; c++) q += part[a] * Sigma[a * B + c] * part[c];
+      const ck = (q - st.theta) / (nrm * nrm);
+      const showP = partsLine === "perron";
+      return { title: `c${clusterColour[k] + 1} · ${cstats.sizes[k]} neurons · ${m} inputs · c = ${ui.fmt(ck, 3)}`, color: catColor(clusterColour[k]), values: SG.order.map(b => part[b] / nrm),
+        overlay: showP ? SG.order.map(b => pv[b]) : ev,
+        sub: `cos with v${sub(bi + 1)} of Σ_g: ${f2(Math.abs(bc))} · with Perron vector of (Σ_g−θ11ᵀ) on its ${m} inputs: ${f3(num)}` };
     });
     let lo = -0.25; panels.forEach(pn => pn.overlay.forEach(x => { if (x < lo) lo = x; }));
-    partsC.update({ labels, panels, yrange: [Math.floor(lo * 4) / 4, 1] });
+    partsC.update({ labels, panels, yrange: [Math.floor(lo * 4) / 4, 1], overlayName: partsLine === "perron" ? "Perron vector of (Σ_g − θ11ᵀ) on the cluster's support" : "nearest eigenvector of Σ_g" });
     const hidden = cl.K - ordC.length;
     partsNote.innerHTML = hidden > 0 ? `${hidden} further cluster${hidden > 1 ? "s" : ""} (grey in the views) not shown.` : "";
   }
@@ -467,6 +496,11 @@ export async function init(panel, ctx) {
   function stepOnce() {
     prevWii.set(s.Wii); prevWib.set(s.Wib); prevValid = true;
     if (st.mode === "mf") E.step(s, Sigma, PP); else E.stepStochastic(s, sampler, PP, st.batch);
+    if (st.jit) {   // private multiplicative jitter on every potential synapse (symmetric for I–I), floor kept
+      const { Wii, Wib, Mii, Mib } = s, fl = PP.wmin;
+      for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) { const k = i * N + j; if (Mii[k]) { const w = Math.max(fl, Wii[k] * Math.exp(JITTER * jrng.normal())); Wii[k] = w; Wii[j * N + i] = w; } }
+      for (let k = 0; k < N * B; k++) if (Mib[k]) Wib[k] = Math.max(fl, Wib[k] * Math.exp(JITTER * jrng.normal()));
+    }
     version++; seqSteps++;
   }
   function onTick(speed) {
@@ -528,7 +562,7 @@ export async function init(panel, ctx) {
   if (worker) worker.onmessage = e => onWorker(e.data);
   function postRun() {
     if (!worker || !s) return;
-    const W0 = E.createState({ N, B, seed: st.seed, p: st.p });
+    const W0 = E.createState({ N, B, seed: st.seed, p: st.p, iiScale: II_SCALE });
     worker.postMessage({ kind: "run", id: runId, N, B, Mii: s.Mii, Mib: s.Mib, Sigma, k: SG.k, W0ii: W0.Wii, W0ib: W0.Wib, P: { ...PP } });
     busy = false; specVersion = -1; RO.pending(); stats.set("dir", null, "computing…");
   }
@@ -571,8 +605,10 @@ export async function init(panel, ctx) {
   function change(o) {
     Object.assign(st, o);
     moved();
-    const sigmaKeys = ["fam", "b", "alpha", "dofr", "nb", "win", "btw", "uneq", "cs"];
+    const sigmaKeys = ["fam", "b", "alpha", "dofr", "nb", "win", "btw", "uneq", "cs", "ell"];
     if (Object.keys(o).some(k => sigmaKeys.includes(k))) { SG = makeSigma(st); Sigma = SG.Sigma; B = SG.B; drawSigma(); makeTheta(); }
+    if ("gamma" in o) makeTheta();
+    if ("n" in o) wS.set(st.wmin);
     showFamControls();
     drawCaption();
     if (Object.keys(o).length === 1 && "theta" in o && st.cont) { PP.theta = st.theta; postRun(); if (!tp.playing) tp.play(); return; }
@@ -582,6 +618,7 @@ export async function init(panel, ctx) {
   function syncControls() {
     famS.set(st.fam); bS.set(st.b); pS.set(st.p); nS.set(st.n); gS.set(st.gamma); wS.set(st.wmin); aS.set(st.alpha); dS.set(st.dofr); nbS.set(st.nb);
     wiS.set(st.win); btS.set(st.btw); uqT.set(st.uneq); csS.set(st.cs); seedS.set(st.seed); modeS.set(st.mode); batchS.set(st.batch); contT.set(st.cont);
+    ellS.set(st.ell); jitT.set(st.jit);
     showFamControls();
   }
   function applyState(next, t) {
@@ -611,7 +648,7 @@ export async function init(panel, ctx) {
     const grid = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "16px 28px" } });
     const mk = title => { const b = ui.h("div"), w = ui.h("div", {}, ui.h("div", { class: "chart-title", html: title }), b); grid.append(w); return b; };
     const hS = mk("True $\\Sigma_g$ <span class=\"synthetic-tag\">synthetic Σ</span>"), hC = mk("Read out from the weights: $\\hat C$"), hD = mk("Difference $\\hat C - \\Sigma_g$");
-    const tiles = ui.stats({ cols: 4, items: [
+    const tiles = ui.stats({ cols: window.innerWidth < 700 ? 2 : 4, items: [
       { key: "dir", label: "directions of $\\Sigma_g$ pinned down", fmt: String },
       { key: "eqs", label: "equations (active synapses)", fmt: ui.fmtInt },
       { key: "cos", label: "Frobenius cosine (this view)", fmt: f3 },

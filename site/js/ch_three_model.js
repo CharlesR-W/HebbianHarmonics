@@ -6,56 +6,73 @@ import * as E from "./engine.js";
 export const B = 3;
 export const DT = 0.05;            // Euler step (lambda = eta = 1). ENGINE.md: 0.05 when the transient is the subject
 export const LAM = 1, ETA = 1;
-export const RES_TOL = 1e-6;       // stationarity tolerance for "converged" (covariance units, eta = 1)
+export const RES_TOL = 1e-5;       // stationarity tolerance for "converged" (docs/findings.md conventions)
+export const JIT_SEED = 3000;      // private-jitter RNG stream offset (seed + JIT_SEED)
 
 // Input covariance presets. corr order follows the UI: rho12, rho13, rho23 (g1..g3).
 export const PRESETS = [
-  { id: "indep", label: "independent", v: [1, 1, 1], r: [0, 0, 0] },
-  { id: "pair", label: "g₁ and g₂ correlated", v: [1, 1, 1], r: [0.6, 0, 0] },
-  { id: "anti", label: "anticorrelated", v: [2 / 3, 2 / 3, 2 / 3], r: [-0.5, -0.5, -0.5] },
-  { id: "loud", label: "g₁ louder", v: [2, 1, 1], r: [0, 0, 0] },
+  { id: "indep", label: "independent, equal variances", v: [1, 1, 1], r: [0, 0, 0] },
+  { id: "pair", label: "g₁ and g₂ correlated (0.6)", v: [1, 1, 1], r: [0.6, 0, 0] },
+  { id: "pos", label: "all positively correlated (0.3)", v: [1, 1, 1], r: [0.3, 0.3, 0.3] },
+  { id: "anti", label: "anticorrelated (I − 11ᵀ/3)", v: [2 / 3, 2 / 3, 2 / 3], r: [-0.5, -0.5, -0.5] },
+  { id: "tilt", label: "unequal variances 1, 1.5, 2.5", v: [1, 1.5, 2.5], r: [0, 0, 0] },
   { id: "custom", label: "custom", v: null, r: null },
 ];
 
+// Defaults follow docs/findings.md ("What the explorer should let the reader discover").
 export const DEFAULTS = { s: "indep", v1: 1, v2: 1, v3: 1, r12: 0, r13: 0, r23: 0, theta: 0.4, gamma: 1, wmin: 1e-4,
-  n: 100, seed: 1, ii: 0, ib: 0.2, mode: "mf", batch: 16 };
+  n: 100, seed: 0, ii: 0.03, ib: 0.2, mode: "mf", batch: 16, jit: 0 };
 
 // A tour is an exact state: DEFAULTS overridden by `params` (a preset fills v*, r*), a fresh start, optionally a
-// scheduled change of theta at time `at.t`, and a playback speed. Every claim in a note was checked headless with
-// runTour (all seeds quoted) and in the page; `expect` records the outcome the note describes.
+// scheduled change of theta at time `at.t`, and a playback speed. The first twelve are docs/findings.md's verified
+// Chapter 1 tours (site/data/sweeps/tours.json, same ids and parameters, seed 0 of the three verified there); the
+// last three are this chapter's own, checked with runTour. `expect` records the outcome the note describes.
+const F = { n: 90, seed: 0, ii: 0, ib: 0.2, wmin: 1e-4, gamma: 1 };     // tours.json common parameters
 export const TOURS = [
-  { id: "collapse", group: "basics", label: "No pruning", params: { s: "indep", theta: 0 },
-    note: "Independent inputs, $\\theta = 0$: no constant pruning drift. Every lateral synapse grows, the whole interior becomes one blob, and it settles at the centroid, $h_i \\approx (\\tfrac13, \\tfrac13, \\tfrac13)$ for every $i$.",
-    expect: { K: 1, where: ["centroid"] } },
-  { id: "corner", group: "basics", label: "Weak pruning", params: { s: "indep", theta: 0.2 },
-    note: "$\\theta = 0.2$. Still one blob, because early on most pairs of neurons covary by more than $0.2$; but the blob does not stay in the middle: it slides, as one body, to a single corner. Which corner depends on the seed; the other two inputs get no neurons at all.",
+  { id: "neutral-identity", group: "basics", label: "No pruning", params: { ...F, s: "indep", theta: 0 },
+    note: "Independent inputs and $\\theta = 0$. For a lone neuron every point of the triangle is then a fixed point; lateral coupling makes consensus instead: all 90 neurons end on one point, the population's starting mean, near but not at the centroid.",
+    expect: { K: 1, where: [""] } },
+  { id: "corners-collective", group: "basics", label: "θ below κ₀", params: { ...F, s: "indep", theta: 0.2 },
+    note: "$\\theta = 0.2$: the only stable parts are now the three corners. But $\\theta$ is below the collective threshold $\\gamma\\kappa_0 = \\tfrac13$, so lateral synapses grow first, the population binds into one blob, and it lands on <em>one</em> corner together.",
     expect: { K: 1, where: ["corner"] } },
-  { id: "corners", group: "basics", label: "Three corners", params: { s: "indep", theta: 0.4 },
-    note: "$\\theta = 0.4$, above the typical initial covariance of two neurons ($\\tfrac13$ for these inputs). Lateral synapses between neurons near different corners are pruned before a blob can form, and the interior splits into three clusters, one per input. Their sizes are set by where the neurons started.",
+  { id: "three-corners", group: "basics", label: "Three corners", params: { ...F, s: "indep", theta: 0.4 },
+    note: "$\\theta = 0.4 &gt; \\gamma\\kappa_0$: neurons choose independently, and the interior splits into one cluster per corner. The sizes (40, 30, 20 for this seed) come from where the neurons started: any split would be a fixed point.",
     expect: { K: 3, where: ["corner", "corner", "corner"] } },
-  { id: "pair", group: "basics", label: "A correlated pair", params: { s: "pair", theta: 0.45 },
-    note: "$\\rho_{12} = 0.6$, $\\theta = 0.45$ (below $\\rho_{12}$). Two clusters: one at $g_3$ and one at the <em>midpoint</em> of the $g_1$–$g_2$ edge, $h = (\\tfrac12, \\tfrac12, 0)$. That embedding is a shared, non-negative part, not an eigenvector of $\\Sigma_g$.",
+  { id: "edge-midpoint", group: "basics", label: "A correlated pair", params: { ...F, s: "pair", theta: 0.5 },
+    note: "$\\rho_{12} = 0.6$, $\\theta = 0.5$. Two clusters: one at $g_3$, one at the <em>midpoint</em> of the $g_1$–$g_2$ edge, $h = (\\tfrac12, \\tfrac12, 0)$: a shared non-negative part, not an eigenvector of $\\Sigma_g$.",
     expect: { K: 2, where: ["midpoint12", "corner3"] } },
-  { id: "anti", group: "basics", label: "Anticorrelated, θ = 0", params: { s: "anti", theta: 0, seed: 5 },
-    note: "$\\Sigma_g = I - \\mathbf 1\\mathbf 1^\\top/3$ (every pair correlated $-\\tfrac12$) and <em>no</em> pruning drift. Three corner clusters anyway: lateral synapses between neurons near different corners see negative covariance and stay at the floor. Not a new mechanism, though: these dynamics are <em>identical</em> to independent inputs at $\\theta = \\tfrac13$ (see the text), right on the threshold. Of seeds 1–8, seeds 1, 2, 3 and 7 give two clusters.",
-    expect: { K: 3, where: ["corner", "corner", "corner"] } },
-  { id: "history", group: "subtle", label: "Lower θ afterwards", params: { s: "indep", theta: 0.4 }, at: { t: 20, theta: 0.1 },
-    note: "Starts as the three-corners tour; at $t = 20$, $\\theta$ drops to $0.1$ (watch the slider). The three clusters stay, because corners covary by $0 < 0.1$. A fresh start at $\\theta = 0.1$ gives one cluster: the fixed point you reach depends on the path.",
-    expect: { K: 3, where: ["corner", "corner", "corner"] } },
-  { id: "slide", group: "subtle", label: "Raise θ past ρ₁₂", params: { s: "pair", theta: 0.45 }, at: { t: 20, theta: 0.7 },
-    note: "Starts as the correlated-pair tour; at $t = 20$, $\\theta$ rises to $0.7$, above $\\rho_{12}$, so the midpoint is no longer a stable part. The cluster does not split: its members are identical, covary by their full variance, and stay wired together. The whole cluster slides to $g_1$ or $g_2$.",
+  { id: "midpoint-gated", group: "basics", label: "θ above ρ₁₂", params: { ...F, s: "pair", theta: 0.65 },
+    note: "$\\theta = 0.65 &gt; \\rho_{12}$: the midpoint is no longer a stable part, but the pair's population is still bound (its self-covariance $0.8 &gt; \\theta/\\gamma$) and picks <em>one</em> of $g_1$, $g_2$ together. The other gets nothing.",
     expect: { K: 2, where: ["corner", "corner3"] } },
-  { id: "seed", group: "subtle", label: "Same θ, other seed", params: { s: "indep", theta: 0.35, seed: 2 },
-    note: "$\\theta = 0.35$, just above $\\tfrac13$, seed 2: two clusters, and one input gets no neurons at all. Seeds 1 and 3–8 give three clusters with the same parameters. Near the threshold even the number of clusters is set by the initial weights.",
-    expect: { K: 2, where: ["corner", "corner"] } },
-  { id: "loud", group: "subtle", label: "One louder input", params: { s: "loud", theta: 0.6 },
-    note: "$\\mathrm{Var}\\,g_1 = 2$, the others $1$, $\\theta = 0.6$: three corner clusters, and the louder input gets about half of the neurons (seeds 1–4: 55, 55, 42 and 54 of 100).",
-    expect: { K: 3, where: ["corner1", "corner", "corner"] } },
-  { id: "noise", group: "subtle", label: "Minibatch noise", params: { s: "indep", theta: 0.5, mode: "mb", batch: 16, seed: 1 }, speed: 4,
-    note: "Independent inputs, $\\theta = 0.5$, but each step sees the covariance of a minibatch of 16 samples instead of the exact $\\Sigma_g$. The noise does not blur clusters, since every neuron sees the same samples; now and then it makes two clusters covary by more than $\\theta$, they wire together, and merged clusters never separate. Three becomes two, then one.",
+  { id: "midpoint-splits", group: "basics", label: "… with γ = ½", params: { ...F, s: "pair", theta: 0.65, gamma: 0.5 },
+    note: "The same, with lateral gain $\\gamma = 0.5$: the lateral threshold $\\theta/\\gamma = 1.3$ exceeds every covariance, nothing binds, and all three corners are populated.",
+    expect: { K: 3, where: ["corner", "corner", "corner"] } },
+  { id: "consensus", group: "inputs", label: "All correlated", params: { ...F, s: "pos", theta: 0.1 },
+    note: "Every pair correlated $0.3$ and $\\theta = 0.1$, below every covariance: $\\Sigma_g - \\theta\\mathbf 1\\mathbf 1^\\top$ is positive, so there is exactly one part, its full-support Perron vector, here the centroid.",
+    expect: { K: 1, where: ["centroid"] } },
+  { id: "anticorrelated", group: "inputs", label: "Anticorrelated", params: { ...F, s: "anti", theta: 0.02 },
+    note: "$\\Sigma_g = I - \\mathbf 1\\mathbf 1^\\top/3$ (every pair correlated $-\\tfrac12$) and almost no pruning drift, $\\theta = 0.02$: three corner clusters. Negative covariances prune by themselves; the text shows this is the same mechanism as drift. (Close to the threshold: in this page's random start, seed 2 gives two clusters.)",
+    expect: { K: 3, where: ["corner", "corner", "corner"] } },
+  { id: "winner-takes-all", group: "inputs", label: "Loudest wins", params: { ...F, s: "tilt", theta: 0.2 },
+    note: "Variances $1, 1.5, 2.5$, $\\theta = 0.2$, below the collective threshold: the bound population goes, all 90 neurons, to the loudest input $g_3$.",
+    expect: { K: 1, where: ["corner3"] } },
+  { id: "independent-tilt", group: "inputs", label: "… with γ = 0", params: { ...F, s: "tilt", theta: 0.2, gamma: 0 },
+    note: "The same without lateral plasticity ($\\gamma = 0$): neurons choose independently, every input is populated, and louder inputs get far more neurons (66, 18 and 6 for this seed: a steep power of the input's energy).",
+    expect: { K: 3, where: ["corner3", "corner2", "corner1"] } },
+  { id: "partial-extinction", group: "inputs", label: "θ above a variance", params: { ...F, s: "tilt", theta: 1.2 },
+    note: "$\\theta = 1.2$ exceeds $\\mathrm{Var}\\,g_1 = 1$: no neuron can covary with $g_1$ by more than $\\theta$, so that corner is not a part and gets nothing. The others share the population (67 and 23 for this seed).",
+    expect: { K: 2, where: ["corner3", "corner2"] } },
+  { id: "floor-too-high", group: "inputs", label: "Floor too high", params: { ...F, s: "indep", theta: 0.6, wmin: 1e-2 },
+    note: "$w_{\\min} = 10^{-2}$, so the floor conductance $\\omega = N w_{\\min} = 0.9$ is comparable to a cluster's input conductance. Every neuron leaks to the centroid before its embedding can concentrate, and at $\\theta = 0.6$ the whole network dies.",
+    expect: { K: 0, where: [] } },
+  { id: "history", group: "history", label: "Lower θ afterwards", params: { ...F, s: "indep", theta: 0.4 }, at: { t: 20, theta: 0.1 },
+    note: "Starts as the three-corners tour; at $t = 20$, $\\theta$ drops to $0.1$ (watch the slider). The three clusters stay, because corners covary by $0 &lt; \\theta$, while a fresh start at $\\theta = 0.1$ gives one cluster. Which fixed point you reach depends on the path.",
+    expect: { K: 3, where: ["corner", "corner", "corner"] } },
+  { id: "noise", group: "history", label: "Minibatch noise", params: { ...F, s: "indep", theta: 0.5, mode: "mb", batch: 16, n: 100, seed: 1 }, speed: 4,
+    note: "Independent inputs, $\\theta = 0.5$, but each step sees the covariance of a minibatch of 16 samples instead of the exact $\\Sigma_g$. Every neuron sees the same samples, so clusters stay points; now and then the noise pushes two clusters' covariance above $\\theta$, they wire together, and merged clusters never separate. Three becomes two, then one.",
     expect: { K: 1, where: ["corner"] } },
-  { id: "lateral", group: "subtle", label: "Wired-up start", params: { s: "indep", theta: 0.4, ii: 0.3 },
-    note: "As the three-corners tour, but every lateral synapse starts at a random weight up to $0.3$ instead of at the floor. The interior starts as one blob and stays one, ending at a single corner.",
+  { id: "wired", group: "history", label: "Wired-up start", params: { ...F, s: "indep", theta: 0.4, ii: 0.3 },
+    note: "As the three-corners tour, but every lateral synapse starts at a random weight up to $0.3$ instead of at the floor. The interior starts as one blob, stays one, and lands on a single corner: what matters is initial lateral conductance relative to input conductance.",
     expect: { K: 1, where: ["corner"] } },
 ];
 
@@ -91,9 +108,16 @@ export function createSim(p0) {
     sim.s = E.createState({ N: p.n, B, seed: p.seed, iiScale: p.ii, ibScale: p.ib });
     sim.Sigma = sigmaOf(p);
     sim.P = { ...E.defaultParams(), theta: p.theta, gamma: p.gamma, wmin: p.wmin, lam: LAM, eta: ETA, dt: DT };
-    sim.sampler = null;
+    sim.sampler = null; sim.jrng = E.makeRng(p.seed + JIT_SEED);
     sim.s.resid = NaN;
   };
+  // private multiplicative jitter (docs/findings.md F8): w <- w exp(sigma xi), independently per synapse, each step.
+  // It breaks exact symmetries (clones, symmetric states) that the deterministic dynamics can never leave.
+  function jitter(sig) {
+    const { N, Wii, Wib, Mii, Mib } = sim.s, r = sim.jrng;
+    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (Mii[i * N + j]) { const w = Wii[i * N + j] * Math.exp(sig * r.normal()); Wii[i * N + j] = w; Wii[j * N + i] = w; }
+    for (let k = 0; k < N * B; k++) if (Mib[k]) Wib[k] *= Math.exp(sig * r.normal());
+  }
   // live parameter changes (no restart): theta, gamma, wmin, Sigma, mode, batch
   sim.update = p => {
     const old = sim.p; sim.p = { ...old, ...p };
@@ -110,6 +134,7 @@ export function createSim(p0) {
         if (!sim.sampler) sim.sampler = E.makeSampler(sim.Sigma, B, sim.p.seed + 1000);
         E.stepStochastic(sim.s, sim.sampler, sim.P, sim.p.batch);
       } else E.step(sim.s, sim.Sigma, sim.P);
+      if (sim.p.jit > 0) jitter(sim.p.jit);
       k++;
       if (budgetMs < Infinity && performance.now() - t0 > budgetMs) break;
     }
@@ -165,11 +190,16 @@ export function analyse(sim, prevLabels = null) {
   }
   const all = [...byLab.values()];
   for (const c of all) { for (let b = 0; b < B; b++) c.part[b] /= c.n; c.energy = quad(c.part, Sigma); }
+  // c = a member's summed input conductance (lambda/eta = 1); at a fixed point c = (h'Σh − θ)/|h|² (findings F1)
+  for (const c of all) { let sw = 0; for (const i of c.members) for (let b = 0; b < B; b++) sw += s.Wib[i * B + b]; c.c = sw / c.n; }
+  // K counts populated clusters, >= max(2, 2% N) members (findings.md convention); smaller ones are stragglers
+  const minPop = Math.max(2, Math.ceil(0.02 * N));
   const live = all.filter(c => !c.dead).sort((a, b) => b.n - a.n);
+  for (const c of live) c.small = c.n < minPop;
   const deadC = all.find(c => c.dead) || null;
   return {
     t: sim.time(), N, H: Float32Array.from(H.subarray(0, N * B)), W8, wmax, labels: Int32Array.from(labels), dead,
-    clusters: deadC ? [...live, deadC] : live, K: live.length, nDead: deadC ? deadC.n : 0, robust: cl.robust, gap: cl.gap,
+    clusters: deadC ? [...live, deadC] : live, K: live.filter(c => !c.small).length, nSmall: live.filter(c => c.small).reduce((a, c) => a + c.n, 0), nDead: deadC ? deadC.n : 0, robust: cl.robust, gap: cl.gap,
     resid, fII: nII ? nFloorII / nII : 0, fIB: nIB ? nFloorIB / nIB : 0,
     theta: sim.P.theta, gamma: sim.P.gamma, Sigma: Float64Array.from(Sigma), mode: sim.p.mode,
   };
@@ -189,7 +219,7 @@ export function placeOf(part, tol = 0.06) {
 // Does an analysis match a tour's expectation? (`where` entries match by prefix, largest cluster first.)
 export function matches(a, expect) {
   if (a.K !== expect.K) return false;
-  const live = a.clusters.filter(c => !c.dead).map(c => placeOf(c.part));
+  const live = a.clusters.filter(c => !c.dead && !c.small).map(c => placeOf(c.part));
   return expect.where.every((w, i) => live[i] && live[i].startsWith(w));
 }
 
@@ -203,7 +233,7 @@ export function runTour(t, { tMax = 200, every = 1, seed = null } = {}) {
     sim.advance(1);
     if (!fired && sim.time() >= t.at.t) { sim.update({ theta: t.at.theta }); fired = true; firedAt = k; }
     if (k % ev === 0) { const a = analyse(sim, prev); prev = a.labels; Kseq.push(a.K); }
-    if (p.mode === "mf" && fired && k > firedAt + 2 && sim.s.resid / ETA < RES_TOL) break;
+    if (p.mode === "mf" && !p.jit && fired && k > firedAt + 2 && sim.s.resid / ETA < RES_TOL) break;
   }
   const a = analyse(sim, prev);
   return { a, Kseq, t: sim.time() };

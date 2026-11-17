@@ -251,6 +251,34 @@ def boundary_order(cent_live: np.ndarray, ev_V: np.ndarray):
     return np.array(a + rest), int(len(a))
 
 
+def support_metrics(z, ctx, dead_set):
+    """How good is C_hat where the network actually has equations?  Support = boundary
+    nodes carrying > 2/B of some live cluster part's mass."""
+    cent = z["cent"].astype(np.float64)
+    B = cent.shape[1]
+    live = [k for k in range(len(cent)) if k not in dead_set]
+    if not live:
+        return dict(n_supported=0)
+    sup = (cent[live] > 2.0 / B).any(0)
+    S = ctx.Sigma
+    res = dict(n_supported=int(sup.sum()), frac_supported=float(sup.mean()))
+    P = np.eye(B) - 1.0 / B
+    Sp = P @ S @ P
+    blk = np.ix_(sup, sup)
+    res["sigma_contrast_mass_on_support_block"] = float((Sp[blk] ** 2).sum() / (Sp ** 2).sum())
+    for v in ("ls_both", "ls_ib", "ls_ii"):
+        C = z[f"C_{v}"].astype(np.float64)
+        Cs, Ss = C[blk], S[blk]
+        res[v] = dict(cos_on_support=float((Cs * Ss).sum() / max(np.linalg.norm(Cs) * np.linalg.norm(Ss), 1e-300)),
+                      relerr_on_support_known=float(np.linalg.norm(Cs - Ss) / np.linalg.norm(Ss)),
+                      frac_C_mass_on_support_block=float((C[blk] ** 2).sum() / max((C ** 2).sum(), 1e-300)))
+        parts = cent[live]
+        q_true = np.einsum("kb,bc,kc->k", parts, S, parts)
+        q_hat = np.einsum("kb,bc,kc->k", parts, C, parts)
+        res[v]["part_energy_relerr_median"] = float(np.median(np.abs(q_hat - q_true) / np.abs(q_true)))
+    return rnd(res)
+
+
 def export_run(name: str, run_dir: Path, ctx: LiftCtx, x28_te, featured: bool):
     r = json.loads((run_dir / f"{name}.json").read_text())
     cfg = r["cfg"]
@@ -268,10 +296,11 @@ def export_run(name: str, run_dir: Path, ctx: LiftCtx, x28_te, featured: bool):
     out["readout"] = rnd(r["readout"]); out["baselines"] = rnd(r["baselines"])
     out["readout_info"] = rnd(r["readout_info"]); out["measurement_rank"] = r["measurement_rank"]
     out["timing"] = rnd(r["timing"])
+    z = np.load(run_dir / f"{name}.npz")
+    out["support"] = support_metrics(z, ctx, set(f.get("dead_clusters", [])))
     if not featured:
         return out
 
-    z = np.load(run_dir / f"{name}.npz")
     d = SITE / "runs" / name
     if d.exists():
         shutil.rmtree(d)
@@ -297,7 +326,7 @@ def export_run(name: str, run_dir: Path, ctx: LiftCtx, x28_te, featured: bool):
 
     # ---- neuron subsample and fixed order
     sub = z["sub"]; lab_all = z["labels"]; H_sub = z["H_sub"]          # (S, n_sub, B) f16
-    H_fin = z["H_final"]
+    H_fin = z["H_final"].astype(np.float32)
     lab_sub = lab_all[sub]
     dead_set = set(out["dead_clusters"])
     pos = choose_neurons(lab_sub, H_fin[sub], dead_set)
