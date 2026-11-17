@@ -1,0 +1,8 @@
+{
+ "run_id": "20261117-001011-final_gpu",
+ "call_id": "fc-01M7M8WWA3G7C45SHG5VQRMPK2",
+ "cfg": "configs/final_gpu.json",
+ "n_units": 76,
+ "gpu": "['L4', 'A10G', 'T4']",
+ "launched": "Tue Nov 17 00:10:11 2026"
+}

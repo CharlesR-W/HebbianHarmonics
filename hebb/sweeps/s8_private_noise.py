@@ -791,8 +791,9 @@ def sim_stationary(args):
     mass = np.array([pg[(xg >= edges[i]) & (xg < edges[i + 1])].sum() for i in range(len(edges) - 1)])
     mean_an = float((pg * wg).sum())
     hist = hist / cnt
-    return dict(kind=kind, theta=theta, sigma=sig, wmin=L, dt=dt, scheme=scheme, tv=float(0.5 * np.abs(hist - mass).sum()
-                + 0.5 * max(0.0, 1 - mass.sum())), mean_sim=s1 / cnt, mean_analytic=mean_an, hist=hist, analytic=mass,
+    tvd = 0.5 * (np.abs(hist - mass).sum() + abs((1 - hist.sum()) - (1 - mass.sum())))   # incl. mass beyond the bins
+    return dict(kind=kind, theta=theta, sigma=sig, wmin=L, dt=dt, scheme=scheme, tv=float(tvd),
+                mean_sim=s1 / cnt, mean_analytic=mean_an, hist=hist, analytic=mass,
                 edges=edges)
 
 
@@ -1017,37 +1018,64 @@ def aggregate_network(rows):
 
 
 # ----------------------------------------------------------------------------- assemble site JSON
+def _raw(name):
+    p = RAW / f"s8_{name}.json"
+    return json.loads(p.read_text()) if p.exists() else None
+
+
+def _stat_row(s, scheme, wmin=WMIN, dt=DT):
+    return dict(kind=s["kind"], theta=s["theta"], sigma=s["sigma"], scheme=scheme, wmin=wmin, dt=dt,
+                alloc=s["alloc"], core=s["core"], tv_weak_strong=s["tv_ws"], tv_rand_strong=s["tv_rs"],
+                equilibrated=s["equilibrated"], transit=s["transit"], off_mass=s["off"], cos_inst=s["cos"],
+                cos_mean=s["cos_mean"], dead=s["dead"], hop_rate=s["hop_rate"], relax=s["relax"], pi_rates=s["pi_Q"],
+                beta=s["fit_pl"].get("beta"), beta_rms=s["fit_pl"].get("rms"), beta_r=s["fit_pl"].get("r"),
+                beta_core=s["fit_pl_core"].get("beta"), T_exp=s["fit_exp_v"].get("T"), T_exp_rms=s["fit_exp_v"].get("rms"))
+
+
 def assemble():
-    A, R, M, P, X, DT, L, NN = (raw_load(k) for k in ("A", "R", "M", "P", "X", "DT", "L", "N"))
+    """Revision 2026-11-17: add/inp/inpn data from the reflected (Strang) scheme ('_r' raw files), multiplicative data
+    from the validated Ito log scheme (A2, M2); original projected-Euler results stay in scratch (s8_A.json etc.)."""
+    A, R, P, X, NN = (_raw(k) for k in ("A_r", "R_r", "P_r", "X_r", "N_r"))
+    A2, M2, V, H, DTc, L, L2, A0 = (_raw(k) for k in ("A2", "M2", "V", "H", "DT", "L", "L2", "A"))
     out = {}
-    # A: allocation vs time from three inits + stationary summaries
-    out["alloc_vs_time"] = [dict(kind=r["kind"], theta=r["theta"], sigma=r["sigma"], init=r["init"], alloc=r["alloc_t"],
-                                 transit=r["transit_t"], off=r["off_t"]) for r in A["rows"]]
+    mulrows = [r for c in A2["cells"] for r in c["rows"]]
+    out["alloc_vs_time"] = [dict(kind=r["kind"], theta=r["theta"], sigma=r["sigma"], init=r["init"],
+                                 scheme="log" if r["kind"] == "mul" else "reflect",
+                                 wmin=c["summary"]["wmin"] if r["kind"] == "mul" else WMIN,
+                                 dt=c["summary"]["dt"] if r["kind"] == "mul" else DT,
+                                 alloc=r["alloc_t"], transit=r["transit_t"], off=r["off_t"])
+                            for c in [dict(summary=dict(wmin=WMIN, dt=DT), rows=A["rows"])] + A2["cells"]
+                            for r in c["rows"]]
     out["snap_times"] = A["rows"][0]["t"]
-    summ = A["summary"] + (X["summary"] if X else [])
-    out["stationary_diag"] = [dict(kind=s["kind"], theta=s["theta"], sigma=s["sigma"], alloc=s["alloc"], core=s["core"],
-                                   tv_weak_strong=s["tv_ws"], tv_rand_strong=s["tv_rs"], equilibrated=s["equilibrated"],
-                                   transit=s["transit"], off_mass=s["off"], cos_inst=s["cos"], cos_mean=s["cos_mean"],
-                                   dead=s["dead"], hop_rate=s["hop_rate"], relax=s["relax"], pi_rates=s["pi_Q"],
-                                   beta=s["fit_pl"].get("beta"), beta_rms=s["fit_pl"].get("rms"), beta_r=s["fit_pl"].get("r"),
-                                   beta_core=s["fit_pl_core"].get("beta"), T_exp=s["fit_exp_v"].get("T"),
-                                   T_exp_rms=s["fit_exp_v"].get("rms"))
-                              for s in summ]
-    # R: rates out of each vertex (milestoning), Arrhenius fits
+    out["snap_times_note"] = "mul rows (T=1000) have snapshots up to 1000 only"
+    out["stationary_diag"] = ([_stat_row(s, "reflect") for s in A["summary"] + X["summary"]] +
+                              [_stat_row(c["summary"], "log", c["summary"]["wmin"], c["summary"]["dt"]) for c in A2["cells"]])
     out["rates"] = [dict(kind=r["kind"], theta=r["theta"], sigma=r["sigma"], out_rate=r["out_rate"], pi_rates=r["pi_Q"],
                          relax=r["relax"], irreducible=r["irreducible"], off_mass=r["off"]) for r in R["rows"]]
     out["arrhenius"] = R["arrhenius"]
-    out["multiplicative_floor"] = M["rows"]
+    out["multiplicative_floor"] = M2["rows"]
     out["planted"] = P["fits"]
-    out["dt_check"] = DT["rows"]
-    out["theory_checks"] = L
-    if NN:
-        out["network"] = aggregate_network(NN["rows"])
-        out["network_snap_times"] = NN["rows"][0]["t"]
-        out["network_lone_prediction"] = NN["lone"]
-        out["network_meta"] = dict(kappa0=NN["kappa0"], lam=NN["lam"], N=NN["N"], T=NN["T"])
+    out["scheme_validation"] = dict(problem_escape=V["escape_problem"], escape=V["escape"],
+                                    default_floor_prediction=V["default_floor_prediction"],
+                                    stationary=V["stationary"])
+    # headline cells: reflected (H, two dt) vs original projected Euler (A0, dt 0.05)
+    orig = {(s["kind"], s["theta"], s["sigma"]): s for s in A0["summary"]}
+    out["scheme_check_headline"] = [dict(kind=h["kind"], theta=h["theta"], sigma=h["sigma"], dt=h["dt"], scheme="reflect",
+                                         alloc=h["alloc"], transit=h["transit"], off_mass=h["off"],
+                                         beta=h["fit_pl"].get("beta"), T_exp=h["fit_exp_v"].get("T"),
+                                         orig_clip_alloc=orig[(h["kind"], h["theta"], h["sigma"])]["alloc"],
+                                         orig_clip_transit=orig[(h["kind"], h["theta"], h["sigma"])]["transit"],
+                                         orig_clip_beta=orig[(h["kind"], h["theta"], h["sigma"])]["fit_pl"].get("beta"))
+                                    for h in H["summary"]]
+    out["dt_check_original_scheme"] = DTc["rows"]
+    out["theory_checks"] = dict(L, rayleigh_vs_floor=L2["rows"])
+    out["network"] = aggregate_network(NN["rows"])
+    out["network_snap_times"] = NN["rows"][0]["t"]
+    out["network_lone_prediction"] = NN["lone"]
+    out["network_meta"] = dict(kappa0=NN["kappa0"], lam=NN["lam"], N=NN["N"], T=NN["T"], scheme="reflect (Strang)")
     meta = dict(
-        script="hebb/sweeps/s8_private_noise.py (parts A R M P X DT L N; Modal helper s8_modal.py)",
+        script="hebb/sweeps/s8_private_noise.py (parts A R P X N rerun with S8_REFLECT=1; A2 M2 V H L2 added in revision; "
+               "DT L original; Modal helper s8_modal.py)",
         description="Allocation of neurons to parts under PRIVATE (independent per-synapse) noise. Does the allocation "
                     "equilibrate (forget the init) and, if so, what law n_k(lambda_k; theta, sigma) does the stationary "
                     "state obey? gamma=0 lone-neuron limit (thousands of independent neurons; no lateral synapses) and "
@@ -1055,8 +1083,11 @@ def assemble():
         units="lam = eta = 1: weights and theta in covariance units, time in units of 1/lam; Euler dt = 0.05; "
               "wmin = 1e-4 unless stated. sigma is per sqrt(time unit).",
         noise_models=dict(
-            add="dw = drift dt + sigma sqrt(dt) xi, then clip at wmin",
-            mul="w <- w exp(sigma sqrt(dt) xi) after the drift step, then clip at wmin (median-neutral)",
+            add="Ito dw = (c - w) dt + sigma dW, reflected at wmin (c = (Sigma h)_b - theta, h frozen per step); "
+                "Strang scheme: exact drift dt/2 sticking at wmin, increment reflected at wmin, exact drift dt/2",
+            mul="Ito dw = (c - w) dt + sigma w dW, reflected at wmin (mean-neutral noise); integrated in log w: "
+                "Strang splitting of the exact flow dw/dt = c - (1 + sigma^2/2) w (sticks at wmin) and "
+                "log-increment sigma sqrt(dt) xi reflected at log wmin; dt = 0.0125",
             inp="private covariance-estimation noise: each synapse estimates Cov from its own samples, n = 1/sigma^2 "
                 "samples per unit time; Gaussian approx, Var per step = sigma^2 dt (C_xx C_yy + C_xy^2), independent "
                 "across synapses (I-B: q_i Sigma_bb + (Sigma h_i)_b^2; I-I: gamma^2 (q_i q_j + C_ij^2))",
@@ -1073,6 +1104,9 @@ def assemble():
             beta="slope of log alloc vs log v over parts with alloc > 1e-3 (rms = residual in log units)",
             T_exp="Boltzmann fit alloc ∝ exp(v/T)",
             tv_weak_strong="total variation between the stationary allocations started from 'weak' and 'strong' inits",
+            scheme_validation="1-D floored synapse: escape = Ito dw = (-theta + a w) dt + sigma w dW reflected at wmin, "
+                              "absorbed at b; rate = absorbed/total time vs exp(-ln MFPT) from quadrature; stationary: "
+                              "dw = (-theta - w) dt + noise, histogram of log w vs analytic density (TV incl. tail mass)",
             arrhenius="ln(out-rate of vertex) = a - 2*barrier/sigma^2 (barrier in units of D = sigma^2/2), fitted over sigma",
             network="per condition: alloc_by_init = core fractions per block (last entry of alloc_t = transit), mean "
                     "over seeds 0,1 and the second half of the run; metrics are means over seeds and inits; spread_inst = "
@@ -1094,6 +1128,20 @@ def assemble():
                            wmin=WMIN, init="W_IB ~ Exp(0.2), W_II ~ U(0,0.03) for rand; block inits put all neurons on one "
                                            "block with W_II at the floor", lateral="noise on lateral synapses too (True) "
                                            "or only on I-B synapses (False)")))
+    meta["revision"] = (
+        "2026-11-17 (after independent review). (1) The original multiplicative integrator (Euler drift, then "
+        "w *= exp(sigma sqrt(dt) xi), then clip) was not floor-compatible: a floored synapse's pre-noise weight is "
+        "already negative, so it could never leave the floor at wmin=1e-4; it also integrated the Stratonovich SDE "
+        "(Ito drift +sigma^2 w/2; at sigma=2 its mean weight diverges: 83-183 vs analytic 0.017). Replaced by the "
+        "validated Ito log scheme (scheme_validation: escape rate within 1-4% of quadrature at dt=0.003, 3-18% at "
+        "0.0125; stationary density TV 0.01-0.02 at 0.0125). All multiplicative data (stationary_diag kind=mul, "
+        "alloc_vs_time kind=mul, multiplicative_floor) are new. (2) Additive/input data were produced by projected "
+        "Euler (clip), which biases floored synapses low (floor mean 0.012 vs analytic 0.021 at sigma=0.1, theta=0.2). "
+        "All add/inp/inpn data here (stationary_diag, alloc_vs_time, rates, arrhenius, planted, network) are reruns "
+        "with a reflected Strang scheme that reproduces the analytic floor mean at dt=0.05 (0.0207 vs 0.0210). "
+        "scheme_check_headline compares reflected (dt 0.05 and 0.0125) with the original values. "
+        "dt_check_original_scheme is the pre-revision dt check (projected Euler). theory_checks.rayleigh_vs_floor "
+        "added: R(h) is non-decreasing only for the zero-floor flow.")
     p = save_json("alloc_private_noise", out, meta)
     print("wrote", p, p.stat().st_size // 1024, "KB")
 

@@ -17,7 +17,7 @@ transitions bracket 0.1 and 0.6; active-edge errors < 1e-15 at γ = 1.4; clone s
    rare, for it to leave the floor. "Multiplicative noise never hops at the default
    floor" is therefore an artefact as measured. The stationary density quoted is for a
    reflected Itô SDE that the code does not integrate (exp-multiplication adds an Itô
-   drift term). Status: open until rerun with a floor-compatible integrator.
+   drift term). Status: RESOLVED 2026-11-17 — rerun with validated reflected / log-space Itô schemes; `findings_private_noise.md` is the revised text. At the default floor multiplicative noise still never equilibrates, now for a verified reason (ln escape time 112 to 16,000); additive and input-noise results were redone with a reflected scheme (beta moves by 0.0-0.4; conclusions unchanged).
 2. **N §2.2 — "the identifiable set is unchanged" is false.** With rectified output
    the equations also involve boundary variances C_bb. Example: one cloned cluster
    h = (1/2, 1/2), C = I, two I–B observations and one within-cluster I–I observation:

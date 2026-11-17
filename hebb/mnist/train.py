@@ -84,9 +84,10 @@ def train(cfg: Cfg, out_dir: Path, device=None, verbose=True) -> dict:
         row["max_w"] = float(max(Wii.max(), Wib.max()))
         row.update(residual_stats(Wii, Wib, Sigma, cfg))
         if cfg.readout_every_snap:
-            Mii, Yii, Mib, Yib = R.equations(Wii, Wib, cfg.theta, cfg.lam, cfg.eta, cfg.gamma, cfg.wmin)
-            for fam in ("both", "ii", "ib"):
-                C, info = R.ls_readout(H, Mii, Yii, Mib, Yib, fam, iters=cfg.cg_iters)
+            # readouts always in float64 (float32 CG lost conjugacy on N=2048 problems)
+            Mii, Yii, Mib, Yib = R.equations(Wii.double(), Wib.double(), cfg.theta, cfg.lam, cfg.eta, cfg.gamma, cfg.wmin)
+            for fam in ("both",):
+                C, info = R.ls_readout(H.double(), Mii, Yii, Mib, Yib, fam, iters=cfg.cg_iters)
                 sc = scorer.score(C.cpu(), summ["n_clusters"])
                 row.update({f"ro_{fam}_{k}": v for k, v in sc.items() if not k.startswith("_")})
                 if fam == "both":
@@ -133,9 +134,11 @@ def train(cfg: Cfg, out_dir: Path, device=None, verbose=True) -> dict:
     # ---- final analysis on time-averaged weights (sgd) / final weights (mf)
     tm = time.time()
     Aii, Aib = (sum_ii / n_avg, sum_ib / n_avg) if cfg.mode == "sgd" else (Wii, Wib)
+    Aii, Aib = Aii.double(), Aib.double()          # final analysis and readouts in float64
+    Wii0, Wib0, Wii, Wib = Wii0.double(), Wib0.double(), Wii.double(), Wib.double()
     Ha = harmonic(Aii, Aib)
-    summ, lab, cent, energy = A.cluster_summary(Ha.float(), Aii, cfg.wmin, Sigma.float(), with_leader=True, Wib=Aib)
-    res_avg = residual_stats(Aii, Aib, Sigma, cfg)
+    summ, lab, cent, energy = A.cluster_summary(Ha.float(), Aii.float(), cfg.wmin, Sigma.float(), with_leader=True, Wib=Aib.float())
+    res_avg = residual_stats(Aii, Aib, Sigma.double(), cfg)
     Mii, Yii, Mib, Yib = R.equations(Aii, Aib, cfg.theta, cfg.lam, cfg.eta, cfg.gamma, cfg.wmin)
     final_ro, C_store, ro_info = {}, {}, {}
     for fam in ("both", "ii", "ib"):

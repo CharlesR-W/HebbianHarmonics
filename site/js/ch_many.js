@@ -280,7 +280,7 @@ export async function init(panel, ctx) {
     { key: "dir", label: "directions pinned down", fmt: String },
     { key: "fps", label: "frame rate", unit: "fps", fmt: x => x.toFixed(0) }] });
   ui.legend({ parent: L.side, items: [
-    { label: "interior neuron; colour = cluster", color: PAL.cat[0], shape: "dot" }, { label: "other: dead, straggler, past the 8th cluster, or not clustered yet", color: PAL.other, shape: "dot" },
+    { label: "interior neuron; colour = cluster", color: PAL.cat[0], shape: "dot" }, { label: "grey: dead, straggler, or not clustered", color: PAL.other, shape: "dot" },
     { label: "boundary neuron $e_b$, projected", color: PAL.boundary, shape: "square" }, { label: "synapse, opacity $\\propto w/\\max w$", color: PAL.edge, shape: "line" }] });
 
   // below: Σ_g, similarity, parts, time series
@@ -768,7 +768,7 @@ export async function init(panel, ctx) {
     tiles.el.style.marginBottom = "14px";
     host.append(top, status, tiles.el, grid, tableHost, grid2);
     ui.renderMath(host);
-    const common = { map: "div", size: 250, xlabel: "input c", ylabel: "input b" };
+    const common = { map: "div", size: 220, xlabel: "input c", ylabel: "input b" };
     const tip = name => (i, j, val) => ui.tipRows(`${gName(SG.order[i])}, ${gName(SG.order[j])}`, [{ name, value: f3(val) }]);
     const hmS = heatmap(hS, { ...common, zlabel: "$\\Sigma_g$", tooltip: tip("Σ_g") });
     const hmC = heatmap(hC, { ...common, zlabel: "$\\hat C$", tooltip: tip("Ĉ") });
@@ -913,7 +913,7 @@ export async function init(panel, ctx) {
       const d = e.data; if (d.kind !== "compare") return;
       if (d.error) { out.textContent = `Comparison failed: ${d.error}`; return; }
       if (d.row) fillCompare(d.row);
-      if (d.done) { cmpWorker.terminate(); cmpWorker = null; out.textContent = ""; if (note) note.textContent = `Computed in your browser just now: ${desc}`; }
+      if (d.done) { cmpWorker.terminate(); cmpWorker = null; out.textContent = ""; if (note) note.textContent = `computed in your browser just now: ${desc}`; }
     };
     cmpWorker.postMessage({ kind: "compare", Sigma: sg.Sigma, B: sg.B, N: cs.n, theta: cs.theta, gamma: cs.gamma, wmin: cs.wmin, seed: cs.seed, k: sg.k,
       configs: [{ key: "d", p: 1 }, { key: "s", p: 0.5 }, { key: "f", p: 1, wmin: cs.wmin / 100 }] });
