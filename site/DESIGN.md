@@ -177,8 +177,8 @@ an arrow; works within and across chapters). `class="explore-link big"` for the 
 - Colour ranges are **fixed** across frames of one figure (pass `range`), so a change of colour is a change of value.
 - Live sims start paused unless the figure is the chapter's centrepiece (`autoplay: true` starts it when it first
   scrolls into view). They pause off screen and when the tab is hidden (automatic).
-- Respect `prefers-reduced-motion`: do not autoplay or auto-rotate when
-  `matchMedia("(prefers-reduced-motion: reduce)").matches`.
+- `prefers-reduced-motion` is respected for you: `transport` ignores `autoplay` and `view3d` ignores
+  `autoRotate` under it (`ui.reducedMotion()` tells you, for anything of your own).
 
 ## 6. Colour grammar
 
@@ -296,7 +296,7 @@ caption depends on state (e.g. the current $B$).
 **`simLayout({parent, side? = 320})`** → `{el, view, side, below}` (see section 4).
 
 **Helpers:** `h(tag, attrs, ...children)` (attrs: `class`, `style` object incl. `--vars`, `text`, `html`,
-`onclick`…; children may be Nodes, strings or components), `renderMath(el)`, `fmt(v, sig=3)` (true minus,
+`onclick`…; children may be Nodes, strings or components), `renderMath(el)`, `reducedMotion()`, `fmt(v, sig=3)` (true minus,
 `×10ⁿ` outside [1e-3, 1e5), `n/a` for NaN), `fmtFixed(v, d=2)`, `fmtPct(v, d=0)`, `fmtInt(v)` (thousands
 separators), `showTip(clientX, clientY, htmlOrNode)`, `hideTip()`,
 `tipRows(head, [{name, value, color?, shape?: "dot"|"square"}], noteHtml?)`, `animate(el, fn(dt))` (rAF loop that

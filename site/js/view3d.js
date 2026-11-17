@@ -4,7 +4,7 @@
 // auto-rotate. Draws only when something changed or while rotating, and only while on screen.
 // API and examples: DESIGN.md "view3d.js".
 import { P } from "./palette.js";
-import { h, animate, showTip, hideTip, tipRows } from "./ui.js";
+import { h, animate, showTip, hideTip, tipRows, reducedMotion } from "./ui.js";
 import { hidpi } from "./charts.js";
 
 // ---- simplex helpers
@@ -40,7 +40,7 @@ export function view3d(el, o = {}) {
   const opt = { height: 460, yaw: -0.5, pitch: 0.95, zoom: 1, autoRotate: false, rotateSpeed: 0.18, hull: true, pointSize: 4,
     edgeWidth: 1, edgeAlpha: 0.6, edgeColor: P.edge, trailColor: P.fg, depthFade: 0.35, hint: true, ...o };
   const cv = h("canvas", { tabindex: "0", "aria-label": "3D view: drag to orbit, scroll to zoom" });
-  const rotBtn = h("button", { type: "button", title: "Auto-rotate", "aria-label": "Auto-rotate", "aria-pressed": String(!!opt.autoRotate), html: ICON.rotate });
+  const rotBtn = h("button", { type: "button", title: "Auto-rotate", "aria-label": "Auto-rotate", "aria-pressed": String(!!opt.autoRotate && !reducedMotion()), html: ICON.rotate });
   const homeBtn = h("button", { type: "button", title: "Reset the view", "aria-label": "Reset the view", html: ICON.home });
   const corner = h("div", { class: "v3-corner" });
   const box = h("div", { class: "v3", style: { height: opt.height + "px" } }, cv, corner, h("div", { class: "v3-btns" }, rotBtn, homeBtn),
@@ -54,7 +54,7 @@ export function view3d(el, o = {}) {
   let trailN = 0, trail = [];
   let center = opt.center || null, radius = opt.radius || null;
   const cam = { yaw: opt.yaw, pitch: opt.pitch, zoom: opt.zoom };
-  let rotating = !!opt.autoRotate, dirty = true, W = 0, H = opt.height, ctx = null;
+  let rotating = !!opt.autoRotate && !reducedMotion(), dirty = true, W = 0, H = opt.height, ctx = null;
   let hoverCb = null, cameraCb = null, hovered = null, highlighted = null;
   // projected screen coordinates (x, y, scale, depth) for points then anchors
   let sx = new Float32Array(0), sy = new Float32Array(0), sd = new Float32Array(0), ss = new Float32Array(0), order = new Uint32Array(0);

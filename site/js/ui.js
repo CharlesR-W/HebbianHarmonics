@@ -95,6 +95,8 @@ export function tipRows(head, rows = [], note) {
   return d;
 }
 
+export const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
 // ---------------------------------------------------------------- visibility-aware animation loop
 // Runs fn(dtSeconds) on every animation frame while `el` is on screen (and its tab is shown). Returns {stop()}.
 export function animate(el, fn) {
@@ -236,7 +238,8 @@ export function chips(o) {
 
 // ---------------------------------------------------------------- transport
 // transport({onTick(speed) -> frame|null, onSeek(frame, i), onReset() -> frame|null, onRestore?(frame),
-//            speeds: [1, 4, 16], speed, timeFmt(t), autoplay, maxHistory: 400, watch: Element, parent})
+//            speeds: [1, 4, 16], speed, timeFmt(t), autoplay (ignored under reduced motion), maxHistory: 400,
+//            watch: Element, parent})
 // A frame is {t, ...anything}; it is what you need to redraw that moment (positions, weights, ...).
 // Each animation frame while playing and on screen: frame = onTick(speed); frames are kept in a history that is
 // thinned by halves past maxHistory, so the scrubber always spans the whole run. Return {..., done: true} to pause
@@ -255,7 +258,7 @@ export function transport(o) {
   const spd = segmented({ options: speeds, value: o.speed ?? speeds[0].value, onChange: v => { speed = v; } });
   spd.el.classList.add("u-speed"); spd.el.title = "Integration steps per animation frame";
   const el = h("div", { class: "u-transport" }, play, step, reset, h("div", { class: "u-scrub-wrap" }, scrub, h("div", { class: "u-tline" }, time, status)), spd);
-  let speed = spd.get(), playing = false, frames = [], pos = -1, onScreen = false, raf = 0, wantAuto = !!o.autoplay;
+  let speed = spd.get(), playing = false, frames = [], pos = -1, onScreen = false, raf = 0, wantAuto = !!o.autoplay && !reducedMotion();
 
   const setPlayIcon = () => { play.innerHTML = playing ? ICON.pause : ICON.play; play.setAttribute("aria-label", playing ? "Pause" : "Play"); el.classList.toggle("playing", playing); };
   const showTime = f => { time.textContent = f ? fmtT(f.t) : ""; };
