@@ -42,7 +42,7 @@ def leader_count(H: np.ndarray, tol: float = 0.1) -> int:
 
 
 def cluster_summary(H: torch.Tensor, Wii: torch.Tensor, wmin: float, Sigma: torch.Tensor,
-                    with_leader: bool = True) -> dict:
+                    with_leader: bool = True, Wib: torch.Tensor | None = None) -> dict:
     N = H.shape[0]
     D = l1_dist(H)
     lab = cluster_labels(H, 0.1, D)
@@ -53,6 +53,17 @@ def cluster_summary(H: torch.Tensor, Wii: torch.Tensor, wmin: float, Sigma: torc
                n_major=int((sizes >= max(2, 0.01 * N)).sum()),
                n_singletons=int((sizes == 1).sum()),
                n_active_components=int(components((Wii > 2 * wmin).cpu().numpy()).max() + 1))
+    # "dead" neurons: every synapse (I-I and I-B) at the floor.  They sit at the floor-weighted
+    # centroid and form one big cluster that carries no input-specific structure.
+    dead = ((Wii > 2 * wmin).sum(1) == 0) & ((Wib > 2 * wmin).sum(1) == 0) if Wib is not None else None
+    if dead is not None:
+        dead_np = dead.cpu().numpy()
+        live_labels = np.unique(lab[~dead_np])
+        out["n_dead"] = int(dead_np.sum())
+        out["n_live_clusters"] = int(len(live_labels))
+        out["n_live_major"] = int(sum(1 for k in live_labels if sizes[k] >= max(2, 0.01 * N)))
+        dead_clusters = np.unique(lab[dead_np])
+        out["dead_clusters"] = dead_clusters.tolist()
     if with_leader:
         out["n_leader"] = leader_count(H.double().cpu().numpy(), 0.1)
     # within-cluster spread (mean L1 to the cluster centroid), a diversity measure

@@ -88,7 +88,7 @@ def stoch_job(args):
 def init_job(args):
     theta, ii, ib, seed = args
     r = simulate(S12, N, theta, gamma=1.0, wmin=WMIN, seed=seed, ii_scale=ii, ib_scale=ib, Tmax=30000)
-    return dict(theta=theta, ii=ii, ib=ib, seed=seed, **{k: v for k, v in state_summary(r, theta, S12).items() if k != "sizes"})
+    return dict(ii=ii, ib=ib, seed=seed, **{k: v for k, v in state_summary(r, theta, S12).items() if k != "sizes"})
 
 
 def main():

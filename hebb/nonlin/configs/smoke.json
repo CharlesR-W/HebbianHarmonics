@@ -1,0 +1,2 @@
+{"defaults": {"N": 128, "steps": 60, "n_snap": 4, "n_sub": 64, "nls_iters": 20, "probes": false},
+ "units": [{"rule": "rect", "tau": 0.0, "theta": 0.44, "c": 1.4633}, {"rule": "linear", "theta": 0.48}]}

@@ -1,102 +1,153 @@
-<p class="placeholder"><span class="ph-tag">Placeholder · style guide</span> This tab is a living style guide for chapter authors: every component of the page rendered together, with <b>fake data and fake dynamics</b> (not the model). It will be replaced by Chapter 1. The contract is <code>site/DESIGN.md</code>.</p>
+<p class="lede">Start as small as possible. Three input neurons $g_1, g_2, g_3$ are clamped to the stimulus. A hundred interior neurons are wired to them, and to each other, all to all, through plastic synapses that start out dense and random. Each interior neuron's voltage is a weighted average of the three inputs, so it is a point in a triangle with the inputs at its corners. I wanted to watch Hebb's rule move those points, and see whether they really fall into clusters.</p>
 
-<p class="lede">A lede paragraph opens each chapter, slightly larger: what I wanted to know and what you will see. Three boundary neurons, a hundred interior ones, and a rule that only ever looks at covariances.</p>
+<h2 id="setup">Neurons as points in a triangle</h2>
 
-<h2 id="sim">The centrepiece: a live simulation</h2>
+<p>Think of the network as resistors. Synapse $w_{ij} \ge 0$ is a conductance; the inputs' voltages are held at $g$ by the rest of the brain; the interior settles to whatever Kirchhoff says. At an interior node no current is lost, so its voltage is the conductance-weighted average of its neighbours' voltages. Solving all of those averages at once gives</p>
 
-<p>A live simulation sits in a <code>figure.fig.full.card</code> with the sim layout: the big view on the left with its transport under it, controls and readouts on the right, linked views underneath. Below 900&nbsp;px the right column drops under the view. The run pauses whenever the figure is off screen, which is why linked views live inside the same figure. Try the tour chips, drag the view, scrub the run.</p>
+<div class="eq" id="eq-harmonic" data-num="1">$$u = H g, \qquad H = L_{II}^{-1} W_{IB},$$</div>
 
-<figure class="fig full card" id="fig-sim">
-  <div class="fig-title">Harmonic embeddings of interior neurons in the simplex over three boundary neurons <span class="synthetic-tag">fake dynamics</span></div>
-  <div class="fig-sub">Drag to orbit. Height above the triangle is the neuron's voltage variance $h_i^\top\Sigma_g h_i$.</div>
-  <div data-slot="sim"></div>
-  <figcaption><b>Plotted:</b> top: each circle is an interior neuron $i$ at its harmonic embedding $h_i$ (barycentric position in the triangle whose corners, squares, are the boundary neurons $g_1, g_2, g_3$), lifted by $h_i^\top\Sigma_g h_i$; its colour mixes the boundary colours in proportion to $h_i$. Lines are synapses, opacity $\propto w_{ij}/\max w$. Bottom left: $h_i^\top\Sigma_g h_j$ for neurons sorted by nearest vertex (bands: group), diverging map, fixed range $[-0.6, 0.6]$. Bottom right: mean over neurons of $\lVert h_i(t+\Delta t) - h_i(t)\rVert_1$ against time; orange line: the time shown. <b>Values:</b> $N = 150$ (default), $B = 3$, fake dynamics for this style guide only.</figcaption>
+<p>where $L_{II}$ is the graph Laplacian restricted to the interior and $W_{IB}$ holds the interior-to-input conductances. Row $i$ of $H$ is neuron $i$'s <b>harmonic embedding</b> $h_i$. Its entries are non-negative and sum to one, so $h_{ib}$ reads as "the fraction of my voltage that comes from input $b$", and $h_i$ is a point in the triangle whose corners are $g_1, g_2, g_3$. It depends only on the weights, not on the stimulus.</p>
+
+<figure class="fig wide card" id="fig-toy">
+  <div class="fig-title">A toy network and its harmonic embeddings</div>
+  <div class="fig-sub">Left: the wiring, drawn anywhere. Right: where the same five neurons sit in the triangle of inputs, computed from those weights.</div>
+  <svg viewBox="0 0 690 262" role="img" aria-label="Left: three clamped inputs and five interior neurons joined by synapses of different strengths. Right: the five interior neurons placed at their harmonic embeddings inside a triangle whose corners are the inputs." style="width:100%;height:auto;display:block;font-family:var(--sans)">
+    <g stroke="var(--c-edge)" stroke-linecap="round" fill="none">
+      <!-- interior-input synapses (width proportional to conductance) -->
+      <line x1="44" y1="44" x2="150" y2="50" stroke-width="5.4" opacity=".75"/>
+      <line x1="44" y1="44" x2="245" y2="88" stroke-width="1.8" opacity=".75"/>
+      <line x1="44" y1="132" x2="118" y2="168" stroke-width="4.5" opacity=".75"/>
+      <line x1="44" y1="132" x2="200" y2="200" stroke-width=".6" opacity=".75"/>
+      <line x1="44" y1="220" x2="292" y2="232" stroke-width="4.5" opacity=".75"/>
+      <line x1="44" y1="220" x2="245" y2="88" stroke-width="1.4" opacity=".55"/>
+      <!-- interior-interior synapses -->
+      <line x1="150" y1="50" x2="245" y2="88" stroke-width="3.6" opacity=".75"/>
+      <line x1="150" y1="50" x2="118" y2="168" stroke-width="2.7" opacity=".75"/>
+      <line x1="245" y1="88" x2="292" y2="232" stroke-width="2.7" opacity=".75"/>
+      <line x1="200" y1="200" x2="118" y2="168" stroke-width="1.8" opacity=".75"/>
+      <line x1="200" y1="200" x2="292" y2="232" stroke-width="1.8" opacity=".75"/>
+      <line x1="150" y1="50" x2="200" y2="200" stroke-width="1.1" opacity=".75"/>
+    </g>
+    <g stroke="var(--c-edge)" stroke-width="1.5">
+      <rect x="35" y="35" width="18" height="18" style="fill:var(--c-cat-0)"/>
+      <rect x="35" y="123" width="18" height="18" style="fill:var(--c-cat-1)"/>
+      <rect x="35" y="211" width="18" height="18" style="fill:var(--c-cat-2)"/>
+    </g>
+    <g font-size="13" font-weight="600" fill="var(--fg)" text-anchor="end">
+      <text x="28" y="49">g₁</text><text x="28" y="137">g₂</text><text x="28" y="225">g₃</text>
+    </g>
+    <g fill="var(--c-interior)" stroke="var(--surface)" stroke-width="2">
+      <circle cx="150" cy="50" r="9"/><circle cx="245" cy="88" r="9"/><circle cx="200" cy="200" r="9"/><circle cx="118" cy="168" r="9"/><circle cx="292" cy="232" r="9"/>
+    </g>
+    <g font-size="11" font-weight="600" fill="#fff" text-anchor="middle">
+      <text x="150" y="54">A</text><text x="245" y="92">B</text><text x="200" y="204">C</text><text x="118" y="172">D</text><text x="292" y="236">E</text>
+    </g>
+    <text x="172" y="258" font-size="11" fill="var(--mute)" text-anchor="middle" class="no-math">line width ∝ conductance w<tspan font-size="8" dy="3">ij</tspan></text>
+    <!-- arrow -->
+    <path d="M327 131 h22" stroke="var(--mute-2)" stroke-width="1.5" fill="none"/><path d="M349 126 l7 5 -7 5z" fill="var(--mute-2)"/>
+    <!-- triangle of embeddings: g1 top, g2 bottom left, g3 bottom right (offset 360) -->
+    <path d="M525 30 L400 215 L650 215 Z" fill="var(--wash)" stroke="#c9c8c1" stroke-width="1.2"/>
+    <g stroke="var(--c-edge)" stroke-width="1.5">
+      <rect x="518" y="23" width="14" height="14" style="fill:var(--c-cat-0)"/>
+      <rect x="393" y="208" width="14" height="14" style="fill:var(--c-cat-1)"/>
+      <rect x="643" y="208" width="14" height="14" style="fill:var(--c-cat-2)"/>
+    </g>
+    <g font-size="13" font-weight="600" fill="var(--fg)">
+      <text x="540" y="35">g₁</text><text x="380" y="236">g₂</text><text x="655" y="236">g₃</text>
+    </g>
+    <g fill="var(--c-interior)" stroke="var(--surface)" stroke-width="2">
+      <circle cx="520.5" cy="97.3" r="9"/><circle cx="562.3" cy="125" r="9"/><circle cx="512.9" cy="161.8" r="9"/><circle cx="458.7" cy="169.1" r="9"/><circle cx="596.3" cy="177.4" r="9"/>
+    </g>
+    <g font-size="11" font-weight="600" fill="#fff" text-anchor="middle">
+      <text x="520.5" y="101.3">A</text><text x="562.3" y="129">B</text><text x="512.9" y="165.8">C</text><text x="458.7" y="173.1">D</text><text x="596.3" y="181.4">E</text>
+    </g>
+    <text x="536" y="101" font-size="11" fill="var(--ink-2)" class="no-math">h<tspan font-size="8" dy="3">A</tspan><tspan dy="-3"> = (0.64, 0.20, 0.16)</tspan></text>
+  </svg>
+  <figcaption><b>Plotted:</b> left, a hand-made network: squares are the clamped inputs $g_1, g_2, g_3$, circles the interior neurons A–E, line width proportional to the conductance $w_{ij}$ (values 0.3–3). Right: each interior neuron at its harmonic embedding $h_i$ (row $i$ of $H = L_{II}^{-1}W_{IB}$ for those weights), in barycentric coordinates: a neuron with $h_i = e_b$ would sit on corner $g_b$.</figcaption>
 </figure>
 
-<h2 id="prose">Prose patterns</h2>
+<details class="more"><summary>The maths: why rows of $H$ are probability vectors</summary>
+<p>Kirchhoff's current law at interior node $i$: $\sum_j w_{ij}(u_j - u_i) + \sum_b w_{ib}(g_b - u_i) = 0$, i.e. $L_{II}u = W_{IB}g$ with $L_{II} = \mathrm{diag}(\deg) - W_{II}$. With every weight at least $w_{\min} > 0$, $L_{II}$ is a non-singular M-matrix, so $L_{II}^{-1}$ has non-negative entries and $H = L_{II}^{-1}W_{IB} \ge 0$. If every input is held at the same voltage $c$, the solution is $u = c\mathbf 1$; hence $H\mathbf 1 = \mathbf 1$. (Probabilistically, $h_{ib}$ is the chance that a random walk from $i$, stepping along edges with probability proportional to conductance, first reaches the inputs at $g_b$.)</p>
+</details>
 
-<p>Body text is Source Serif 4 at 18&nbsp;px; maths renders with KaTeX, inline like $u = Hg$ with $H = L_{II}^{-1}W_{IB}$, or displayed and numbered:</p>
-<div class="eq" id="eq-rule" data-num="1">$$\frac{dw_{ij}}{dt} = w_0 - \lambda w_{ij} + \eta_{ij}\,h_i^\top \Sigma_g h_j, \qquad w_{ij} \ge w_{\min}.$$</div>
-<p>Refer to it as <a href="#three/eq-rule">(1)</a>. A side note sits in the margin on wide screens and opens on tap on narrow ones<span class="sidenote">Side notes are for asides a careful reader wants and a quick reader can skip, such as why $w_{\min} &gt; 0$ keeps $L_{II}$ invertible.</span>; the number is added for you.</p>
+<p>The plasticity rule is the note's, with a regulariser that depends only on the weight:</p>
 
-<aside class="callout key"><p class="callout-title">Key point</p><p>The one thing to take away from a section. At most one per section.</p></aside>
-<aside class="callout caveat"><p class="callout-title">Caveat</p><p>An honest limitation: what this does not show, or where the evidence is thin.</p></aside>
-<aside class="callout"><p>A neutral note, without a title.</p></aside>
+<div class="eq" id="eq-rule" data-num="2">$$\begin{gathered}\frac{dw_{ij}}{dt} = w_0 - \lambda w_{ij} + \eta_{ij}\,\mathrm{Cov}(u_i, u_j), \\ w_{ij} \ge w_{\min}, \qquad \mathrm{Cov}(u_i,u_j) = h_i^\top \Sigma_g h_j.\end{gathered}$$</div>
+
+<p>The last identity is just $u = Hg$: the voltage covariance is $H\Sigma_g H^\top$, so Hebb sees only the input covariance $\Sigma_g$ and the embeddings. For a synapse onto an input, the covariance is $(H\Sigma_g)_{ib}$. I write the constant as $w_0 = -\eta\theta$, so that $\theta$ is in covariance units: <b>with $\theta &gt; 0$, a synapse grows only where its two neurons covary by more than $\theta$</b>, and otherwise is pruned down to the floor $w_{\min}$. Lateral synapses use $\eta_{II} = \gamma\eta$; since $w_0$ is shared, their effective threshold is $\theta/\gamma$.<span class="sidenote">$\lambda/\eta$ only sets the weight scale and the clock; I use $\lambda = \eta = 1$ and Euler steps of $dt = 0.05$. The floor $w_{\min} = 10^{-4}$ keeps $L_{II}$ invertible; it is small but not nothing, because $N w_{\min}$ of floor conductance still connects each neuron to everyone (try $w_{\min} = 10^{-2}$ under "More controls").</span></p>
+
+<p>Two properties drive everything below. The rule is <b>bounded</b>: each $u_i = h_i^\top g$ is a convex combination of the inputs, so no covariance exceeds $\max_b \Sigma_{bb}$ and no weight exceeds $\max(1,\gamma)\,\eta(\max_b\Sigma_{bb} - \theta)/\lambda$. And it is <b>self-reinforcing</b>: a strong synapse between $i$ and $j$ pulls their embeddings together, neurons with similar embeddings covary more, and that strengthens the synapse further. Whether the interior ends up as one blob or several clusters is a race between this feedback and the pruning.</p>
+
+<h2 id="sim">Watch it</h2>
+
+<p>The simulation below runs the real engine in your browser. Each circle is an interior neuron at its embedding $h_i$; the height above the triangle is its voltage variance $h_i^\top\Sigma_g h_i$, the diagonal of the matrix Hebb works with. Its colour mixes the three input colours in proportion to $h_i$, so a neuron's colour and its position say the same thing. Start with the tours; then change $\theta$ while it runs.</p>
+
+<figure class="fig full card" id="fig-sim">
+  <div class="fig-title">Harmonic embeddings of $N$ interior neurons over time, three clamped inputs <span class="synthetic-tag">synthetic Σ</span></div>
+  <div class="fig-sub">Drag to orbit, scroll to zoom, hover anything. $\theta$, $\gamma$, $w_{\min}$, $\Sigma_g$ and the covariance mode act on the running network; $N$, the seed and the initial weights restart it. The scrubber replays the run.</div>
+  <div data-slot="sim"></div>
+  <figcaption><b>Plotted:</b> top: squares are the inputs $g_1, g_2, g_3$, drawn just outside the corner they define (coloured leader); each circle is an interior neuron $i$ at its harmonic embedding $h_i$ (barycentric position in the triangle of inputs), raised by $\kappa\, h_i^\top\Sigma_g h_i$ with $\kappa = 0.8/\max_b \Sigma_{bb}$ (or flat); colour: the $h_i$-weighted mix of the input colours; grey, smaller: dead neurons (every synapse at $w_{\min}$). Once the clustering is clear-cut, members of a cluster coincide and are drawn with radius $\propto 0.8 + 2\sqrt{n_c/N}$ for a cluster of $n_c$ neurons. Ink lines: synapses (interior–interior and interior–input), opacity $w/\max w$ over the current frame, at most the 4,000 strongest. Fading ink: the last 10 frames of each neuron's path. Faint mesh: the surface $\kappa\, h^\top\Sigma_g h$ over the triangle; dashed: the flat triangle. Below the view, in reading order: (a) $H\Sigma_g H^\top$ with neurons sorted by cluster (band colour: the colour of the cluster's mean embedding), diverging map, range $\pm\max_b\Sigma_{bb}$; (b) number of neurons in each cluster against time, stacked; (c) the projected stationarity residual $r = \max |dw/dt|$ over synapses (synapses at the floor with negative drift count 0), covariance units, log axis; in minibatch mode it is the mean-field drift at the current weights; (d) fraction of lateral and of input synapses at $w_{\min}$. Orange line: the time shown. Clusters: single linkage on the embeddings in $L_1$, cut at the largest gap between merge heights (the engine's <code>clustersAuto</code>), dead neurons excluded. <b>Values:</b> $B = 3$, $\lambda = \eta = 1$, $dt = 0.05$; the mode (exact $\Sigma_g$ or minibatch) is shown in the view; $N$, $\theta$, $\gamma$, $w_{\min}$, $\Sigma_g$, seed and initial scales as set in the controls (defaults: $N = 100$, $\theta = 0.4$, $\gamma = 1$, $w_{\min} = 10^{-4}$, independent unit-variance inputs, seed 1).</figcaption>
+</figure>
+
+<h3 id="notice">What to notice</h3>
+<ul>
+  <li><b>The first moments decide.</b> Neurons start spread uniformly over the triangle (their input weights are independent exponentials, their lateral weights at the floor). By $t \approx 1$ the lateral synapses have either thickened everywhere, and the cloud contracts to one blob, or only within groups, and it tears into clusters (at speed ×1 that is a third of a second: use ×¼, or scrub back). After that, clusters move as rigid bodies.</li>
+  <li><b>Members of a cluster coincide.</b> At the fixed point the neurons of a cluster agree to about $10^{-8}$ in $L_1$: the heatmap shows solid blocks, and the 3D view shows one dot where there are thirty.</li>
+  <li><b>Height is not what is being climbed.</b> Corners are the highest points for independent inputs and the centroid the lowest, yet the no-pruning tour settles at the centroid. The pull is towards inputs a neuron already covaries with by more than $\theta$, not up the variance surface.</li>
+  <li><b>Convergence is visible.</b> The residual falls exponentially once the structure is settled; a shoulder before that is a cluster still sliding. The run pauses itself when $r &lt; 10^{-6}$.</li>
+  <li><b>Between clusters, lateral synapses sit at the floor</b> (panel d), and their covariance in the heatmap is below $\theta/\gamma$; within a cluster, every synapse is alive.</li>
+</ul>
+
+<h2 id="pruning">One blob, unless something prunes</h2>
+
+<p>With independent inputs and $\theta = 0$ (<a class="explore-link" href="#three/fig-sim?tour=collapse">no pruning</a>), every pair of neurons starts with non-negative covariance, so every lateral synapse grows, the feedback loop closes, and the whole interior becomes one blob at the centroid. That is the note's starting point, $\rho(w) = w_0 - \lambda w$ with $w_0 \ge 0$, and it gives one cluster whatever the (non-negative) input.</p>
+
+<p>I expected any $\theta &gt; 0$ to fix this. It does not. At $\theta = 0.2$ (<a class="explore-link" href="#three/fig-sim?tour=corner">weak pruning</a>) the interior still becomes one blob, because initially most pairs of neurons covary by more than $0.2$ (88% of pairs at the default start). Pruning does change where the blob goes: it slides, as one body, to a single corner, and the other two inputs get no neurons. A blob behaves like one neuron, and for one neuron with independent inputs the only stable resting places when $\theta &gt; 0$ are the corners (the maths below). Only when $\theta$ exceeds the typical initial covariance, $\tfrac13$ here (the average of $h_i^\top h_j$ for uniformly spread embeddings), are lateral synapses between neurons near different corners pruned before a blob can form: <a class="explore-link" href="#three/fig-sim?tour=corners">three corners</a>.</p>
+
+<aside class="callout key"><p class="callout-title">Key point</p><p>There are two thresholds with two jobs. The input threshold $\theta$ decides where a group of neurons settles (the centroid when $\theta = 0$, a corner or a shared part when $\theta &gt; 0$). The lateral threshold $\theta/\gamma$ decides how many groups there are: it must beat the covariance neurons have <em>at the start</em>, or they wire into one blob first. With $\gamma = 0.5$, $\theta = 0.2$ already gives <a class="explore-link" href="#three/fig-sim?s=indep&theta=0.2&gamma=0.5">three corners</a>; with $\gamma = 2$, $\theta = 0.4$ gives one.</p></aside>
+
+<h2 id="parts">Correlated inputs: parts, not eigenvectors</h2>
+
+<p>Now let $g_1$ and $g_2$ correlate, $\rho_{12} = 0.6$, and set $\theta = 0.45$, between the cross-correlation $0.6$ and the uncorrelated level $0$ (<a class="explore-link" href="#three/fig-sim?tour=pair">a correlated pair</a>). Two clusters form: one at $g_3$, and one at the midpoint of the $g_1$–$g_2$ edge, $h = (\tfrac12, \tfrac12, 0)$, holding the neurons that started near either $g_1$ or $g_2$ (about 70 of 100). That second cluster is not an eigenvector of $\Sigma_g$; it is a non-negative mixture of the inputs that move together, a shared <em>part</em>. Raise $\theta$ above $0.6$ and the midpoint stops being stable, but the cluster does not split into two: its members are identical, covary by their full variance $0.8 &gt; \theta$, and stay wired together, so the whole cluster <a class="explore-link" href="#three/fig-sim?tour=slide">slides to $g_1$ or to $g_2$</a>. A fresh start at <a class="explore-link" href="#three/fig-sim?s=pair&theta=0.8">$\theta = 0.8$</a> does give three corners.</p>
+
+<details class="more"><summary>The maths: what a surviving synapse says at the fixed point, and which parts are stable</summary>
+<p>At a fixed point, every synapse above the floor has zero drift, so with $\eta = \lambda = 1$:</p>
+$$\begin{gathered} w_{ib} = (\Sigma_g h_i)_b - \theta \quad\text{(input synapses)}, \\ w_{ij} = \gamma\, h_i^\top \Sigma_g h_j - \theta \quad\text{(lateral synapses)},\end{gathered}$$
+<p>and a synapse at the floor has $(\Sigma_g h_i)_b \le \theta + w_{\min}$, respectively $\gamma h_i^\top\Sigma_g h_j \le \theta + w_{\min}$. Each surviving synapse reads one entry of $H\Sigma_g$ or $H\Sigma_g H^\top$ off its own weight; that is what makes the note's weight-space readout possible.</p>
+<p>Now take a cluster whose members share one embedding $h$. Lateral synapses inside it join nodes at equal voltage and carry no current, and those to other clusters sit at the floor, so up to $O(N w_{\min})$ Kirchhoff gives $h_b = w_{ib}/\sum_c w_{ic}$. Substituting the fixed-point weights, with $\mathbf 1^\top h = 1$:</p>
+$$\begin{gathered} h \;\propto\; (\Sigma_g h - \theta\mathbf 1)_+ \\ \Longleftrightarrow\quad (\Sigma_g - \theta\mathbf 1\mathbf 1^\top)_{SS}\, h_S = c\, h_S, \\ (\Sigma_g h)_b \le \theta \text{ for } b \notin S,\end{gathered}$$
+<p>where $S$ is the support of $h$. So a cluster sits at a non-negative eigenvector of $\Sigma_g - \theta\mathbf 1\mathbf 1^\top$ restricted to some subset of inputs; it is stable when that eigenvector is the top one (Perron) and the inequality off the support is strict. Independent inputs: on a support of size $k$ the uniform vector has eigenvalue $1 - k\theta$, below the other eigenvalues ($1$) whenever $\theta &gt; 0$, so only corners are stable; at $\theta = 0$ everything is marginal and a blob stays where it formed. The pair: on $S = \{1, 2\}$ the uniform vector $(\tfrac12, \tfrac12)$ has eigenvalue $1 + \rho_{12} - 2\theta$ against $1 - \rho_{12}$ for $(1, -1)$, so the midpoint is the stable part exactly when $\theta &lt; \rho_{12}$; and the corner $g_1$ is stable only if $(\Sigma_g e_1)_2 = \rho_{12} &lt; \theta$.</p>
+</details>
+
+<h2 id="anticorrelation">Anticorrelation is pruning in disguise</h2>
+
+<p>The $\theta \le 0$ story assumed non-negative covariances. Clipping at the floor prunes any synapse whose covariance is negative, whatever $\theta$, so anticorrelated inputs give clusters with no pruning drift at all: <a class="explore-link" href="#three/fig-sim?tour=anti">$\Sigma_g = I - \mathbf 1\mathbf 1^\top/3$ at $\theta = 0$</a>, every pair of inputs correlated $-\tfrac12$, gives three corner clusters. But it is not a separate mechanism. Because every row of $H$ sums to one,</p>
+
+$$\begin{gathered} h_i^\top(\Sigma_g + c\,\mathbf 1\mathbf 1^\top)h_j = h_i^\top \Sigma_g h_j + c, \\ \big(H(\Sigma_g + c\,\mathbf 1\mathbf 1^\top)\big)_{ib} = (H\Sigma_g)_{ib} + c,\end{gathered}$$
+
+<p>so with $\gamma = 1$ the pairs $(\Sigma_g, \theta)$ and $(\Sigma_g + c\mathbf 1\mathbf 1^\top, \theta + c)$ produce <em>identical</em> dynamics: the network only ever sees $\Sigma_g - \theta\mathbf 1\mathbf 1^\top$. The anticorrelated tour is therefore exactly independent unit inputs at $\theta = \tfrac13$ (I checked: the weights agree to $2\times10^{-14}$ after 400 steps), which sits right on the threshold of the previous section; that is why some seeds give two clusters there. "Pruning by anticorrelation" and "pruning by drift" are the same thing, $\theta$ measured from the level the inputs share. (With $\gamma \ne 1$ the two thresholds shift differently and the identity is only approximate. The same symmetry is why $\theta$ cannot be read off the weights later: it is indistinguishable from a constant added to $\Sigma_g$.)</p>
+
+<h2 id="history">History, seeds and noise</h2>
+
+<p>The fixed point you reach depends on how you got there. Run to three corners at $\theta = 0.4$ and then <a class="explore-link" href="#three/fig-sim?tour=history">lower $\theta$ to $0.1$</a>: the clusters stay apart, because corners covary by zero, while a fresh start at $0.1$ gives a single cluster. Near the threshold, <a class="explore-link" href="#three/fig-sim?tour=seed">the seed alone</a> decides whether there are two clusters or three; and if the lateral synapses <a class="explore-link" href="#three/fig-sim?tour=lateral">start wired up</a>, the interior is one blob from the outset and stays one.</p>
+
+<p>I hoped noise would help: with minibatch covariances instead of the exact $\Sigma_g$, perhaps members of a cluster would spread out into a cloud of slightly different features. They do not. <a class="explore-link" href="#three/fig-sim?tour=noise">With 16 samples per step</a>, every neuron sees the same samples, so the noise is common to all of them and a cluster stays a point. What the noise does do is now and then push two clusters' covariance above $\theta$; they wire together, and merged clusters never separate. Three clusters become two, then one, which then wanders. Noise acts as a ratchet towards fewer clusters, and the smaller the batch (relative to $dt$), the faster it turns.<span class="sidenote">The noise per unit time scales like $dt/\text{batch}$; at batch 64 and 256 the three corners lasted to $t = 300$ for seeds 1–4 at $\theta = 0.4$ and $0.5$.</span></p>
+
+<h2 id="allocation">Who gets the neurons?</h2>
+
+<p>With three independent unit inputs, the corner clusters get roughly a third of the neurons each, but only roughly: between 20 and 43 of 100 per corner over seeds 1–6, set by the basins of the starting positions. Make one input louder, $\mathrm{Var}\,g_1 = 2$ (<a class="explore-link" href="#three/fig-sim?tour=loud">one louder input</a>), and $g_1$'s cluster takes about half. An input whose variance is below $\theta$ gets none: no neuron can covary with it by more than $\theta$. So the allocation does track input energy, in the direction the note guesses; whether it is proportional, or some other "spectral filter" set by $\theta$ and the starting distribution, is a question for the <a href="#homeo">Homeostasis</a> chapter, which measures it with controlled sweeps.</p>
+
+<h2 id="verdict">What this already tells us about the conjecture</h2>
 
 <aside class="callout found">
-  <p class="callout-title">What we found</p>
+  <p class="callout-title">What we found (three inputs, dense, mean-field)</p>
   <ul>
-    <li><span class="verdict holds">holds</span>Hebbian plasticity reads only second moments of the clamped inputs.</li>
-    <li><span class="verdict amended">amended</span>Clusters are thresholded Perron vectors of blocks, not eigenvectors of $\Sigma_g$.</li>
-    <li><span class="verdict fails">fails</span>With $w_0 \ge 0$ there is one cluster, whatever the input.</li>
-    <li><span class="verdict open">open</span>Do neurons per cluster track mode energy?</li>
+    <li><span class="verdict holds">holds</span>The embeddings do separate into a few discrete clusters at a fixed point, and how many is set by the homeostatic parameters ($\theta$, $\gamma$).</li>
+    <li><span class="verdict amended">amended</span>Clusters need pruning: a constant drift $w_0 = -\eta\theta &lt; 0$, or negative input covariances, which are the same thing up to $\Sigma_g \to \Sigma_g - \theta\mathbf 1\mathbf 1^\top$. And the lateral threshold $\theta/\gamma$ has to beat the covariance neurons have at the start, or they merge into one blob first.</li>
+    <li><span class="verdict amended">amended</span>Cluster positions are corners or shared parts (the midpoint of a correlated pair): non-negative Perron vectors of $\Sigma_g - \theta\mathbf 1\mathbf 1^\top$ on a subset of inputs. Not signed eigenvectors of $\Sigma_g$.</li>
+    <li><span class="verdict fails">fails</span>"Each neuron in a cluster is a random feature": in this limit the members of a cluster coincide to $10^{-8}$. That is redundancy, not a reservoir. Shared minibatch noise does not diversify them either; it merges clusters.</li>
+    <li><span class="verdict open">open</span>Allocation: louder inputs get more neurons and inputs quieter than $\theta$ get none, but the count also depends on the seed, the initial weights and the path, and the fixed point is multistable. Whether sparse connectivity ($p &lt; 1$) creates genuine within-cluster diversity is for the later chapters.</li>
   </ul>
 </aside>
 
-<details class="more"><summary>The maths: why rows of $H$ are probability vectors</summary>
-<p>Kirchhoff at interior node $i$: $\sum_j w_{ij}(u_j - u_i) = 0$, so $u_i$ is a weighted average of its neighbours. Hence $u = L_{II}^{-1}W_{IB}\,g$, every entry of $H$ is non-negative, and $H\mathbf 1 = \mathbf 1$.</p>
-</details>
-
-<div class="table-scroll"><table class="data">
-  <thead><tr><th>Decision</th><th>Default</th><th>Alternative</th><th class="num">Effect size</th></tr></thead>
-  <tbody>
-    <tr><td>Weights</td><td>symmetric</td><td>directed Laplacian</td><td class="num">n/a</td></tr>
-    <tr><td>Boundary-boundary synapses</td><td>none</td><td>allowed</td><td class="num">0.00</td></tr>
-    <tr><td>Covariance</td><td>mean-field, exact $\Sigma_g$</td><td>minibatch estimates</td><td class="num">0.12</td></tr>
-  </tbody>
-</table></div>
-
-<p>Deep links put a chapter in a given state: <a class="explore-link" href="#three?tour=collapse">see the collapse tour</a>. Inline key swatches: <span class="swatch" style="--sw: var(--c-cat-0)"></span>$g_1$, <span class="swatch" style="--sw: var(--c-cat-1)"></span>$g_2$, <span class="swatch" style="--sw: var(--c-cat-2)"></span>$g_3$; synthetic data is tagged <span class="synthetic-tag">synthetic Σ</span>.</p>
-
-<h2 id="charts">Charts</h2>
-
-<figure class="fig wide card">
-  <div class="fig-title">Heatmap at scale: a 1,200 × 1,200 matrix on canvas</div>
-  <div data-slot="hm-big"></div>
-  <figcaption><b>Plotted:</b> a fake 1,200 × 1,200 similarity matrix with four planted blocks (bands: blocks), sequential map. Hover a cell for its value.</figcaption>
-</figure>
-
-<div class="fig-row">
-  <figure class="fig card">
-    <div class="fig-title">Scatter, coloured by category, with boundary anchors</div>
-    <div data-slot="scatter"></div>
-    <figcaption><b>Plotted:</b> fake 2D embedding of 300 neurons, colour = cluster (fixed categorical order, grey = unassigned); squares = boundary neurons. Click a point to select it.</figcaption>
-  </figure>
-  <figure class="fig card">
-    <div class="fig-title">Bars with an overlay</div>
-    <div data-slot="bars"></div>
-    <figcaption><b>Plotted:</b> bars: a cluster's part $h$ over 16 boundary neurons; dots: the top eigenvector of $\Sigma_g$ (signed) over the same neurons. Fake.</figcaption>
-  </figure>
-</div>
-
-<figure class="fig wide card">
-  <div class="fig-title">Small multiples: one panel per cluster, bars over boundary neurons</div>
-  <div data-slot="multi"></div>
-  <figcaption><b>Plotted:</b> for each fake cluster, its part $h$ (bars, cluster colour) and the nearest eigenvector of $\Sigma_g$ (ink dots) over the same 12 boundary neurons. Shared $y$ range $[-0.6, 0.6]$.</figcaption>
-</figure>
-
-<div class="fig-row">
-  <figure class="fig card">
-    <div class="fig-title">Image grid with labelled rows, from Float32 arrays</div>
-    <div data-slot="images"></div>
-    <figcaption><b>Plotted:</b> fake 14 × 14 "embeddings as images", diverging map with one shared symmetric range; each row is one fake cluster, its colour under each tile.</figcaption>
-  </figure>
-  <figure class="fig card">
-    <div class="fig-title">Filmstrip: one matrix over snapshots</div>
-    <div data-slot="film"></div>
-    <figcaption><b>Plotted:</b> a fake $40 \times 40$ similarity matrix at 8 snapshots, fixed diverging range $[-1, 1]$; thumbnails show every snapshot at once.</figcaption>
-  </figure>
-</div>
-
-<h2 id="controls">Controls, tiles, legends, colour</h2>
-
-<figure class="fig wide card">
-  <div class="fig-title">Every control, standalone</div>
-  <div data-slot="controls"></div>
-</figure>
-
-<figure class="fig wide card">
-  <div class="fig-title">The colour grammar</div>
-  <div data-slot="colours"></div>
-  <figcaption><b>Plotted:</b> the categorical order (clusters, boundary neurons when $B \le 8$), the three colour maps with their roles, and the neuron shapes. Defined in <code>css/tokens.css</code>.</figcaption>
-</figure>
+<aside class="callout caveat"><p class="callout-title">Caveat</p><p>Everything here is one tiny world: $B = 3$, all-to-all symmetric synapses, a linear (resistor) network, a floor at $w_{\min}$, Euler steps of $0.05$, and the specific random start described above. The tours are exact states and were checked against their notes for the seeds quoted; other seeds can land elsewhere near a threshold, which is itself one of the findings.</p></aside>

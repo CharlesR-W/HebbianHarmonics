@@ -101,7 +101,7 @@ def covs():
             "powerlaw12": cov_powerlaw(12, 1.0, seed=0), "powerlaw_pos12": cov_powerlaw_pos(12, 1.0, seed=0)}
 
 
-THETAS = [-0.05, 0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7]
+THETAS = [-0.05, 0.0, 0.03, 0.07, 0.13, 0.18, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75]  # avoids exact correlation levels
 
 
 def score_state(Wii, Wib, S, theta, K):
@@ -159,7 +159,7 @@ def train_job(args):
     out = []
     st = None
     t = 0
-    for T in [1, 10, 20, 40, 80, 160, 320, 640, 1280, 2560, 5120]:
+    for T in [1, 10, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200, 240, 280, 320, 400, 640, 1280, 2560, 5120]:
         r = simulate(S, N, theta, gamma=GAMMA, wmin=WMIN, seed=seed, state=st, Tmax=T - t, check=T - t)
         st = (r["Wii"], r["Wib"], r["Mii"], r["Mib"]); t = T
         sc = score_state(r["Wii"], r["Wib"], S, theta, 3)
@@ -167,13 +167,28 @@ def train_job(args):
     return dict(cov=name, theta=theta, seed=seed, traj=out)
 
 
+def mask_job(args):
+    name, theta, p, seed = args
+    S = covs()[name]
+    r = simulate(S, N, theta, gamma=GAMMA, wmin=WMIN, seed=seed, p=p, Tmax=30000)
+    Ck, info = readout_ls(r["Wii"], r["Wib"], theta)
+    Cf, _ = readout_ls(r["Wii"], r["Wib"], theta, fit_theta=True)
+    return dict(cov=name, theta=theta, p=p, seed=seed, res=r["res"], scores=score3(Ck, Cf, S), info=info)
+
+
 def main():
     jobs = [(n, th, s) for n in covs() for th in THETAS for s in (0, 1)]
-    tj = [("block12", th, 0) for th in (0.05, 0.3, 0.45)] + [("powerlaw12", 0.1, 0)]
+    tj = [(c, th, s) for c, th in (("block12", 0.05), ("block12", 0.35), ("block12", 0.45), ("block12", 0.65),
+                                    ("powerlaw12", 0.13), ("powerlaw_pos12", 0.25)) for s in (0, 1, 2)]
+    mj = [(c, th, p, s) for c, th in (("block12", 0.35), ("powerlaw12", 0.25)) for p in (1.0, 0.5, 0.25) for s in (0, 1)]
     with Timer(f"readout ({len(jobs) + len(tj)})"):
-        R = pmap(_d, [("r", j) for j in jobs] + [("t", j) for j in tj])
+        R = pmap(_d, [("t", j) for j in tj] + [("m", j) for j in mj] + [("r", j) for j in jobs])
     rows = [r for t, r in R if t == "r"]
     traj = [r for t, r in R if t == "t"]
+    masks = [r for t, r in R if t == "m"]
+    for m in masks:
+        print("mask", m["cov"], m["theta"], m["p"], m["seed"], "rank", m["info"]["rank"], "known cos %.3f relF %.3f contrast cos %.3f bw %.3f"
+              % (m["scores"]["known"]["cos"], m["scores"]["known"]["relF"], m["scores"]["contrast"]["cos"], m["scores"]["contrast"]["bw"]))
     for n in covs():
         print(n)
         for th in THETAS:
@@ -201,12 +216,14 @@ def main():
                       "(contrast version drops theta 11^T)",
                 info="rank/n_params of the measurement operator on symmetric matrices (+theta if fitted), cond = ratio of "
                      "largest to smallest nonzero singular value")
-    save_json("readout", dict(rows=rows, training=traj), meta)
+    meta["training"] = "readout applied along training (equilibrium assumption violated before convergence); seeds 0-2; steps of dt=0.05"
+    meta["masks"] = "labelled comparison: fixed sparse potential-synapse mask p (I-I and I-B) at equilibrium, ii+ib readout"
+    save_json("readout", dict(rows=rows, training=traj, masks=masks), meta)
 
 
 def _d(a):
     t, j = a
-    return t, (job if t == "r" else train_job)(j)
+    return t, dict(r=job, t=train_job, m=mask_job)[t](j)
 
 
 if __name__ == "__main__":

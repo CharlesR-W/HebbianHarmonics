@@ -1,0 +1,97 @@
+{
+ "defaults": {
+  "N": 2048,
+  "wmin": 0.000244140625,
+  "ii_scale": 0.05,
+  "steps": 3000,
+  "n_snap": 12,
+  "n_sub": 256,
+  "cg_iters": 200
+ },
+ "units": [
+  {
+   "lift": "pixels",
+   "B": 196,
+   "theta": 0.45,
+   "ib_shape": 1.0
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "theta": 0.6,
+   "ib_shape": 1.0
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "theta": 0.75,
+   "ib_shape": 1.0
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "theta": 0.9,
+   "ib_shape": 1.0
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "theta": 0.45,
+   "ib_shape": 0.1
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "theta": 0.6,
+   "ib_shape": 0.1
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "theta": 0.75,
+   "ib_shape": 0.1
+  },
+  {
+   "lift": "pixels",
+   "B": 196,
+   "theta": 0.9,
+   "ib_shape": 0.1
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "theta": 0.1,
+   "ib_shape": 1.0
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "theta": 0.2,
+   "ib_shape": 1.0
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "theta": 0.3,
+   "ib_shape": 1.0
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "theta": 0.1,
+   "ib_shape": 0.1
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "theta": 0.2,
+   "ib_shape": 0.1
+  },
+  {
+   "lift": "rff",
+   "B": 256,
+   "theta": 0.3,
+   "ib_shape": 0.1
+  }
+ ]
+}

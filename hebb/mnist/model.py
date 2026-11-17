@@ -32,7 +32,8 @@ class Cfg:
     mode: str = "sgd"           # sgd (minibatch covariance) | mf (exact Sigma_g)
     seed: int = 0
     ii_scale: float = 0.2       # Wii ~ U(0, ii_scale)  (mean 0.1)
-    ib_scale: float = 0.1       # Wib ~ Exp(mean ib_scale)
+    ib_scale: float = 0.1       # Wib ~ Exp(mean ib_scale)  (ib_shape = 1)
+    ib_shape: float = 1.0       # Wib ~ Gamma(ib_shape, ib_scale/ib_shape): <1 = heavy-tailed, still dense
     n_snap: int = 36
     n_sub: int = 512            # neurons whose H is stored at every snapshot
     avg_frac: float = 0.2       # time-average weights over the last avg_frac of steps
@@ -54,7 +55,10 @@ def init_weights(cfg: Cfg, device, dtype):
     _ = rng.random((N, B))
     Wii = rng.uniform(0, 1, (N, N)) * cfg.ii_scale
     Wii = np.triu(Wii, 1); Wii = Wii + Wii.T
-    Wib = rng.exponential(cfg.ib_scale, (N, B))
+    if cfg.ib_shape == 1.0:
+        Wib = rng.exponential(cfg.ib_scale, (N, B))
+    else:
+        Wib = rng.gamma(cfg.ib_shape, cfg.ib_scale / cfg.ib_shape, (N, B))
     return (torch.as_tensor(Wii, device=device, dtype=dtype),
             torch.as_tensor(Wib, device=device, dtype=dtype))
 

@@ -28,7 +28,8 @@ def run_name(c: Cfg) -> str:
     lift = c.lift if c.lift != "rff" else f"rff{c.B}" + ("" if c.bw_mult == 1 else f"bw{c.bw_mult:g}")
     if c.lift == "relu":
         lift = f"relu{c.B}"
-    return f"{lift}_N{c.N}_th{c.theta:g}_wmin{c.wmin:g}_{c.mode}_s{c.seed}"
+    init = "" if (c.ib_shape == 1.0 and c.ii_scale == 0.2) else f"_init{c.ib_shape:g}-{c.ii_scale:g}"
+    return f"{lift}_N{c.N}_th{c.theta:g}_wmin{c.wmin:g}{init}_{c.mode}_s{c.seed}"
 
 
 def train(cfg: Cfg, out_dir: Path, device=None, verbose=True) -> dict:
@@ -71,7 +72,7 @@ def train(cfg: Cfg, out_dir: Path, device=None, verbose=True) -> dict:
 
     def measure(t, Wii, Wib, H):
         Hs = H.float()
-        summ, lab, cent, energy = A.cluster_summary(Hs, Wii, cfg.wmin, Sigma.float(), with_leader=cfg.N <= 1024)
+        summ, lab, cent, energy = A.cluster_summary(Hs, Wii, cfg.wmin, Sigma.float(), with_leader=cfg.N <= 1024, Wib=Wib)
         row = dict(step=t, time=t * cfg.dt, **summ, eff_rank=A.eff_rank(H))
         row["floor_ii"], row["floor_ib"] = A.floor_frac(Wii, Wib, cfg.wmin)
         row["mean_wii"] = float(Wii.sum() / (cfg.N * (cfg.N - 1))); row["mean_wib"] = float(Wib.mean())
@@ -128,7 +129,7 @@ def train(cfg: Cfg, out_dir: Path, device=None, verbose=True) -> dict:
     tm = time.time()
     Aii, Aib = (sum_ii / n_avg, sum_ib / n_avg) if cfg.mode == "sgd" else (Wii, Wib)
     Ha = harmonic(Aii, Aib)
-    summ, lab, cent, energy = A.cluster_summary(Ha.float(), Aii, cfg.wmin, Sigma.float(), with_leader=True)
+    summ, lab, cent, energy = A.cluster_summary(Ha.float(), Aii, cfg.wmin, Sigma.float(), with_leader=True, Wib=Aib)
     res_avg = residual_stats(Aii, Aib, Sigma, cfg)
     Mii, Yii, Mib, Yib = R.equations(Aii, Aib, cfg.theta, cfg.lam, cfg.eta, cfg.gamma, cfg.wmin)
     final_ro, C_store, ro_info = {}, {}, {}

@@ -210,7 +210,7 @@ def partC():
                     fit = {}
                     for j, key in ((1, "E"), (2, "c"), (3, "lam_top")):
                         m = a[:, j] > 0
-                        if m.sum() >= 3 and np.ptp(np.log(a[m, j])) > 1e-6:
+                        if m.sum() >= 3 and np.ptp(np.log(a[m, j])) > 0.1:
                             sl, ic = np.polyfit(np.log(a[m, j]), np.log(a[m, 0]), 1)
                             rr = np.corrcoef(np.log(a[m, j]), np.log(a[m, 0]))[0, 1]
                             fit[key] = dict(beta=float(sl), r=float(rr))

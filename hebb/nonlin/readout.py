@@ -130,15 +130,15 @@ def gauss_readout(H, Mii, Qii, Mib, Qib, tau=0.0, family="both", C0=None, iters=
             state["ib"] = (Mib * (Pib - tib)).pow(2).sum() / nib
             loss = loss + state["ib"] / sib
         loss.backward()
-        state["loss"] = float(loss)
+        state["loss"] = float(loss.detach())
         return loss
 
     opt.step(closure)
     C = (0.5 * (A + A.T)).detach()
     info = dict(loss=state.get("loss"), alpha=alpha, n_ii=float(Mii.sum()) if use_ii else 0.0,
-                n_ib=float(Mib.sum()) if use_ib else 0.0, theta_fit=float(th) if fit_theta else None,
-                rms_ii=float(state["ii"]) ** 0.5 if "ii" in state else None,
-                rms_ib=float(state["ib"]) ** 0.5 if "ib" in state else None,
-                rel_rms_ii=(float(state["ii"]) / sii) ** 0.5 if "ii" in state else None,
-                rel_rms_ib=(float(state["ib"]) / sib) ** 0.5 if "ib" in state else None)
+                n_ib=float(Mib.sum()) if use_ib else 0.0, theta_fit=float(th.detach()) if fit_theta else None,
+                rms_ii=float(state["ii"].detach()) ** 0.5 if "ii" in state else None,
+                rms_ib=float(state["ib"].detach()) ** 0.5 if "ib" in state else None,
+                rel_rms_ii=(float(state["ii"].detach()) / sii) ** 0.5 if "ii" in state else None,
+                rel_rms_ib=(float(state["ib"].detach()) / sib) ** 0.5 if "ib" in state else None)
     return C, C0, info
