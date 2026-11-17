@@ -381,3 +381,19 @@ Setup: N = 40 and 80, B = 12, `blocks` and `power`, 8 values of b, 3 seeds, all 
 - **Eigen comparisons.** The q ≈ ν·n errors at small b are partly definitional (singletons count as clusters).
 - **Training-bank geometry.** Fusion chain metrics are primarily training-bank values (evaluation-bank spans are reported beside them). The nonlinear readout's "true" D is the training bank, with evaluation-bank versions reported.
 - **Not done (SPEC §4.7 list):** the stability Hessian (eq. 12), lagged statistics, a generative phase, real data.
+
+## Corrections found while writing the chapters (2026-11-17)
+
+These override the text above where they differ; the page follows them.
+
+- **G3 scope.** "No regime of a few clean clusters; components are chains" holds at α = 1. At α = 0.1 components are tight (span under one edge range, G4); what is still absent is a plateau: the count is not set by the inputs and changes with every grid step of b and with history.
+- **Rectifier and distances.** A homogeneous rectifier roughly halves the uncoupled D² (more fusion); threshold spread σ_t = 0.7 pushes the closest pairs apart, so the default rectifier fuses less than the linear network.
+- **G15 degenerate case.** With equal cluster sizes and var c = 1 the spectrum is degenerate, so "ψ = s, c" is not defined there (`eigen.json`: cos 0.026 at 12/12, var c = 1).
+- **G12 structural reason (derived).** A live edge exists iff D² < 2b and carries D² = 2(b − αw), so for a member linked to all others the prototype error is below 2b/Var F_i: neighbours' differences are capped by the fusion scale by construction. At b = 0.03 the edge distributions for α = 1 and α = 10 are nearly identical; the differences fall far below the cap only for small α together with larger b.
+- **G17 Spearman definition.** −0.70 (b = 0.1) and −0.31 (b = 0.05) count only components with at least two members, pooled over five seeds (11 such components at b = 0.1). Over all components: −0.75 and −0.15.
+- **G18.** `α_A > λ_max(Σ_g)` is sufficient, not necessary, for all rows to converge to one row.
+- **G20 qualifications.** Strong fusion (b = 0.1) nearly keeps the mass law at ν = 0.2 (deviation 0.007) and breaks it only at smaller budgets; weak fusion at ν = 0.05, b = 0.01 purifies 52% ± 21% of neurons.
+- **G21 hinge numbers at small b are from an unconverged optimiser.** The sweep's L-BFGS hinge objective was 10² to 10⁵ times the true minimum in 12 re-run small-b configurations; its cosines differ from the true minimiser's by up to about 0.1, mostly higher. At full rank they agree. The page minimises the hinge exactly and quotes no small-b hinge numbers from the JSON.
+- **G21 "full rank means exact recovery" needs a qualifier.** Two full-rank runs have cosine 0.972 and 0.987: their operators have singular values below 1e-4 σ_max, which the ridge shrinks. Exact identifiability and what the ridge returns are separate statements.
+- **G21 table.** The identity baseline 0.36 at b = 0.003 averages in seeds with no live edges (cosine 0 by convention). Read over all runs, the fused regime under 1% noise gives cosine 0.15–0.64 (not 0.22–0.63) and the sampling error is 0.078–0.156 (not 0.09–0.10).
+- **Note's claim about p(stimulus)** (carried from v1 review): the weights encode an uncentred second moment of zero-mean inputs; recovering it is not recovering the input distribution.

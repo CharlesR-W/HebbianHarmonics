@@ -1,3 +1,147 @@
-<p class="lede">How many neurons does a cluster get, and is that a law $n(\lambda)$ in the variance $\lambda$ of the mode it represents? Three cases are kept apart: in the base model, where allocation is set by the fixed attachments and the fusion scale; with plastic attachments under the same energy, which in the prototypes drifted to the quietest inputs; and with an additional principle, labelled as such, whose mass law is water-filling, $q_a = (\lambda_a - \mu)_+$. The open question is which ingredient, if any, turns that law for mass into a law for neuron counts.</p>
+<p class="lede">The note's last open question was how the energy of an input mode relates to the number of neurons allocated to it: does the network assign neurons in proportion to energy, and do the homeostatic parameters act as a spectral filter $n(\lambda)$? The answer comes in three parts. In the base model, neurons per mode is fixed by the wiring and cut up by the fusion scale, which is a resolution effect and not $n(\lambda)$. Letting the wiring learn under the same energy makes things worse, because the neurons drain to the quietest inputs. An added principle, which this chapter labels as such, does give a law, but it is a law for spectral mass, and it becomes a law for neuron counts only when neurons specialise. None of the ingredients I tried made them specialise.</p>
 
-<p class="placeholder"><span class="ph-tag">In preparation</span> This chapter is being rewritten for the new model. The three cases, with their evidence, will appear here.</p>
+<h2 id="allocation-base">In the base model the attachments decide</h2>
+
+<p>In the base model each neuron's attachments $a_{ib}$ to the inputs are drawn once and then fixed; only the lateral conductances $w_{ij}$ learn. Fusion can merge neurons whose responses are already within an edge's range, $D_{ij} &lt; \sqrt{2b}$, but it cannot move a neuron onto inputs it is not attached to. So the number of neurons available to a group of inputs is the number attached to it. What the rule decides is only how those neurons are split into clusters.</p>
+
+<p>To isolate this, take $B = 12$ inputs in four blocks of three. Inside block $k$ the inputs have variance $v_k$ and correlation $\rho = 0.8$; different blocks are uncorrelated. Each neuron is attached to the three inputs of one block, with random shares summing to 1. The neurons are linear ($V_i = 0$), so a neuron's response is $F_i = h_i^\top g$, with $h_i$ a point in its block's simplex (at $W = 0$, $h_i = a_i$). Since $h_i - h_j$ sums to zero,</p>
+
+<div class="eq" id="allocation-eq-block" data-num="1">$$D_{ij}^2 = (h_i - h_j)^\top \Sigma_g\, (h_i - h_j) = v_k\,(1-\rho)\,\lVert h_i - h_j\rVert^2 .$$</div>
+
+<p>Raising a block's variance multiplies every distance inside it by $\sqrt{v_k}$, while the range of an edge stays at $\sqrt{2b}$. A louder block is therefore resolved more finely. It breaks into more, smaller clusters, and it gains no neurons. Equation (<a href="#allocation/allocation-eq-block">1</a>) also makes the picture below exact: each block's simplex, drawn as an equilateral triangle of side $\sqrt{2v_k(1-\rho)}$, is an isometric map of its neurons' response functions, all four at one common scale.</p>
+
+<figure class="fig full card" id="allocation-fig-base">
+  <div class="fig-title">Four blocks of inputs, each with its own attached neurons; block 1's variance is a slider <span class="synthetic-tag">synthetic Σ</span></div>
+  <div class="fig-sub">Every change restarts the network from $W = 0$ (a cold start, as in the sweep below) and runs it to its fixed point. Hover a neuron for its shares and its cluster.</div>
+  <div data-slot="base"></div>
+  <figcaption><b>Plotted:</b> one panel per block $k$, drawn at one common scale in units of response (RMS voltage). Squares: the block's three inputs $g_b$, at the corners of an equilateral triangle of side $\sqrt{2 v_k (1-\rho)}$. Circles: neurons attached to the block, at their embedding $h_i$ (row $i$ of $H$, the linear response $u = Hg$) in barycentric coordinates, so the distance between two circles is $D_{ij}$ computed with $\Sigma_g$ (eq. 1). Colour: the neuron's connected component of the live graph ($w_{ij} &gt; 10^{-9}$) within its block, multi-member components ordered by size (largest first), singletons grey. Ink lines: live lateral edges, opacity $w_{ij}/\max w$. Bar in each panel: the edge range $\sqrt{2b}$ at the same scale. Diameter: the largest RMS distance from a member to its component's prototype (mean response), computed with $\Sigma_g$; span: the largest distance between two members. Stationarity $r = \max|dw/dt|$ (projected); the neuronal residual is $\max|\partial E/\partial u|$ on the training bank. <b>Values:</b> $B = 12$, four blocks of 3 inputs, $\rho = 0.8$, $v_2 = v_3 = v_4 = 1$, 12 neurons on each of blocks 2–4, linear potential, $\alpha = 1$, projected Euler with $dt = 0.5$, training bank $S = 256$ Gaussian samples (the rule's expectations are bank means; distances drawn and diameters use $\Sigma_g$, so an edge can be a few per cent longer or shorter than the bar), stop when $\max|\Delta W|/dt &lt; 10^{-9}$; defaults $v_1 = 1$, $n_1 = 12$, $b = 0.02$, seed 0. The page's random generator is not numpy's, so a seed here is not the sweep's seed of the same number.</figcaption>
+</figure>
+
+<p>Try the <a class="explore-link" href="#allocation/allocation-fig-base?ta=quiet">quiet block</a>: at $v_1 = 0.25$ its triangle is smaller than the edge range and all its neurons fuse into one cluster. The <a class="explore-link" href="#allocation/allocation-fig-base?ta=loud">loud block</a> at $v_1 = 8$ has the same 12 neurons spread over a triangle much wider than the range, and it fragments into small clusters and singletons. A <a class="explore-link" href="#allocation/allocation-fig-base?ta=loud-coarse">larger fusion scale</a> merges some of those fragments again. <a class="explore-link" href="#allocation/allocation-fig-base?ta=more">Attaching more neurons</a> to a block gives it a bigger cluster, one for one.</p>
+
+<p>The precomputed sweep (cold starts from $W = 0$, five seeds per point) gives the same result. At <span data-fill="a-b">b</span>, block 1 keeps exactly its <span data-fill="a-n">n</span> attached neurons at every variance. Its number of components goes from <span data-fill="a-k-lo">…</span> at $v_1 = $ <span data-fill="a-v-lo">…</span> to <span data-fill="a-k-hi">…</span> at $v_1 = $ <span data-fill="a-v-hi">…</span>, with a mean component size of <span data-fill="a-size-hi">…</span>. Across all <span data-fill="a-runs">…</span> runs, <span data-fill="a-mixed">…</span> components contained neurons from two blocks.</p>
+
+<div class="fig-row">
+  <figure class="fig card" id="allocation-fig-var">
+    <div class="fig-title">Components of block 1 against its variance <span class="synthetic-tag">synthetic Σ</span></div>
+    <div data-slot="sweep-var"><p class="mute">loading…</p></div>
+    <figcaption><b>Plotted:</b> $K_1$, the number of connected components made of block-1 neurons at the fixed point (mean over seeds, band ±1 sd), against $v_1$ (log axis), one line per fusion scale $b$; dashed: $n_1 = 12$, the number of neurons attached to block 1. <b>Values:</b> as the live figure, $\alpha = 1$, seeds 0–4. Data: <code>data/sweeps2/allocation.json</code>, field <code>a.planted</code> (kind <code>variance</code>).</figcaption>
+  </figure>
+  <figure class="fig card" id="allocation-fig-count">
+    <div class="fig-title">Cluster size against the number of neurons attached <span class="synthetic-tag">synthetic Σ</span></div>
+    <div data-slot="sweep-count"><p class="mute">loading…</p></div>
+    <figcaption><b>Plotted:</b> mean size of block 1's components (mean over seeds, band ±1 sd) against $n_1$, the number of neurons attached to block 1, one line per $b$; dashed: size $= n_1$ (one component holding every attached neuron). <b>Values:</b> $v_1 = \dots = v_4 = 1$, $\alpha = 1$, seeds 0–4. Data: field <code>a.planted</code> (kind <code>count</code>).</figcaption>
+  </figure>
+</div>
+
+<p>With random attachments, where each neuron listens to 3 of the 12 inputs regardless of block, there is no planted count to hold fixed, and the same effect shows up as a weak trend. Larger components have quieter prototypes: louder directions are cut finer. The Spearman correlation between component size and prototype variance, over components with at least two members pooled across five seeds, is <span data-fill="a-sp-0.1">…</span> at $b = 0.1$, <span data-fill="a-sp-0.05">…</span> at $b = 0.05$ and <span data-fill="a-sp-0.02">…</span> at $b = 0.02$. The trend has the opposite sign to "more neurons for more energy", and it comes from the edge range, not from any allocation.</p>
+
+<figure class="fig card" id="allocation-fig-random">
+  <div class="fig-title">Random attachments: component size against prototype variance <span class="synthetic-tag">synthetic Σ</span></div>
+  <div data-slot="random"><p class="mute">loading…</p></div>
+  <figcaption><b>Plotted:</b> one point per connected component at the fixed point; x: the variance of its prototype (the members' mean response) on the evaluation bank; y: its number of members. Dark: components with at least two members (the ones the Spearman $\rho$ above uses); grey: singletons. Colour does not mark the seed; all five seeds are pooled. <b>Values:</b> $N = 48$, $B = 12$, each neuron on 3 random inputs (Dirichlet shares, degree 1), block variances 2, 1, 0.5, 0.25, $\rho = 0.8$, linear, $\alpha = 1$, seeds 0–4, evaluation bank 4096 samples. Data: field <code>a.random</code>.</figcaption>
+</figure>
+
+<aside class="callout key"><p class="callout-title">Key point</p><p>In the base model the attachments fix which neurons can represent which inputs, and $b$ sets how finely each group is cut. A louder group is cut into more, smaller clusters. That is a resolution effect: nothing in the rule moves a neuron towards energy.</p></aside>
+
+<h2 id="allocation-plastic">Letting the attachments learn: they drain to the quiet inputs</h2>
+
+<p>The obvious repair is to let the attachments learn by the same principle as the lateral weights. An attachment is an edge to a clamped node, so gradient descent on the same objective, with a ridge $\tfrac{\alpha_A}{2} a_{ib}^2$ and each neuron's total input conductance held at 1, gives the same kind of rule:</p>
+
+<div class="eq" id="allocation-eq-arule" data-num="2">$$\begin{gathered}\frac{da_{ib}}{dt} = -\alpha_A\, a_{ib} - \tfrac12\, \mathbb E_g\big[(u_i - g_b)^2\big], \\ \text{each row projected on } \big\{a_i \ge 0,\ \textstyle\sum_b a_{ib} = 1\big\}.\end{gathered}$$</div>
+
+<p>The mechanism can be read off in the simplest case: linear neurons with no lateral edges. Then $u_i = a_i^\top g$, and the energy neuron $i$ contributes at equilibrium is</p>
+
+<div class="eq" id="allocation-eq-aenergy" data-num="3">$$E_i = \tfrac12 \sum_b a_{ib}\, \mathbb E\big[(u_i - g_b)^2\big] = \tfrac12\Big(\sum_b a_{ib}\, \Sigma_{bb} - a_i^\top \Sigma_g\, a_i\Big),$$</div>
+
+<p>which is half the attachment-weighted variance of the inputs the neuron listens to, about their weighted mean. It is zero for a neuron attached to a single input of any variance, and small for a neuron whose inputs agree. Nothing in it rewards listening to a loud input. The ridge charges for concentrating a row, so a neuron that spreads its row pays $E_i$, and spreading is cheapest over quiet, well-correlated inputs. Inside one block, $J_i = E_i + \tfrac{\alpha_A}{2}\lVert a_i\rVert^2$ depends on the row only through $s = \lVert a_i\rVert^2 \in [\tfrac13, 1]$:</p>
+
+<div class="eq" id="allocation-eq-arow" data-num="4">$$J_i = \tfrac12\, v_k (1-\rho)(1-s) + \tfrac{\alpha_A}{2}\, s .$$</div>
+
+<p>So the best row inside block $k$ is pure (cost $\alpha_A/2$) if $\alpha_A &lt; v_k(1-\rho)$, and spread evenly otherwise, at cost $v_k(1-\rho)/3 + \alpha_A/6$, which is lowest for the quietest block. Written as $J_i = \tfrac12\sum_b a_{ib}\Sigma_{bb} + \tfrac12 a_i^\top(\alpha_A I - \Sigma_g)a_i$, the per-neuron objective is strictly convex whenever $\alpha_A &gt; \lambda_{\max}(\Sigma_g)$ (a sufficient condition). Then every neuron converges to the same row and the population collapses onto one function. The live figure runs rule (<a href="#allocation/allocation-eq-arule">2</a>) on all neurons at once. Lateral learning and the rectifying potential are switches, so the case where the derivation does not apply can be checked as well.</p>
+
+<figure class="fig full card" id="allocation-fig-plastic">
+  <div class="fig-title">Plastic attachments under the energy rule, from dense random rows <span class="synthetic-tag">synthetic Σ</span></div>
+  <div class="fig-sub">Press play. Every change restarts from the same dense rows. The table under the panels is computed from $\Sigma_g$ and $\alpha_A$ by eq. (4).</div>
+  <div data-slot="plastic"></div>
+  <figcaption><b>Plotted:</b> (a) one column per neuron, its attachment row $a_i$ stacked by input: each segment is one $a_{ib}$, coloured by the block of input $b$ (block variances in the legend), with thin white lines between inputs of the same block. Columns are sorted by the block holding the largest share of the row, then by that share. (b) The mean over neurons of each block's share of the row, against time $t$. Majority: a neuron with more than half its row on one block. Support: the number of inputs with $a_{ib} &gt; 10^{-6}$. Stationarity $r = \max(|\Delta W|, |\Delta A|)/dt$ over the last step (the sweep's measure); equilibrium is claimed below $10^{-6}$. The table: for each block, the best row confined to that block and its cost $J_i$ (eq. 4), with $\Sigma_g$ in place of the training bank. <b>Values:</b> $N = 40$, $B = 12$, block variances 2, 1, 0.5, 0.25, $\rho = 0.8$, initial rows Dirichlet(1) over all 12 inputs, degree 1, $W = 0$ initially, lateral rule (when on) with $\alpha = 1$, projected Euler with $dt = \min(0.2, 1/\alpha_A)$, training bank $S = 256$, rectifying potential $k_{lo} = 3$, $k_{hi} = 0$, $\sigma_t = 0.7$; stop when $r &lt; 10^{-8}$ or after 6000 steps; defaults $\alpha_A = 1$, no lateral learning, linear, seed 0.</figcaption>
+</figure>
+
+<p>With the <a class="explore-link" href="#allocation/allocation-fig-plastic?tb=drain">default ridge</a>, nearly every neuron ends with most of its row on the quietest block. Adding <a class="explore-link" href="#allocation/allocation-fig-plastic?tb=lateral-rect">lateral learning and the rectifier</a> does not change that. A <a class="explore-link" href="#allocation/allocation-fig-plastic?tb=strong">strong ridge</a> ($\alpha_A$ above $\lambda_{\max}$) makes every row the same spread row. Its largest share is still the quiet block's, but it is no majority. A <a class="explore-link" href="#allocation/allocation-fig-plastic?tb=weak">weak ridge</a> lets pure attachments win on the loud blocks. Which input such a neuron ends on depends on its starting row; that is a local minimum, not an allocation. The sweep:</p>
+
+<figure class="fig wide card" id="allocation-fig-plastic-table">
+  <div class="fig-title">Plastic attachments in the sweep <span class="synthetic-tag">synthetic Σ</span></div>
+  <div data-slot="plastic-table"><p class="mute">loading…</p></div>
+  <figcaption><b>Plotted:</b> per configuration, the mean over five seeds of the number of neurons (of 40) with more than half their row on each block, the mean share of the row on the quiet block (variance 0.25), the mean support, and the number of seeds whose run reached $r &lt; 10^{-6}$ within 6000 steps. <b>Values:</b> as the live figure; lateral $b$ as listed; seeds 0–4. Data: field <code>b</code>.</figcaption>
+</figure>
+
+<aside class="callout key"><p class="callout-title">Key point</p><p>Pure energy minimisation prefers quiet inputs. The equilibrium energy is a cost for disagreement among the inputs a neuron listens to, and loud inputs disagree by more. This is why the base model keeps the attachments fixed, and why an allocation law needs a principle that this energy does not contain.</p></aside>
+
+<h2 id="allocation-sm">An added principle: similarity matching with a fixed amplitude</h2>
+
+<aside class="callout caveat"><p class="callout-title">Not derived from the conductance energy</p><p>From here on the chapter adds a principle; nothing below follows from the network energy or the distance rule. The question is narrower: if the population is asked to reproduce its input's second moments, with every neuron held to the same response amplitude, does a neuron-count law follow?</p></aside>
+
+<p>Write each neuron's linear response in whitened coordinates, $F_i(g) = x_i^\top \Sigma_g^{-1/2} g$ with $x_i \in \mathbb R^B$, so that $\langle F_i, F_j\rangle = x_i^\top x_j$. In the eigenbasis of $\Sigma_g = \mathrm{diag}(\lambda_1, \dots, \lambda_B)$ the principle is</p>
+
+<div class="eq" id="allocation-eq-sm" data-num="5">$$\min_X\ \tfrac12\,\big\lVert \Sigma_g - X^\top X \big\rVert_F^2 \qquad \text{subject to}\quad \lVert x_i\rVert^2 = \nu \ \text{ for every neuron } i .$$</div>
+
+<p>The objective costs redundancy. The spectral mass of mode $a$, $q_a = (X^\top X)_{aa} = \sum_i x_{ia}^2$, is the total variance the population spends on that mode, and mass above $\lambda_a$ is penalised exactly as mass below it is. The constraint is a homeostatic amplitude: every neuron spends the same variance $\nu$, so $\sum_a q_a = N\nu$. I use the hard constraint throughout. (With a soft penalty $r(q)$ instead, the law would be $q_a + r'(q_a) = \lambda_a$; that is not what is plotted.) Three experiments are kept apart below: (c1) whether the mass law holds; (c2) whether added ingredients make neurons specialise; (c3) how far each ingredient moves the masses off the law.</p>
+
+<h3 id="allocation-c1">(c1) The mass law is water-filling, exactly</h3>
+
+<p>Relax $X^\top X$ to any $M \succeq 0$ with $\operatorname{Tr} M = N\nu$. The best such $M$ is diagonal in the eigenbasis, with $q$ the Euclidean projection of $\lambda$ onto $\{q \ge 0,\ \sum_a q_a = N\nu\}$:</p>
+
+<div class="eq" id="allocation-eq-wf" data-num="6">$$q_a = (\lambda_a - \mu)_+, \qquad \textstyle\sum_a (\lambda_a - \mu)_+ = N\nu .$$</div>
+
+<p>This is water-filling. The level $\mu$ is set by the total budget, modes below it get nothing, and each mode above it gets its excess over the level. If the budget exceeds $\sum_a\lambda_a$, $\mu$ is negative and every mode is over-represented by the same amount $-\mu$.</p>
+
+<details class="more"><summary>Why the relaxation is tight under the hard constraint</summary>
+<p>The relaxed optimum $M^\star$ has rank $r \le B \le N$. Any PSD matrix with eigenvalues $(q_1, \dots, q_r)$ can be written $X^\top X$ with $X$ of size $N \times B$; the question is whether every row can have norm exactly $\nu$. The rows' norms are the diagonal of the $N\times N$ Gram matrix $XX^\top$, whose eigenvalues are $(q_1, \dots, q_r, 0, \dots, 0)$. By the Schur–Horn theorem a symmetric matrix with that spectrum and diagonal $d$ exists if and only if $d$ is majorised by the spectrum, and the constant vector $(\nu, \dots, \nu)$ is majorised by every vector of the same length and sum. So $M^\star$ is attained with $\lVert x_i\rVert^2 = \nu$ for all $i$, and the hard-constrained minimum equals the relaxed one.</p>
+</details>
+
+<figure class="fig full card" id="allocation-fig-sm">
+  <div class="fig-title">Similarity matching with $\lVert x_i\rVert^2 = \nu$, solved live by projected gradient <span class="synthetic-tag">synthetic spectrum</span></div>
+  <div class="fig-sub">Press play. The optimiser starts from random rows; the ingredient selector adds a term or constraint (c2, c3).</div>
+  <div data-slot="sm"></div>
+  <figcaption><b>Plotted:</b> (a) water-filling: grey bars, the eigenvalues $\lambda_a$; dashed line, the water level $\mu$ of eq. (6); blue, the predicted mass $q_a^\star = (\lambda_a - \mu)_+$, drawn from $\mu$ up to $\lambda_a$; ink ticks, $\mu + q_a$ for the live optimiser's masses $q_a = (X^\top X)_{aa}$ (a tick on the top of a blue bar means $q_a = q_a^\star$; a tick on the dashed line means $q_a = 0$). (b) Composition: one column per neuron, one row per mode, colour $x_{ia}^2/\nu$, the fraction of neuron $i$'s variance on mode $a$; columns grouped by home mode $\arg\max_a x_{ia}^2$ (band under the columns), then sorted by purity $\max_a x_{ia}^2/\nu$. (c) Neuron counts per mode: neurons whose home mode is $a$ (all, and only those with purity $&gt; 0.9$), and the count the law would give if neurons were pure, $q_a^\star/\nu$ (dots). Tiles: mass-law deviation $\sum_a |q_a - q_a^\star|/(N\nu)$; largest off-diagonal $|(X^\top X)_{ab}|$; pure fraction (purity $&gt; 0.9$); count error $\sum_a |n_a - q_a^\star/\nu|/N$ with $n_a$ the home-mode counts; objective excess, $\tfrac12\lVert\Sigma_g - X^\top X\rVert^2$ minus its constrained minimum $\tfrac12\sum_a(\lambda_a - q^\star_a)^2$; stationarity $\max|X - P(X - \eta\nabla f)|/\eta$ with $P$ the projection on the constraints. <b>Values:</b> $\Sigma_g = \mathrm{diag}(\lambda)$; spectrum <code>lam8</code> $= (3, 2, 1.5, 1, 0.6, 0.3, 0.1, 0.05)$ with $N = 60$, or <code>pow16</code> $\lambda_a = 4/a$, $a = 1..16$, with $N = 80$; step $\eta = 0.02$, at most 20,000 iterations, stop early when stationarity $&lt; 10^{-10}$; fusion term with $\alpha = 1$; rotated basis: a fixed random orthogonal matrix (this page's generator, seed 777; not the sweep's matrix); defaults <code>lam8</code>, $\nu = 0.1$, no ingredient, init seed 0.</figcaption>
+</figure>
+
+<p>With <a class="explore-link" href="#allocation/allocation-fig-sm?tc=law">no ingredient</a> the masses settle on the water-filling prediction to solver precision. In the sweep, over both spectra, three values of $\nu$ and four random starts, the largest mass-law deviation is <span data-fill="c1-qdev">…</span>, the largest off-diagonal entry <span data-fill="c1-off">…</span> and the largest objective excess <span data-fill="c1-exc">…</span> (table c1 below).</p>
+
+<p><b>Mass is not count.</b> The objective sees $X$ only through $X^\top X$, and it does not care how a mode's mass is shared among neurons. Replacing $X$ by $QX$, with $Q$ any orthogonal $N \times N$ matrix that keeps every row norm at $\nu$, changes nothing, and almost all such solutions have neurons that load on several modes. A neuron-count law $n_a = q_a/\nu$ needs every neuron to be pure, with all its variance on one mode. That requires $q_a/\nu$ to be whole numbers, and even then it picks out a corner of the solution set that a descent method has no reason to find. Panel (b) shows what the optimiser actually lands on: mixed neurons. In the sweep, the pure fraction without any ingredient is between <span data-fill="c1-pure-lo">…</span> and <span data-fill="c1-pure-hi">…</span>, depending on spectrum and $\nu$.</p>
+
+<h3 id="allocation-c2">(c2) Making neurons specialise, and (c3) what it costs the law</h3>
+
+<p>I tried three ingredients that could make neurons specialise, one at a time.</p>
+<ul>
+  <li><b>Fusion term.</b> The base model's lateral energy, carried over: add $-\tfrac{1}{2\alpha}\sum_{i&lt;j}\big(b - \tfrac12\lVert x_i - x_j\rVert^2\big)_+^2$, which is the lateral energy minimised over $w$ with $D_{ij}^2 = \lVert x_i - x_j\rVert^2$. It pulls nearby neurons together.</li>
+  <li><b>Non-negativity in the eigenbasis</b>, $x_{ia} \ge 0$. If $X^\top X$ is diagonal and $X \ge 0$, then $\sum_i x_{ia} x_{ic} = 0$ for $a \ne c$ forces disjoint supports, so every neuron is pure. This ingredient is told where the modes are.</li>
+  <li><b>Non-negativity in a rotated basis</b>, $R^\top x_i \ge 0$ for a fixed random orthogonal $R$. This is the control: a sign constraint that is not aligned with the modes.</li>
+</ul>
+
+<p>Specialisation (c2) and the law (c3) are scored separately, in two tables. The <a class="explore-link" href="#allocation/allocation-fig-sm?tc=fusion-weak">weak fusion term</a> keeps the law exactly and purifies part of the population, by an amount that varies widely between random starts. The <a class="explore-link" href="#allocation/allocation-fig-sm?tc=fusion-strong">strong one</a> ($b = 0.1$) breaks the law at every budget but the largest: it merges neurons and empties the weaker modes. <a class="explore-link" href="#allocation/allocation-fig-sm?tc=nonneg">Non-negativity in the eigenbasis</a> makes nearly every neuron pure, but the optimiser stops in local minima that over-populate the weak modes. The pure neurons get the wrong counts, and the masses move off the law. In the <a class="explore-link" href="#allocation/allocation-fig-sm?tc=rotated">rotated basis</a> no neuron is pure and $X^\top X$ is not even diagonal. Only at the largest budget, <a class="explore-link" href="#allocation/allocation-fig-sm?tc=nonneg-big">$\nu = 0.2$ with non-negativity in the eigenbasis</a>, are the counts close to the law (count error <span data-fill="c2-best">…</span> in the sweep). There $\mu &lt; 0$, every mode is populated and the counts have room to round.</p>
+
+<figure class="fig wide card" id="allocation-fig-sm-tables">
+  <div class="fig-title">The three experiments in the sweep <span class="synthetic-tag">synthetic spectrum</span></div>
+  <div class="fig-sub">Choose the spectrum and budget for tables c2 and c3 and the counts chart; table c1 lists every setting.</div>
+  <div data-slot="sm-tables"><p class="mute">loading…</p></div>
+  <figcaption><b>Plotted:</b> (c1) with no ingredient, per spectrum and $\nu$: the water level $\mu$; the largest mass-law deviation, off-diagonal entry, objective excess and stationarity over four random starts; the mean pure fraction. (c2) per ingredient: mean ± sd over four starts of the pure fraction, the count error against the law $q^\star_a/\nu$, and the count error against the best integer counts for pure neurons, $\arg\min_n \tfrac12\sum_a(\lambda_a - n_a\nu)^2$ with $\sum_a n_a = N$; a count error measures specialisation only when the pure fraction is near 1, so it is greyed below 0.9. (c3) per ingredient: mean ± sd of the mass-law deviation and of the objective excess, the largest off-diagonal entry, and the largest stationarity. Counts chart: home-mode counts $n_a$ of each start (dots, one colour per start), the law $q^\star_a/\nu$ (line) and the integer optimum (dashed). <b>Values:</b> projected gradient, step 0.02, 20,000 iterations, random starts 0–3; fusion $\alpha = 1$; rotated basis from numpy seed 777. Data: field <code>c</code>.</figcaption>
+</figure>
+
+<h2 id="allocation-verdict">What this adds up to</h2>
+
+<p>The note hoped the homeostatic parameters would act as a spectral filter $n(\lambda)$. In the base model they do not: allocation is set by the wiring, and $b$ only decides how finely each wired group is cut, finer for louder groups. Letting the wiring learn under the same energy moves neurons the wrong way, towards the quietest inputs, because that energy is a cost of disagreement, not a reward for signal. A spectral law does exist once two things are added that the conductance energy does not contain: a cost for redundancy (the population must reproduce $\Sigma_g$, not exceed it) and a regulated amplitude per neuron. That law, water-filling $q_a = (\lambda_a - \mu)_+$, is a law for spectral mass. It turns into a law for neuron counts, $n_a = q_a/\nu$, only if neurons specialise, and none of the ingredients tested made them specialise with the right counts.</p>
+
+<aside class="callout found">
+  <p class="callout-title">What we found</p>
+  <ul>
+    <li><span class="verdict fails">fails</span>An allocation law $n(\lambda)$ in the base model. Neurons per block is fixed by the attachments. A louder block fragments into more, smaller clusters, which is a resolution effect.</li>
+    <li><span class="verdict fails">fails</span>Plastic attachments under the same energy, as a source of allocation. They drain to the quietest inputs. A ridge above $\lambda_{\max}(\Sigma_g)$ makes all neurons identical, and a weak ridge lets pure attachments to louder inputs survive as local minima.</li>
+    <li><span class="verdict holds">holds</span>With the added similarity-matching principle and a hard amplitude $\nu$, the spectral mass obeys water-filling $q_a = (\lambda_a - \mu)_+$ exactly (derived, and verified to solver precision).</li>
+    <li><span class="verdict open">open</span>Turning the mass law into a neuron-count law. Neurons come out mixed. Weak fusion purifies only some of them. Strong fusion and non-negativity give pure neurons with the wrong counts and move the masses off the law. A rotated non-negativity constraint fails outright.</li>
+  </ul>
+</aside>
+
+<p><b>Not tried.</b> A global search for the pure, integer-optimal allocation under non-negativity: it exists (the greedy integer fill in table c2 gives it), but projected gradient from random starts does not find it. Non-negative similarity matching with rectified outputs on the raw inputs (the NSM family), the most natural specialising principle not tested. A soft amplitude penalty. Sparsity penalties, noise, or competition between neurons. Any version of the added principle derived inside the conductance model, for example plastic attachments whose constraint fixes each neuron's response variance instead of its input conductance. Spectra and sizes were limited to the two spectra above with $N \le 80$.</p>
+
+<p>What I would now say is this. Attraction, the distance rule, explains why populations form. Something else has to explain how much redundancy each population can afford. And neuron count equals spectral mass only when neurons specialise.</p>
