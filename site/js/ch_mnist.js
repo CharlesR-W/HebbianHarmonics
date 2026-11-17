@@ -133,7 +133,7 @@ function sweepFigure(host, index, state, ctx) {
         const b = index.runs.find(r => r.lift === "pixels").baselines;
         refs.push({ y: b.diag.contrast_cos, label: `diag Σ ${ui.fmtFixed(b.diag.contrast_cos, 2)}` }, { y: b.identity.contrast_cos, label: `identity ${ui.fmtFixed(b.identity.contrast_cos, 2)}` });
       }
-      const c = lineChart(boxes[mi], { series, xrange: xr, yrange: m.yrange || [0, maxLive + 1], height: 210, xlabel: "θ", xname: "θ", legend: false,
+      const c = lineChart(boxes[mi], { series, xrange: xr, yrange: m.yrange || [0, maxLive + 1], height: 185, xlabel: "θ", xname: "θ", legend: false,
         yfmt: m.fmt, xfmt: v => ui.fmt(v, 2), refs });
       return c;
     });

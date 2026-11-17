@@ -45,26 +45,29 @@ export function runFigure(host, capHost, index, state, ctx) {
   ] });
   Object.assign(stats.el.style, { marginBottom: "14px", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" });
   // ---- snapshot bar
+  let data = null, run = null, hm = null, sc = null, curves = [], tiles = null, token = 0, uRange = null;
   const play = ui.h("button", { type: "button", class: "u-play", "aria-label": "Play through training" });
   let S = 33, k = Math.max(0, ctx.param("snap", 32));
   const snap = ui.slider({ label: "training step", min: 0, max: S - 1, step: 1, value: Math.min(k, S - 1), fmt: i => stepLabel(i),
     onInput: i => { k = i; draw(); }, onChange: i => ctx.setParams({ snap: i }) });
-  const tbar = ui.h("div", { style: { display: "flex", gap: "12px", alignItems: "center", maxWidth: "560px", marginBottom: "10px" } }, play, ui.h("div", { style: { flex: 1 } }, snap.el));
+  const tbar = ui.h("div", { style: { display: "flex", gap: "12px", alignItems: "center", flex: "1 1 340px", maxWidth: "520px" } }, play, ui.h("div", { style: { flex: 1 } }, snap.el));
   // ---- panels
   const hmBox = ui.h("div", { style: { minWidth: 0 } }), mapBox = ui.h("div", { style: { minWidth: 0 } }), tileBox = ui.h("div", { style: { minWidth: 0 } });
   const panelHead = html => ui.h("div", { class: "chart-title", html });
+  const tileHead = panelHead("");
   const panels = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: "14px 26px", alignItems: "start" } },
     ui.h("div", { style: { minWidth: 0 } }, panelHead("voltage covariance $h_i^\\top\\Sigma_g h_j$"), hmBox),
     ui.h("div", { style: { minWidth: 0 } }, panelHead("2D map of the embeddings (Hellinger UMAP)"), mapBox),
-    ui.h("div", { style: { minWidth: 0 } }, panelHead("16 neurons' embeddings $h_i$"), tileBox));
+    ui.h("div", { style: { minWidth: 0 } }, tileHead, tileBox));
   const curveGrid = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "8px 20px", marginTop: "16px" } });
   const curveBoxes = ["clusters", "neurons and synapses at the floor", "stationarity residual |dw/dt|", "readout of the instantaneous weights"].map(t => {
     const b = ui.h("div", { style: { minWidth: 0 } }); curveGrid.append(ui.h("div", { style: { minWidth: 0 } }, panelHead(t), b)); return b;
   });
-  host.append(top, stats.el, tbar, panels, curveGrid);
+  const row2 = ui.h("div", { style: { display: "flex", flexWrap: "wrap", gap: "10px 24px", alignItems: "center", marginBottom: "12px" } }, ui.h("div", { style: { flex: "2 1 520px", minWidth: 0 } }, stats.el), tbar);
+  stats.el.style.marginBottom = "0";
+  host.append(top, row2, panels, curveGrid);
   ui.renderMath(panels);
 
-  let data = null, run = null, hm = null, sc = null, curves = [], tiles = null, token = 0, uRange = null;
   function stepLabel(i) { const st = run?.snapshot_steps; return st ? `${ui.fmtInt(st[i])}  (t = ${ui.fmt(st[i] * run.dt, 2)})` : String(i); }
 
   function buildTheta() {
@@ -106,14 +109,14 @@ export function runFigure(host, capHost, index, state, ctx) {
     const clusters = Object.fromEntries(nj.clusters.map(c => [c.id, c]));
     const a = r.files.similarity.a;
     hm?.destroy(); sc?.destroy();
-    hm = heatmap(hmBox, { values: D.decodeSim(d.sim, k, n, a), rows: n, cols: n, map: "div", range: [-a, a], size: 330, groups: { rows: groupsOf(nj) },
+    hm = heatmap(hmBox, { values: D.decodeSim(d.sim, k, n, a), rows: n, cols: n, map: "div", range: [-a, a], size: 280, groups: { rows: groupsOf(nj) },
       zlabel: "$h_i^\\top\\Sigma_g h_j$", xlabel: "neuron j (final clusters by size)", ylabel: "neuron i",
       tooltip: (i, j, v) => ui.tipRows(`step ${ui.fmtInt(r.snapshot_steps[k])}`, [
         { name: `neuron ${N.ids[i]} (${clusterName(clusters[N.cluster[i]])})`, value: "", color: clusterColor(N.cluster_rank[i], N.dead[i]) },
         { name: `neuron ${N.ids[j]} (${clusterName(clusters[N.cluster[j]])})`, value: "", color: clusterColor(N.cluster_rank[j], N.dead[j]) },
         { name: "hᵢᵀΣg hⱼ", value: ui.fmtFixed(v, 3) }]) });
     const cols = N.ids.map((_, i) => clusterColor(N.cluster_rank[i], N.dead[i]));
-    sc = scatter(mapBox, { x: frame(0), y: frame(1), color: cols, size: N.dead.map(x => (x ? 2.5 : 3.6)), equal: true, height: 330,
+    sc = scatter(mapBox, { x: frame(0), y: frame(1), color: cols, size: N.dead.map(x => (x ? 2.5 : 3.6)), equal: true, height: 280,
       xrange: uRange[0], yrange: uRange[1], xlabel: "UMAP 1", ylabel: "UMAP 2",
       tooltip: i => { const c = clusters[N.cluster[i]]; return ui.tipRows(`neuron ${N.ids[i]}`, [
         { name: "final cluster", value: clusterName(c), color: cols[i] }, { name: "cluster size", value: ui.fmtInt(c.size) },
@@ -125,9 +128,11 @@ export function runFigure(host, capHost, index, state, ctx) {
     if (dead) items.push({ label: `dead pool · ${ui.fmtInt(dead.size)}`, color: P.other, shape: "dot" });
     const lg = ui.legend({ items }); lg.el.classList.add("chart-legend"); lg.el.style.marginTop = "4px"; mapBox.append(lg.el);
     // tiles
+    tileHead.innerHTML = d.tileImg ? "16 neurons' embeddings $h_i$" : "the parts, by their response";
+    ui.renderMath(tileHead);
     if (d.tileImg) {
-      tiles = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 64px))", gap: "5px" } });
-      tileBox.replaceChildren(tiles, ui.h("div", { class: "u-help", style: { marginTop: "8px", maxWidth: "290px" }, text: "Rows: four neurons spread through the display order (largest cluster first, dead pool last). Swatch: final cluster." }));
+      tiles = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 58px))", gap: "5px" } });
+      tileBox.replaceChildren(tiles, ui.h("div", { class: "u-help", style: { marginTop: "8px", maxWidth: "260px" }, text: "16 neurons spread through the display order; swatch: final cluster." }));
     } else {
       tiles = null;
       const lay = r.files.cluster_sta.layout, ids = r.files.cluster_sta.clusters;
@@ -138,14 +143,15 @@ export function runFigure(host, capHost, index, state, ctx) {
     }
     // curves
     curves.forEach(c => c.destroy());
-    const cv = d.curves, x = cv.step.map(s => s + 1), common = { x, xlog: true, height: 190, xlabel: "training step + 1", xname: "step + 1", xfmt: v => ui.fmt(v, 2) };
+    const cv = d.curves, x = cv.step.map(s => s + 1), common = { x, xlog: true, height: 150, xlabel: "training step + 1", xname: "step + 1", xfmt: v => ui.fmt(v, 2) };
     const frac = arr => arr.map(v => v / r.N);
     curves = [
       lineChart(curveBoxes[0], { ...common, ylog: true, series: [{ name: "live clusters", y: cv.n_live_clusters }, { name: "live, ≥ 1% of N", y: cv.n_live_major, dash: true }], yfmt: v => ui.fmt(v, 2) }),
       lineChart(curveBoxes[1], { ...common, yrange: [0, 1], yfmt: v => ui.fmtPct(v, 0), series: [{ name: "dead neurons / N", y: frac(cv.n_dead) }, { name: "input synapses at floor", y: cv.floor_ib }, { name: "lateral synapses at floor", y: cv.floor_ii }] }),
       lineChart(curveBoxes[2], { ...common, ylog: true, yfmt: v => ui.fmt(v, 1), series: [{ name: "mean", y: cv.res_mean }, { name: "mean over active edges", y: cv.res_active_mean }, { name: "max", y: cv.res_max, dash: true }] }),
-      lineChart(curveBoxes[3], { ...common, yrange: [0, 1], yfmt: D.f2, series: [{ name: "contrast-subspace cos", y: cv.ro_both_contrast_cos }, { name: "scale-invariant cos", y: cv.ro_both_scale_cos }],
-        refs: [{ y: r.readout.ls_both.contrast_cos, label: `final, averaged weights ${D.f2(r.readout.ls_both.contrast_cos)}` }, { y: r.baselines.diag.contrast_cos, label: `diag Σ ${D.f2(r.baselines.diag.contrast_cos)}` }] }),
+      lineChart(curveBoxes[3], { ...common, yrange: [0, 1], yfmt: D.f2, series: [{ name: "contrast-subspace cos", y: cv.ro_both_contrast_cos }, { name: "scale-invariant cos", y: cv.ro_both_scale_cos },
+        { name: `final, averaged weights (${D.f2(r.readout.ls_both.contrast_cos)})`, x: [1, x[x.length - 1]], y: [r.readout.ls_both.contrast_cos, r.readout.ls_both.contrast_cos], color: P.fg, dash: true, width: 1.2 },
+        { name: `diag Σg (${D.f2(r.baselines.diag.contrast_cos)})`, x: [1, x[x.length - 1]], y: [r.baselines.diag.contrast_cos, r.baselines.diag.contrast_cos], color: P.mute2, dash: true, width: 1.2 }] }),
     ];
     draw();
   }
@@ -171,8 +177,10 @@ export function runFigure(host, capHost, index, state, ctx) {
     const r = run, tilesTxt = r.files.neuron_tiles
       ? "Right: the embeddings $h_i$ of 16 displayed neurons at this step as 14×14 images over the pixels, each tile on its own maximum (exported colour map: light = 0, dark = the tile's maximum), enlarged without smoothing; swatch: final cluster."
       : "Right: each final cluster's response-weighted average stimulus $\\mathbb E[r(x)(x - \\bar x)]/\\mathrm{sd}(r)$, $r(x) = c_k^\\top(g(x) - \\mu_g)$ over the test digits (red: brighter than average, each tile on its own symmetric scale).";
-    capHost.innerHTML = `<b>Plotted:</b> at the chosen training step, left: $h_i^\\top\\Sigma_g h_j$ for ${r.n_shown} displayed neurons in one fixed order (final clusters by size, dead pool last; within a cluster by distance to its centroid), diverging map on a fixed symmetric range for the whole run; left band: final cluster (categorical colour by size, grey: past the eighth, or the dead pool). Middle: the same neurons in a 2D UMAP of their embeddings with the Hellinger metric (Euclidean distance between $\\sqrt{h_i}$), computed at the final step and warm-started backwards, each frame Procrustes-aligned to the next; axes fixed over the run; colour: final cluster. ${tilesTxt} Below, against training step + 1 (log axis; accent line: the chosen step): live clusters (all clusters except the dead pool, so every neuron counts as its own cluster at the start) and those with ≥ 1% of $N$; the fraction of neurons in the dead pool and of synapses at the floor; the stationarity residual, the projected mean-field drift $|dw/dt|$ at the snapshot weights; the masked least-squares readout of the instantaneous weights, contrast-subspace and scale-invariant cosines (these violate the equilibrium assumption before convergence; dashed: the final readout on weights averaged over the last 600 steps, and diag $\\Sigma_g$). The stat tiles are for the final, averaged weights. <b>Values:</b> run <code>${r.name}</code>: ${D.runLabel(r)}; $\\omega = N w_{\\min} = ${D.omega(r)}$, $dt = ${r.dt}$, ${ui.fmtInt(r.steps)} steps; $\\theta$ at the ${ui.fmtPct(r.theta_percentile, 1)} percentile of off-diagonal $\\Sigma_g$. Data: <code>data/mnist/runs/${r.name}/</code>.`;
-    ui.renderMath(capHost);
+    D.caption(capHost,
+      `at the chosen step, $h_i^\\top\\Sigma_g h_j$ of ${r.n_shown} displayed neurons in one fixed order (diverging map, one range for the whole run), the same neurons in a Hellinger-metric UMAP, ${r.files.neuron_tiles ? "16 neurons' $h_i$ as images" : "the parts' response-weighted average stimuli"}, and training curves against step + 1 (accent line: the chosen step). Colour everywhere: final cluster (grey: the dead pool, or past the eighth cluster). Stat tiles: final, averaged weights.`,
+      `Left: rows and columns in one fixed order (final clusters by size, dead pool last; within a cluster by distance to its centroid), diverging map on a fixed symmetric range for the whole run; left band: final cluster. Middle: a 2D UMAP of the embeddings with the Hellinger metric (Euclidean distance between $\\sqrt{h_i}$), computed at the final step and warm-started backwards, each frame Procrustes-aligned to the next; axes fixed over the run. ${tilesTxt} Curves (log step axis): live clusters (all clusters except the dead pool, so every neuron is its own cluster at the start) and those with ≥ 1% of $N$; the fraction of neurons in the dead pool and of synapses at the floor; the stationarity residual, the projected mean-field drift $|dw/dt|$ at the snapshot weights; the masked least-squares readout of the instantaneous weights (contrast-subspace and scale-invariant cosines; these violate the equilibrium assumption before convergence), with dashed lines for the final readout on weights averaged over the last 600 steps and for diag $\\Sigma_g$.`,
+      `run <code>${r.name}</code>: ${D.runLabel(r)}; $\\omega = N w_{\\min} = ${D.omega(r)}$, $dt = ${r.dt}$, ${ui.fmtInt(r.steps)} steps; $\\theta$ at the ${ui.fmtPct(r.theta_percentile, 1)} percentile of off-diagonal $\\Sigma_g$.`);
   }
 
   // play: one snapshot every 0.45 s while on screen

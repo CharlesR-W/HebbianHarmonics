@@ -53,6 +53,12 @@ export function decodeSim(u8, k, n, a) {
   return out;
 }
 
+/** Caption: a short definitional line, the full definition of every mark in a disclosure, then the values. */
+export function caption(host, short, full, values) {
+  host.innerHTML = `<b>Plotted:</b> ${short}${full ? ` <details class="more" style="margin:6px 0 0"><summary>Exact definition of every mark</summary><p>${full}</p></details>` : ""}${values ? `<div style="margin-top:4px;overflow-wrap:anywhere"><b>Values:</b> ${values}</div>` : ""}`;
+  ui.renderMath(host);
+}
+
 // ------------------------------------------------------------------ run naming and selection
 export const LIFTS = [
   { value: "pixels", label: "pixels 14×14", short: "pixels" },
