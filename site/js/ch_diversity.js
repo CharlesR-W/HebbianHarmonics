@@ -296,7 +296,7 @@ function outsideFigure(ctx, A) {
 
 // ===================================================================================== Part B, s ± c
 const SCTOURS = [
-  { id: "equal", label: "Equal sizes", note: "$n_A = n_B = 12$, $\\sigma_c^2 = 0.1$: $\\psi_1 = s$, $\\psi_2 = c$, not the prototypes.", p: { sc2: 0.1, na: 12, leak: 0 } },
+  { id: "equal", label: "Equal sizes", note: "$n_A = n_B = 12$, $\\sigma_c^2 = 0.1$: $\\psi_1 = s$, $\\psi_2 = c$, not the prototypes. (At $\\sigma_c^2 = 1$ the two eigenvalues would coincide and no single pair is singled out.)", p: { sc2: 0.1, na: 12, leak: 0 } },
   { id: "unequal", label: "20 / 4", note: "$n_A = 20$, $n_B = 4$, $\\sigma_c^2 = 0.1$: $\\psi_1$ tilts toward $p_A$.", p: { sc2: 0.1, na: 20, leak: 0 } },
   { id: "unequal5", label: "20 / 4, $\\sigma_c^2 = 0.5$", note: "Less overlap between the prototypes: $\\psi_1$ swings further toward $p_A$.", p: { sc2: 0.5, na: 20, leak: 0 } },
   { id: "orth", label: "Orthogonal prototypes", note: "$\\sigma_c^2 = 1$, $n_A = 16$, $n_B = 8$: the prototypes are orthogonal, $\\psi_a$ are the prototypes and $q = \\nu n$.", p: { sc2: 1, na: 16, leak: 0 } },
@@ -352,7 +352,7 @@ function scFigure(ctx) {
 
 // ===================================================================================== Part B, blocks
 const BTOURS = [
-  { id: "uncorr", label: "Uncorrelated blocks", note: "Cross-block correlation 0, linear, $b = 0.1$: four orthogonal clusters; $\\psi$ = prototypes = $\\Sigma_g$'s modes, $q \\approx \\nu n$.", p: { rx: 0, pot: "linear", b: 0.1 } },
+  { id: "uncorr", label: "Uncorrelated blocks", note: "Cross-block correlation 0, linear, $b = 0.1$: four orthogonal clusters; $\\psi \\approx$ prototypes $\\approx$ $\\Sigma_g$'s modes (close, not exact), $q \\approx \\nu n$.", p: { rx: 0, pot: "linear", b: 0.1 } },
   { id: "corr", label: "Correlated blocks", note: "Cross-block correlation 0.4, linear, $b = 0.1$: the same four clusters, overlapping prototypes; $\\psi$ = $\\Sigma_g$'s modes, not the prototypes.", p: { rx: 0.4, pot: "linear", b: 0.1 } },
   { id: "merge", label: "Correlated, $b = 0.23$", note: "Two of the four clusters have merged; the eigenfunctions still follow $\\Sigma_g$ more closely than the prototypes.", p: { rx: 0.4, pot: "linear", b: 0.23 } },
   { id: "rect", label: "Rectifying", note: "Uncorrelated blocks with the rectifying potential at $b = 0.1$: cluster counts shift and the eigenfunctions are partly nonlinear.", p: { rx: 0, pot: "rect", b: 0.1 } },

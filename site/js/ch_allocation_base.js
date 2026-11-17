@@ -11,7 +11,7 @@ export const sub = n => String(n).split("").map(d => SUBD[+d] ?? d).join("");
 export const DEF_A = { v1: 1, n1: 12, b: 0.02, seed: 0 };
 const KEYS_A = { v1: "av", n1: "an", b: "ab", seed: "as" };
 export const TOURS_A = [
-  { id: "quiet", label: "Quiet block", note: "$v_1 = 0.25$, $b = 0.02$: block 1's triangle is smaller than the edge range; its 12 neurons fuse into one cluster.", p: { v1: 0.25, n1: 12, b: 0.02, seed: 0 } },
+  { id: "quiet", label: "Quiet block", note: "$v_1 = 0.25$, $b = 0.02$: block 1's triangle is still wider than the edge range, but its 12 neurons start close enough that nearly every pair is in range (drag the time bar to $t = 0$); the learned edges pull them in to about one edge range, and they end in one cluster.", p: { v1: 0.25, n1: 12, b: 0.02, seed: 0 } },
   { id: "loud", label: "Loud block fragments", note: "$v_1 = 8$, $b = 0.02$: the same 12 neurons, spread over a triangle many edge ranges wide, split into small clusters and singletons.", p: { v1: 8, n1: 12, b: 0.02, seed: 0 } },
   { id: "loud-coarse", label: "Loud block, larger $b$", note: "$v_1 = 8$, $b = 0.05$: a longer edge range merges some of the fragments; still 12 neurons.", p: { v1: 8, n1: 12, b: 0.05, seed: 0 } },
   { id: "more", label: "More neurons attached", note: "$v_1 = 1$, $n_1 = 24$, $b = 0.02$: twice the neurons on block 1, and its cluster doubles.", p: { v1: 1, n1: 24, b: 0.02, seed: 0 } },

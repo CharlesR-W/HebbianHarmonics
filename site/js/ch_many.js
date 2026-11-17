@@ -46,8 +46,12 @@ function numbers(F, R) {
   o.fdiam1 = `${f2(m1)} ± ${f2(s1)}`; o.fdiam01 = `${f2(m01)} ± ${f2(s01)}`; o.fbk = f3(bg[kb]);
   // hysteresis windows: b where some seed's up and down partitions differ
   const win = (sg, al) => { const bs = bg.filter((_, k) => runs.some(r => r.sigma === sg && r.pot === "linear" && r.alpha === al && r.part_diff_up_down[k] > 0)); return bs.length ? `${f2(bs[0])}–${f2(bs[bs.length - 1])}` : "none"; };
+  // part_diff_up_down is a sum of two conditional fractions (each over the pairs together on one branch), so it can
+  // exceed 1. Partitions are stored for seed 0 only; from them, the plain fraction of all pairs grouped differently.
   const pdmax = al => f2(Math.max(...runs.filter(r => r.pot === "linear" && r.alpha === al).flatMap(r => r.part_diff_up_down)));
   o.fpd01 = pdmax(0.1); o.fpd1 = pdmax(1);
+  const pdall = al => f2(Math.max(...runs.filter(r => r.pot === "linear" && r.alpha === al && r.up.lab).flatMap(r => allPairDiff(r.up.lab, r.down.lab))));
+  o.fpdall01 = pdall(0.1); o.fpdall1 = pdall(1);
   o.fwin01b = win("blocks", 0.1); o.fwin01p = win("power", 0.1); o.fwin1b = win("blocks", 1); o.fwin1p = win("power", 1);
   o.fk01 = f3(0.1 * c.deg / 4); o.fk1 = f3(1 * c.deg / 4);
   // which branch is lower: J(up) - J(down), seed means per configuration and b
@@ -65,7 +69,8 @@ function numbers(F, R) {
   o.fJworst = f2(worst.v); o.fJworstcfg = `${worst.sg}, ${potName(worst.pot)}, α = ${worst.al}, b = ${f2(worst.b)}`;
   // nestedness
   let nb = { v: -1 }; runs.forEach(r => r.nest_cold.forEach((v, k) => { if (v > nb.v) nb = { v, r, k }; }));
-  o.fnest = f2(nb.v); o.fnestcfg = `${nb.r.sigma}, ${potName(nb.r.pot)}, α = ${nb.r.alpha}, between b = ${f2(bg[nb.k])} and ${f2(bg[nb.k + 1])}`;
+  o.fnest = f2(nb.v); o.fnestcfg = `${nb.r.sigma}, ${potName(nb.r.pot)}, α = ${nb.r.alpha}, seed ${nb.r.seed}, between b = ${f2(bg[nb.k])} and ${f2(bg[nb.k + 1])}`;
+  o.fnestall = nb.r.cold.lab ? f2(allPairSplit(nb.r.cold.lab[nb.k], nb.r.cold.lab[nb.k + 1])) : "not stored for this seed";
   o.fnestdown = f2(Math.max(...runs.flatMap(r => r.nest_down)));
   const a1 = runs.filter(r => r.alpha === 1);
   o.fnonmono = `${a1.filter(r => r.cold.K.some((v, k) => k > 0 && v > r.cold.K[k - 1])).length} of ${a1.length}`;
@@ -111,6 +116,19 @@ function numbers(F, R) {
   o.r4up = f2(meanAt(3, 0.01, k6, (p, k) => p.up[k][0]));
   o.r4scal = f2(Math.max(...R.scaling.rows.map(r => r[2])));
   return o;
+}
+
+// Fractions of ALL N(N-1)/2 pairs, from stored partitions (label arrays). The JSON's nest_* and part_diff_up_down
+// divide instead by the pairs together in the first partition (hebb/onsite_analysis.py pair_violation).
+function allPairSplit(fine, coarse) {
+  const n = fine.length; let c = 0;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (fine[i] === fine[j] && coarse[i] !== coarse[j]) c++;
+  return c / (n * (n - 1) / 2);
+}
+function allPairDiff(labsA, labsB) {
+  return labsA.map((a, k) => { const b = labsB[k], n = a.length; let c = 0;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if ((a[i] === a[j]) !== (b[i] === b[j])) c++;
+    return c / (n * (n - 1) / 2); });
 }
 
 function fillNumbers(panel, o) {
@@ -163,8 +181,8 @@ function buildSweep(ctx, F) {
   // figure 2: nestedness, up/down difference, J, partitions
   const s2 = ctx.slot("history"); controlBar(s2);
   const g2 = grid(300); s2.append(g2);
-  const cN = lineChart(panel(g2, "(e) Refinement violations between neighbouring $b$", "fraction of pairs together at the smaller b, apart at the larger; 0 = nested"), { series: [], xlog: true, xrange: xr, xlabel: "b (geometric midpoint of the two grid values)", ylabel: "fraction of pairs", height: 230, xname: "b" });
-  const cH = lineChart(panel(g2, "(f) Up and down partitions differ", "pairs grouped differently, both directions summed; 0 = same partition"), { series: [], xlog: true, xrange: xr, xlabel: xlab, ylabel: "pair mismatch", height: 230, xname: "b" });
+  const cN = lineChart(panel(g2, "(e) Refinement violations between neighbouring $b$", "of the pairs together at the smaller b, the fraction apart at the larger (conditional); dashed: seed 0, as a fraction of all pairs; 0 = nested"), { series: [], xlog: true, xrange: xr, xlabel: "b (geometric midpoint of the two grid values)", ylabel: "conditional fraction", height: 230, xname: "b" });
+  const cH = lineChart(panel(g2, "(f) Up and down partitions differ", "sum of two conditional fractions (of the pairs together on one branch, those apart on the other), 0 to 2; dashed: seed 0, fraction of all pairs grouped differently; 0 = same partition"), { series: [], xlog: true, xrange: xr, xlabel: xlab, ylabel: "mismatch index (0–2)", height: 230, xname: "b" });
   const cJ = lineChart(panel(g2, "(g) Which branch has the lower objective $J$", "above 0: the down (fused) branch is lower"), { series: [], xlog: true, xrange: xr, xlabel: xlab, ylabel: "J difference", height: 230, xname: "b" });
   ui.renderMath(s2);
   const partRow = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "16px 26px", marginTop: "18px" } });
@@ -189,11 +207,15 @@ function buildSweep(ctx, F) {
     cD.update({ series: [...branches(x => x.diam_max), { name: "cold, evaluation bank", x: bg, y: agg(rs, r => r.cold.diam_max_eval).mean, color: BR.cold, points: true, r: 2.6 }] });
     cS.update({ series: branches(x => x.span_over_range) });
     const mid = bg.slice(0, -1).map((b, k) => Math.sqrt(b * bg[k + 1]));
-    cN.update({ series: [ser("cold start", mid, agg(rs, r => r.nest_cold), BR.cold), ser("continuation down", mid, agg(rs, r => r.nest_down), BR.down)] });
-    cH.update({ series: [ser("up vs down", bg, agg(rs, r => r.part_diff_up_down), catColor(6))] });
+    const r0 = rs.find(r => r.seed === 0);
+    const split0 = L => L.slice(0, -1).map((lab, k) => allPairSplit(lab, L[k + 1]));
+    const dotted = (name, x, y, color) => ({ name, x, y, color, dash: true, width: 1.3 });
+    cN.update({ series: [ser("cold start (conditional)", mid, agg(rs, r => r.nest_cold), BR.cold), ser("continuation down (conditional)", mid, agg(rs, r => r.nest_down), BR.down),
+      dotted("cold start, seed 0, of all pairs", mid, split0(r0.cold.lab), BR.cold), dotted("continuation down, seed 0, of all pairs", mid, split0(r0.down.lab), BR.down)] });
+    cH.update({ series: [ser("up vs down, mismatch index", bg, agg(rs, r => r.part_diff_up_down), catColor(6)),
+      dotted("seed 0, fraction of all pairs", bg, allPairDiff(r0.up.lab, r0.down.lab), catColor(6))] });
     const dJ = (a, b) => r => r[a].J.map((v, k) => v - r[b].J[k]);
     cJ.update({ series: [ser("J(up) − J(down)", bg, agg(rs, dJ("up", "down")), BR.up), ser("J(cold) − J(down)", bg, agg(rs, dJ("cold", "down")), BR.cold)] });
-    const r0 = rs.find(r => r.seed === 0);
     pCold.update(r0.cold.lab); pDown.update(r0.down.lab);
   }
   draw();
