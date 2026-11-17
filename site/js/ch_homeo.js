@@ -51,7 +51,7 @@ function initLive(ctx, data) {
     onChange: x => { xMode = x; ctx.setParams({ x: x === "lam" ? null : x }); if (cur) alloc.update(cur, xMode); } });
   xSeg.el.style.margin = "4px 0 0";
   allocBox.before(xSeg.el);
-  const alloc = allocPlot(allocBox, { height: 330, tooltip: true });
+  const alloc = allocPlot(allocBox, { height: 290, tooltip: true });
   const tp = ui.transport({
     parent: L.view, watch: fig, speeds: [1, 4, 16, 64].map(x => ({ value: x, label: `×${x}` })), speed: 16, autoplay: true, maxHistory: 300,
     timeFmt: t => `t = ${ui.fmtFixed(t, 1)}`,
@@ -59,14 +59,15 @@ function initLive(ctx, data) {
     onSeek: f => { cur = f; show(f, true); },
     onReset: () => restart(),
   });
-  const row = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(260px, 40%), 1fr))", gap: "14px 26px", marginTop: "16px" } });
+  const row = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px 22px", marginTop: "16px" } });
   L.view.append(row);
-  const stripBox = box(row, "(b) Parts that exist at each $\\theta$", "step line: number of stable parts; dot: clusters populated now; shaded: $\\theta < \\gamma\\kappa_0$, the heuristic collective crossover; click to set $\\theta$");
+  const stripBox = box(row, "(b) Parts that exist at each $\\theta$", "step line: stable parts; dot: clusters now; shaded: below the heuristic crossover $\\gamma\\kappa_0$; click to set $\\theta$");
   const riverBox = box(row, "(c) Neurons per cluster over time", "stacked; colour = cluster (by size); grey: small clusters and dead neurons");
-  const partsBox = box(L.view, "(d) The clusters' parts", "member mean of $h_i$ over the inputs, one panel per cluster (largest first), then stable parts with no neurons");
+  const sigmaHost = box(row, "(d) The input covariance $\\Sigma_g$", "hover a cell");
+  const partsBox = box(L.view, "(e) The clusters' parts", "member mean of $h_i$ over the inputs, one panel per cluster (largest first), then stable parts with no neurons");
   partsBox.parentElement.style.marginTop = "16px";
-  const strip = thetaStrip(stripBox, { height: 190, onPick: th => { thetaS.set(th); p.theta = th; liveChange(); } });
-  const river = riverChart(riverBox, { height: 190 });
+  const strip = thetaStrip(stripBox, { height: 170, onPick: th => { thetaS.set(th); p.theta = th; liveChange(); } });
+  const river = riverChart(riverBox, { height: 170 });
   ui.renderMath(L.view);
 
   // ------------------------------------------------------------ tours
@@ -78,7 +79,8 @@ function initLive(ctx, data) {
   const covIds = Object.keys(data.covs);
   const covS = ui.select({ label: "input covariance $\\Sigma_g$", options: covIds.map(id => ({ value: id, label: (data.covs[id].real ? "real: " : "synthetic: ") + data.covs[id].label })), value: p.cov,
     onChange: id => { p.cov = id; const c = M.covOf(data, id); p.theta = clampTheta(p.theta, c); makeThetaSlider(); resetChange(); } });
-  const sigmaBox = ui.h("div", { style: { display: "grid", gap: "6px" } });
+  const sigmaBox = ui.h("div", { style: { display: "flex", flexWrap: "wrap", gap: "8px 20px", alignItems: "start" } });
+  sigmaHost.append(sigmaBox);
   let thetaS = null;
   const thetaHost = ui.h("div");
   function thetaRange(c) { return [-0.2, Math.min(1.6, Math.ceil((c.stats.var_max + 0.05) * 100) / 100)]; }
@@ -87,7 +89,7 @@ function initLive(ctx, data) {
     const c = M.covOf(data, p.cov), [lo, hi] = thetaRange(c);
     const s = ui.slider({ label: "pruning threshold $\\theta = -w_0/\\eta$", min: lo, max: hi, step: 0.01, value: p.theta, fmt: f2,
       marks: thetaMarks(c, p.gamma, lo, hi),
-      help: "Sets which parts exist (the step line in (b)). Ticks: $\\kappa_0$ and $\\gamma\\kappa_0$; the smallest and largest covariance (cov) and variance (var) of $\\Sigma_g$.",
+      help: "Sets which parts exist ((b)). Ticks: $\\kappa_0$, $\\gamma\\kappa_0$, smallest and largest covariance and variance.",
       onInput: x => { p.theta = x; liveChange(); } });
     if (thetaS) thetaS.el.replaceWith(s.el); else thetaHost.append(s.el);
     thetaS = s;
@@ -102,14 +104,14 @@ function initLive(ctx, data) {
   }
   makeThetaSlider();
   const gammaS = ui.slider({ label: "lateral gain $\\gamma = \\eta_{II}/\\eta$", min: 0, max: 3, step: 0.05, value: p.gamma, fmt: f2,
-    help: "Not part of $\\rho$: the lateral learning rate. The population tends to bind into one blob when $\\theta < \\gamma\\kappa_0$ (a heuristic crossover, accurate to 0.03–0.08 where tested).",
+    help: "Lateral learning rate, not in $\\rho$. Below the heuristic crossover $\\theta < \\gamma\\kappa_0$ the population tends to bind into one blob.",
     onInput: x => { p.gamma = x; refreshMarks(); liveChange(); } });
   const omegaS = ui.slider({ label: "floor leak $\\omega = N w_{\\min}\\lambda/\\eta$", min: 1e-4, max: 1, log: true, sig: 2, value: p.omega, fmt: x => ui.fmt(x, 2),
     help: "", onChange: x => { p.omega = x; liveChange(); } });
   const omegaHelp = omegaS.el.querySelector(".u-help") || ui.h("div", { class: "u-help" });
   if (!omegaHelp.parentNode) omegaS.el.append(omegaHelp);
   const initS = ui.select({ label: "initial input weights $W_{IB}(0)$ (mean 0.2)", options: M.INITS.map(x => ({ value: x.id, label: x.label })), value: p.init,
-    help: "The spread of the starting weights, not their scale, sets how steeply allocation follows energy.", onChange: x => { p.init = x; resetChange(); } });
+    help: "Their spread, not their scale, sets the allocation exponent.", onChange: x => { p.init = x; resetChange(); } });
   const nS = ui.slider({ label: "interior neurons $N$", min: 60, max: 250, step: 10, value: p.n, fmt: String, onChange: x => { p.n = x; resetChange(); } });
   const lamS = ui.segmented({ label: "decay $\\lambda$ (with $\\eta = 1$)", options: [0.25, 0.5, 1, 2, 4].map(x => ({ value: x, label: String(x) })), value: p.lam,
     help: "Weights, $w_{\\min}$, the initial weights and the time step all scale with $1/\\lambda$; watch the max weight and the clock change and nothing else.",
@@ -123,7 +125,7 @@ function initLive(ctx, data) {
     help: "Itô noise on every synapse, reflected at the floor (findings F11). Input: each synapse estimates its covariance from its own samples, $1/\\sigma^2$ per unit time. Additive: $\\sigma\\,dW$. Multiplicative: $\\sigma w\\,dW$, integrated in $\\log w$. With noise, a neuron counts as in a part when its embedding has cosine $\\ge 0.9$ with it, otherwise as in transit.",
     onChange: x => { p.noise = x; liveChange(); } });
 
-  ui.controls({ parent: L.side, title: "Inputs", primary: [covS, sigmaBox] });
+  ui.controls({ parent: L.side, title: "Inputs", primary: [covS] });
   ui.controls({ parent: L.side, title: "Knobs", primary: [thetaHost, gammaS, omegaS, initS],
     advanced: [noiseS, batchS, nS, lamS, seedS, iiS], advancedLabel: "More controls ($N$, $\\lambda$, seed, noise)" });
 
@@ -136,8 +138,8 @@ function initLive(ctx, data) {
     { key: "t", label: "time $t$", fmt: x => ui.fmtFixed(x, 1) },
     { key: "r", label: "stationarity $r$", fmt: x => ui.fmt(x, 2), help: "Projected residual max |dw/dt| (floor synapses pushed down count 0), covariance units." },
   ] });
-  const regimeBox = ui.h("div", { style: { borderLeft: `3px solid ${P.line}`, padding: "4px 0 4px 10px", margin: "10px 0 6px", fontSize: "13px", lineHeight: "1.45" } });
-  L.side.append(regimeBox);
+  const regimeBox = ui.h("div", { style: { borderLeft: `3px solid ${P.line}`, padding: "4px 0 4px 10px", margin: "12px 0 0", fontSize: "13px", lineHeight: "1.45" } });
+  row.before(regimeBox);
 
   // ------------------------------------------------------------ the Sigma panel
   let sigmaHM = null, imageBox = null;
@@ -146,12 +148,12 @@ function initLive(ctx, data) {
     let m = 0; for (const x of S) m = Math.max(m, Math.abs(x));
     const tag = ui.h("span", { class: c.real ? "synthetic-tag" : "synthetic-tag", text: c.real ? "real data: MNIST" : "synthetic Σ" });
     if (c.real) tag.style.filter = "hue-rotate(180deg)";
-    const hmHost = ui.h("div");
+    const hmHost = ui.h("div", { style: { flex: "0 0 auto", width: "190px" } });
     const st = c.stats;
     const desc = ui.h("div", { class: "u-help", html: `${c.desc}. $\\kappa_0 = \\mathbf 1^\\top\\Sigma_g\\mathbf 1/B^2 = ${f3(st.kappa0)}$; covariances ${f2(st.offdiag_min)} to ${f2(st.offdiag_max)}; variances ${f2(st.var_min)} to ${f2(st.var_max)}.` });
-    sigmaBox.replaceChildren(ui.h("div", { style: { display: "flex", gap: "8px", alignItems: "center" } }, tag), hmHost, desc);
+    sigmaBox.replaceChildren(hmHost, ui.h("div", { style: { flex: "1 1 220px", display: "grid", gap: "6px", justifyItems: "start" } }, tag, desc));
     const groups = c.groups ? groupRuns(c.groups) : null;
-    sigmaHM = heatmap(hmHost, { values: Float32Array.from(S), rows: B, cols: B, map: "div", range: [-m, m], size: 200, zlabel: "$\\Sigma_g$",
+    sigmaHM = heatmap(hmHost, { values: Float32Array.from(S), rows: B, cols: B, map: "div", range: [-m, m], size: 160, zlabel: "$\\Sigma_g$",
       groups: groups ? { rows: groups } : null, xlabel: c.image ? "pixel" : "input", ylabel: c.image ? "pixel" : "input",
       tooltip: (i, j, v) => ui.tipRows(`inputs g${sub(i + 1)}, g${sub(j + 1)}`, [{ name: i === j ? "variance" : "covariance", value: f3(v) }]) });
     ui.renderMath(sigmaBox);
@@ -162,14 +164,14 @@ function initLive(ctx, data) {
       imageBox = ui.h("div");
       const wrap = ui.h("div", { style: { gridColumn: "1 / -1", minWidth: "0" } });
       L.below.append(wrap);
-      wrap.append(ui.h("div", { class: "chart-title", html: "(e) The real covariance as images: mean digit, pixel variances $\\Sigma_{bb}$, and the top eight eigenvectors of $\\Sigma_g$" }), imageBox);
+      wrap.append(ui.h("div", { class: "chart-title", html: "(f) The real covariance as images: mean digit, pixel variances $\\Sigma_{bb}$, and the top eight eigenvectors of $\\Sigma_g$" }), imageBox);
       const vari = Float32Array.from({ length: B }, (_, b) => S[b * B + b]);
       imageGrid(imageBox, { arrays: [Float32Array.from(im.mean_image), vari], w, h: w, map: "seq", range: "tile", tile: 64, labels: ["mean", "variance"],
         tooltip: i => ui.tipRows(i ? "pixel variance (scaled)" : "mean pixel intensity", []) });
       const eg = ui.h("div", { style: { marginTop: "8px" } }); imageBox.append(eg);
       imageGrid(eg, { arrays: im.eigvecs.map(v => Float32Array.from(v)), w, h: w, map: "div", range: "tile", tile: 64, labels: im.eigvecs.map((_, k) => `v${sub(k + 1)}`),
         tooltip: k => ui.tipRows(`eigenvector ${k + 1} of Σ_g`, [{ name: "eigenvalue", value: f3(im.eigvals[k]) }], "signed (red +, blue −), its own symmetric scale") });
-      wrap.append(ui.h("div", { class: "u-help", html: `Computed by <code>hebb/homeo_cov.py</code> from the ${ui.fmtInt(im.n_images)} MNIST training images, average-pooled $28\\times28 \\to 7\\times7$; one global scale so the mean variance is 1. Eigenvectors are signed and global; compare the clusters' parts in (d), which are non-negative and local.` }));
+      wrap.append(ui.h("div", { class: "u-help", html: `Computed by <code>hebb/homeo_cov.py</code> from the ${ui.fmtInt(im.n_images)} MNIST training images, average-pooled $28\\times28 \\to 7\\times7$; one global scale so the mean variance is 1. Eigenvectors are signed and global; compare the clusters' parts in (e), which are non-negative and local.` }));
       ui.renderMath(L.below);
     }
   }
@@ -206,7 +208,7 @@ function initLive(ctx, data) {
     const wmin = M.wminOf(p);
     modeLine.innerHTML = `${p.batch ? `minibatch: plasticity sees the covariance of ${p.batch} Gaussian samples per step (shared by all neurons)` : "mean-field: plasticity sees the exact $\\Sigma_g$"}${p.noise !== "none" ? `, plus private ${M.NOISES.find(x => x.id === p.noise).label}` : ""} · $N = ${p.n}$, $w_{\\min} = \\omega/N = ${ui.fmt(wmin, 2)}$${p.lam !== 1 ? `/$\\lambda$` : ""} · Euler $dt = ${ui.fmt(M.DT / p.lam, 2)}$`;
     ui.renderMath(modeLine);
-    omegaHelp.innerHTML = `A synapse at the floor still conducts $w_{\\min}$; together they pull every cluster towards the population mean. Here $w_{\\min} = ${ui.fmt(wmin, 2)}$ for $N = ${p.n}$.`;
+    omegaHelp.innerHTML = `Floored synapses still conduct, pulling clusters together. Here $w_{\\min} = ${ui.fmt(wmin, 2)}$.`;
     ui.renderMath(omegaHelp);
   }
   function drawParts(a) {

@@ -124,7 +124,7 @@ function phaseFigure(el, phase, data, live) {
       ...parents.map(pp => ({ kind: "line", pts: gl.map(g => [g * pp.E, g]), color: P.ink2 })),
       ...levels.map(x => ({ kind: "vline", x, color: P.mute })),
     ];
-    gridMap(mapEl, { xs: thetas, ys: gam, yIndex: true, height: 330, xlabel: "pruning threshold θ", ylabel: "lateral gain γ", yfmt: v => ui.fmt(v, 2),
+    gridMap(mapEl, { xs: thetas, ys: gam, yIndex: true, height: 232, xlabel: "pruning threshold θ", ylabel: "lateral gain γ", yfmt: v => ui.fmt(v, 2),
       cell: (i, j) => { const ks = ax.K[j][i]; if (!ks) return null; const K = median(ks); return { K, ks, dead: ax.dead[j][i], res: ax.res[j][i], maxfrac: ax.maxfrac[j][i], theta: thetas[i], gamma: gam[j], dark: isDark(K, kmax) }; },
       color: q => kColor(q.K, kmax), label: q => q.K === 0 ? "†" : (q.ks.every(k => k === q.ks[0]) ? String(q.K) : `${q.K}*`),
       tooltip: q => ui.tipRows(`θ = ${f2(q.theta)}, γ = ${ui.fmt(q.gamma, 2)}`, [
@@ -177,7 +177,7 @@ function allocFigure(el, alloc) {
   const famS = ui.segmented({ label: "vary block 0's", options: [{ value: "var", label: "variance" }, { value: "size", label: "size" }, { value: "size_eqlam", label: "size, same λ" }], value: fam, onChange: v => { fam = v; draw(); } });
   const gS = ui.segmented({ label: "lateral gain γ", options: [0, 1].map(x => ({ value: x, label: String(x) })), value: gam, onChange: v => { gam = v; draw(); } });
   ctl.append(famS.el, gS.el);
-  const chart = lineChart(ch, { series: [{ name: "", x: [1], y: [0] }], xlog: true, yrange: [0, 1], height: 280, ylabel: "fraction of N in block 0", xlabel: "", yfmt: v => ui.fmtPct(v, 0) });
+  const chart = lineChart(ch, { series: [{ name: "", x: [1], y: [0] }], xlog: true, yrange: [0, 1], height: 220, ylabel: "fraction of N in block 0", xlabel: "", yfmt: v => ui.fmtPct(v, 0) });
   function draw() {
     const rows = alloc.planted.filter(r => r.family === fam && r.gamma === gam).sort((a, b) => a.theta - b.theta);
     const series = rows.map((r, k) => {
@@ -201,7 +201,7 @@ function betaFigure(el, limit, alloc) {
   const pick = (shape, scale) => th.map(t => { const r = limit.rows.find(q => q.theta === t && q.shape === shape && q.scale === scale); return r && r.beta != null ? r.beta : NaN; });
   const planted = alloc.planted.filter(r => r.family === "var" && r.gamma === 0).sort((a, b) => a.theta - b.theta);
   const desc = alloc.descriptive_fits.filter(r => r.cov === "powerlaw_pos12" && r.gamma === 0 && r.fit && r.fit.lam_top);
-  lineChart(el, { height: 280, yrange: [0, 11], xrange: [0, 0.52], xlabel: "pruning threshold θ", ylabel: "allocation exponent β", xname: "θ", yfmt: v => ui.fmt(v, 2),
+  lineChart(el, { height: 210, yrange: [0, 11], xrange: [0, 0.52], xlabel: "pruning threshold θ", ylabel: "allocation exponent β", xname: "θ", yfmt: v => ui.fmt(v, 2),
     refs: [{ y: 1, label: "β = 1" }],
     series: [
       { name: "diag(v), Exp init, N → ∞", x: th, y: pick("exp", 0.2), dots: true, color: P.cat[0] },
@@ -221,7 +221,7 @@ function spreadFigure(el, ingr, limit) {
   });
   const sd = Math.PI / Math.sqrt(6);
   series.push({ name: "exponential init (log-sd π/√6)", x: thetas.map(() => sd), y: thetas.map(t => limit.rows.find(r => r.theta === t && r.shape === "exp" && r.scale === 0.2).beta), points: true, r: 5.5, color: P.fg });
-  lineChart(el, { series, height: 280, yrange: [0, 12], xrange: [0, 3.2], xlabel: "spread of the initial input weights: sd of log W", ylabel: "allocation exponent β", xname: "log-sd", yfmt: v => ui.fmt(v, 2),
+  lineChart(el, { series, height: 230, yrange: [0, 12], xrange: [0, 3.2], xlabel: "spread of the initial input weights: sd of log W", ylabel: "allocation exponent β", xname: "log-sd", yfmt: v => ui.fmt(v, 2),
     refs: [{ y: 1, label: "β = 1" }] });
 }
 
@@ -315,7 +315,7 @@ async function privateNoise(slots, index) {
   }
   const d = await get("alloc_private_noise.json");
   const v = d.meta.diag_sigma.v, st = d.stationary_diag;
-  const rev = d.meta.revision != null ? `revision ${d.meta.revision}` : "first run (no revision stated in the file)";
+  const rev = d.meta.revision != null ? `revision ${String(d.meta.revision).split(").")[0]})` : "first run (no revision stated in the file)";
   document.querySelectorAll("[data-v='pn-rev']").forEach(e => { e.textContent = rev; });
   noiseLaw(slots.law, d, v, st);
   noiseTime(slots.time, d);
@@ -395,13 +395,13 @@ function noiseBeta(el, st) {
   el.replaceChildren(row);
   const thetas = [0.05, 0.2, 0.4];
   const ser = (key, th, k) => { const rr = st.filter(r => r.kind === "inp" && r.theta === th).sort((x, y) => x.sigma - y.sigma); return { name: `θ = ${th}`, x: rr.map(r => r.sigma), y: rr.map(r => r[key] == null ? NaN : r[key]), dots: true, color: catColor(k) }; };
-  lineChart(a, { height: 240, xlog: true, xrange: [0.09, 5.5], yrange: [0, 8], xlabel: "input-noise level σ (log)", ylabel: "β in n ∝ λ^β", xname: "σ", yfmt: v => ui.fmt(v, 2),
+  lineChart(a, { height: 200, xlog: true, xrange: [0.09, 5.5], yrange: [0, 8], xlabel: "input-noise level σ (log)", ylabel: "β in n ∝ λ^β", xname: "σ", yfmt: v => ui.fmt(v, 2),
     refs: [{ y: 1, label: "β = 1" }], series: thetas.map((t, k) => ser("beta", t, k)) });
   const pts = (kind, wmin, name, k) => {
     const rr = st.filter(r => isRow(r, kind, wmin) && r.equilibrated).sort((x, y) => x.transit - y.transit);
     return { name, x: rr.map(r => r.transit), y: rr.map(outside), points: true, color: catColor(k), r: 3.5 };
   };
-  lineChart(b, { height: 240, xrange: [0, 1], yrange: [0, 1], xlabel: "time-averaged fraction in transit", ylabel: "fraction off the loudest part", xname: "transit", xfmt: v => ui.fmtPct(v, 0), yfmt: v => ui.fmtPct(v, 0),
+  lineChart(b, { height: 200, xrange: [0, 1], yrange: [0, 1], xlabel: "time-averaged fraction in transit", ylabel: "fraction off the loudest part", xname: "transit", xfmt: v => ui.fmtPct(v, 0), yfmt: v => ui.fmtPct(v, 0),
     refs: [{ x: 0.09, label: "9%" }, { y: 0.05, label: "5%" }],
     series: [pts("inp", 1e-4, "input", 0), pts("add", 1e-4, "additive", 1), pts("mul", 0.01, "multiplicative, w_min 0.01", 2), pts("mul", 0.03, "multiplicative, w_min 0.03", 3)] });
 }
