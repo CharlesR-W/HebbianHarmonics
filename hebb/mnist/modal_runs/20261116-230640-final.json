@@ -1,0 +1,8 @@
+{
+ "run_id": "20261116-230640-final",
+ "call_id": "fc-01M7M58KB3GD0WW0WBF4ME2WPG",
+ "cfg": "configs/final.json",
+ "n_units": 114,
+ "gpu": "L4",
+ "launched": "Mon Nov 16 23:06:41 2026"
+}

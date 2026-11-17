@@ -89,7 +89,7 @@ export async function init(panel, ctx) {
     onChange: x => { p.batch = x; liveChange(); } });
   batchS.el.style.display = p.mode === "mb" ? "" : "none";
   const jitS = ui.select({ label: "private jitter $w \\leftarrow w\\,e^{\\sigma\\xi}$ per step", options: [{ value: 0, label: "off" }, { value: 1e-3, label: "σ = 10⁻³" }, { value: 1e-2, label: "σ = 10⁻²" }], value: p.jit,
-    help: "Independent noise on every synapse. A run can sit, with a tiny residual, on an exactly symmetric state that is unstable; jitter lets it fall off. Shared minibatch noise cannot do this.",
+    help: "Independent noise on every synapse above the floor. A run can sit, with a tiny residual, on an exactly symmetric state that is unstable; jitter lets it fall off. Shared minibatch noise cannot do this.",
     onChange: x => { p.jit = x; liveChange(); } });
   const trailsT = ui.toggle({ label: "fading trails", value: opts.trails, onChange: on => { opts.trails = on; v.setTrails(on ? TRAIL : 0); writeView(); } });
   const synT = ui.toggle({ label: "draw synapses", value: opts.syn, onChange: on => { opts.syn = on; if (cur) draw3d(cur); writeView(); } });

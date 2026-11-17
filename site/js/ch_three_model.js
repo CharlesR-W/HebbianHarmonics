@@ -113,10 +113,12 @@ export function createSim(p0) {
   };
   // private multiplicative jitter (docs/findings.md F8): w <- w exp(sigma xi), independently per synapse, each step.
   // It breaks exact symmetries (clones, symmetric states) that the deterministic dynamics can never leave.
+  // Synapses at the floor are left alone: the clip would undo the jitter at the next step, and nudging them just
+  // above w_min would make the residual report their (large, negative) drift as motion.
   function jitter(sig) {
-    const { N, Wii, Wib, Mii, Mib } = sim.s, r = sim.jrng;
-    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (Mii[i * N + j]) { const w = Wii[i * N + j] * Math.exp(sig * r.normal()); Wii[i * N + j] = w; Wii[j * N + i] = w; }
-    for (let k = 0; k < N * B; k++) if (Mib[k]) Wib[k] *= Math.exp(sig * r.normal());
+    const { N, Wii, Wib, Mii, Mib } = sim.s, r = sim.jrng, fl = sim.P.wmin * (1 + 1e-3);
+    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (Mii[i * N + j] && Wii[i * N + j] > fl) { const w = Wii[i * N + j] * Math.exp(sig * r.normal()); Wii[i * N + j] = w; Wii[j * N + i] = w; }
+    for (let k = 0; k < N * B; k++) if (Mib[k] && Wib[k] > fl) Wib[k] *= Math.exp(sig * r.normal());
   }
   // live parameter changes (no restart): theta, gamma, wmin, Sigma, mode, batch
   sim.update = p => {

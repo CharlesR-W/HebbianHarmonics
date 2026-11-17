@@ -5,32 +5,12 @@
 // into the simulation.
 import * as E from "./engine.js";
 import { measurementGram, eigvalsSym, summarise } from "./ch_many_meas.js";
+import { scoreAll as scoreAllRaw, readPair as readPairRaw, partsSum, runAndScore, identityRow } from "./ch_many_ro.js";
 
 let run = null;          // {id, N, B, Mii, Mib, Sigma, k, untrained: scores, base: scores}
 const warm = new Map();  // warm starts per readout row
-
-const settings = ["known", "scale", "contrast"];
-function scoreAll(Ck, Cp, S, B, k) {
-  // Ck: readout with theta known (scored under 'known' and 'scale'); Cp: theta-free readout (scored under 'contrast')
-  const out = {};
-  for (const st of settings) {
-    const m = E.compareCov(st === "contrast" ? Cp : Ck, S, B, { setting: st, k });
-    out[st] = { cos: m.cosine, rel: m.relErr, bw: m.bw, sub: m.subspace, neg: m.negFrac, scale: m.scale };
-  }
-  return out;
-}
-
-function readPair(H, Wii, Wib, P, opts, key) {
-  const { N, B, Mii, Mib } = run;
-  const base = { theta: P.theta, lam: P.lam, eta: P.eta, gamma: P.gamma, wmin: P.wmin, maxIter: 300, ...opts };
-  const k1 = key + ":k", k2 = key + ":p";
-  const rk = E.readoutLS(H, Wii, Wib, Mii, Mib, N, B, { ...base, thetaMode: "known", x0: warm.get(k1) });
-  // unknown theta: 'project' is exact for gamma = 1 (engine author's recommendation); otherwise theta is fitted
-  const mode = P.gamma === 1 ? "project" : "fit";
-  const rp = E.readoutLS(H, Wii, Wib, Mii, Mib, N, B, { ...base, thetaMode: mode, x0: warm.get(k2) });
-  warm.set(k1, rk.C); warm.set(k2, rp.C);
-  return { rk, rp, mode };
-}
+const scoreAll = scoreAllRaw;
+const readPair = (H, Wii, Wib, P, opts, key) => readPairRaw(H, Wii, Wib, run.Mii, run.Mib, run.N, run.B, P, opts, warm, key);
 
 function onRun(msg) {
   const { id, N, B, Mii, Mib, Sigma, k, W0ii, W0ib, P } = msg;
@@ -62,6 +42,10 @@ function onJob(msg) {
   rows.ii = ii ? scoreAll(ii.rk.C, ii.rp.C, Sigma, B, k) : null;
   const ib = readPair(H, Wii, Wib, P, { use: "ib" }, "ib");
   rows.ib = scoreAll(ib.rk.C, ib.rp.C, Sigma, B, k);
+  // parts-sum sketch (findings F10): θ11ᵀ + Σ_k c_k h_k h_kᵀ/|h_k|², from the clusters of the current embeddings
+  const cl = E.clustersAuto(H, N, B);
+  const ps = partsSum(H, Wib, Mib, N, B, P, cl.labels, cl.K);
+  rows.parts = scoreAll(ps.C, E.project1(ps.C, B), Sigma, B, k);
   // derivative-aware readout from the two Euler snapshots prev -> current
   let Ctr = null;
   if (prevWii) {
@@ -93,40 +77,28 @@ function onJob(msg) {
   }
   return {
     t, rows, mode: main.mode,
-    Ck: main.rk.C, Cp: main.rp.C, Ctr,
+    Ck: main.rk.C, Cp: main.rp.C, Ctr, Cps: ps.C, partsK: ps.K, robust: cl.robust,
     mII: main.rk.mII, mIB: main.rk.mIB, iters: main.rk.iters, relRes: main.rk.relResidual,
     eig: { sigma: eS, sigmaP: eSp, known: eK, proj: eP }, spec, ms: performance.now() - t0,
   };
 }
 
-// Dense vs sparse wiring, run to convergence here (a separate worker instance; the page's live run is untouched).
+// Dense vs sparse wiring (and dense with a lower floor), each run to convergence here (a separate worker instance;
+// the page's live run is untouched). Rows are posted one at a time so the table fills as they finish.
 function onCompare(msg) {
-  const { Sigma, B, N, theta, gamma, wmin, seed, k, ps } = msg;
-  const P = { ...E.defaultParams(), theta, gamma, wmin, dt: 0.2 };
-  const I = new Float64Array(B * B); for (let b = 0; b < B; b++) I[b * B + b] = 1;
-  const id = scoreAll(I, I, Sigma, B, k);
-  const identity = { p: "id", cosK: id.known.cos, cosC: id.contrast.cos, bwC: id.contrast.bw, sub: id.contrast.sub };
-  return [identity, ...ps.map(p => {
-    const s = E.createState({ N, B, seed, p });
-    let steps = 0;
-    while (steps < 8000) { E.advance(s, Sigma, P, 50); steps += 50; if (s.resid / P.eta < 1e-8) break; }
-    const H = E.harmonicFrom(s.Wii, s.Wib, N, B);
-    const cl = E.clustersAuto(H, N, B);
-    run = { id: -1, N, B, Mii: s.Mii, Mib: s.Mib, Sigma, k }; warm.clear();
-    const pr = readPair(H, s.Wii, s.Wib, P, { maxIter: 2000 }, "cmp");
-    const sc = scoreAll(pr.rk.C, pr.rp.C, Sigma, B, k);
-    const eq = E.readoutEquations(s.Wii, s.Wib, s.Mii, s.Mib, N, B, { theta, lam: P.lam, eta: P.eta, gamma, wmin });
-    const G = measurementGram(H, eq, N, B, { families: ["both"] });
-    const ev = eigvalsSym(G.both, G.p);
-    return { p, K: cl.K, dir: summarise(ev, 1e-5).rank, pdim: G.p, cosK: sc.known.cos, cosC: sc.contrast.cos, bwC: sc.contrast.bw, bwK: sc.known.bw,
-      sub: sc.contrast.sub, steps, resid: s.resid / P.eta };
-  })];
+  const { Sigma, B, N, theta, gamma, wmin, seed, k, configs } = msg;
+  self.postMessage({ kind: "compare", row: identityRow(Sigma, B, k) });
+  for (const c of configs) {
+    const r = runAndScore({ Sigma, B, N, theta, gamma, wmin: c.wmin ?? wmin, seed, k, p: c.p });
+    self.postMessage({ kind: "compare", row: { ...r, key: c.key } });
+  }
+  self.postMessage({ kind: "compare", done: true });
 }
 
 self.onmessage = e => {
   const msg = e.data;
   try {
-    if (msg.kind === "compare") { self.postMessage({ kind: "compare", res: onCompare(msg) }); return; }
+    if (msg.kind === "compare") { onCompare(msg); return; }
     if (msg.kind === "run") { onRun(msg); self.postMessage({ kind: "run", id: msg.id }); return; }
     if (msg.kind === "job") {
       if (!run || msg.runId !== run.id) { self.postMessage({ kind: "job", stale: true, seq: msg.seq }); return; }

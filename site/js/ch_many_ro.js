@@ -1,0 +1,98 @@
+// Chapter "many": readout helpers shared by the worker (ch_many_worker.js) and offline checks in node (pure module,
+// no DOM). Scores in the three settings of SPEC §7.3, the parts-sum estimator of docs/findings.md F10, and the
+// dense-vs-sparse comparison run to convergence.
+import * as E from "./engine.js";
+import { measurementGram, eigvalsSym, summarise } from "./ch_many_meas.js";
+
+export const SETTINGS = ["known", "scale", "contrast"];
+
+// Ck: estimate with theta known (scored under 'known' and 'scale'); Cp: theta-free estimate (scored under 'contrast')
+export function scoreAll(Ck, Cp, S, B, k) {
+  const out = {};
+  for (const st of SETTINGS) {
+    const m = E.compareCov(st === "contrast" ? Cp : Ck, S, B, { setting: st, k });
+    out[st] = { cos: m.cosine, rel: m.relErr, bw: m.bw, sub: m.subspace, neg: m.negFrac, scale: m.scale };
+  }
+  return out;
+}
+
+// Dead neuron: every I–B weight at the floor (max_b w_ib ≤ 1.5 wmin), as in hebb/sweeps.
+export function deadMask(Wib, Mib, N, B, wmin) {
+  const dead = new Uint8Array(N);
+  for (let i = 0; i < N; i++) { let mx = 0; for (let b = 0; b < B; b++) if (Mib[i * B + b] && Wib[i * B + b] > mx) mx = Wib[i * B + b]; dead[i] = mx <= 1.5 * wmin ? 1 : 0; }
+  return dead;
+}
+
+// Parts-sum (findings F10): C = θ11ᵀ + Σ_k c_k h_k h_kᵀ/|h_k|², over clusters with at least one live member;
+// h_k = member mean of h, c_k = (λ/η)·Σ_b w_ib of a member (mean over live members). Returns {C, K, parts:[{h, c, n}]}.
+export function partsSum(H, Wib, Mib, N, B, P, labels, K) {
+  const dead = deadMask(Wib, Mib, N, B, P.wmin);
+  const h = new Float64Array(K * B), n = new Int32Array(K), nl = new Int32Array(K), cs = new Float64Array(K);
+  for (let i = 0; i < N; i++) {
+    const k = labels[i]; n[k]++;
+    for (let b = 0; b < B; b++) h[k * B + b] += H[i * B + b];
+    if (dead[i]) continue;
+    nl[k]++; let s = 0; for (let b = 0; b < B; b++) s += Wib[i * B + b];
+    cs[k] += s * P.lam / P.eta;
+  }
+  const C = new Float64Array(B * B).fill(P.theta), parts = [];
+  for (let k = 0; k < K; k++) {
+    if (!nl[k]) continue;
+    const c = cs[k] / nl[k];
+    let q = 0; for (let b = 0; b < B; b++) { h[k * B + b] /= n[k]; q += h[k * B + b] ** 2; }
+    if (q <= 0) continue;
+    for (let a = 0; a < B; a++) for (let b = 0; b < B; b++) C[a * B + b] += c * h[k * B + a] * h[k * B + b] / q;
+    parts.push({ c, n: n[k] });
+  }
+  return { C, K: parts.length, parts };
+}
+
+// Masked least-squares readout, theta known and theta unknown ('project' is exact for γ = 1; otherwise fitted).
+export function readPair(H, Wii, Wib, Mii, Mib, N, B, P, opts = {}, warm = null, key = "") {
+  const base = { theta: P.theta, lam: P.lam, eta: P.eta, gamma: P.gamma, wmin: P.wmin, maxIter: 300, ...opts };
+  const rk = E.readoutLS(H, Wii, Wib, Mii, Mib, N, B, { ...base, thetaMode: "known", x0: warm ? warm.get(key + ":k") : undefined });
+  const mode = P.gamma === 1 ? "project" : "fit";
+  const rp = E.readoutLS(H, Wii, Wib, Mii, Mib, N, B, { ...base, thetaMode: mode, x0: warm ? warm.get(key + ":p") : undefined });
+  if (warm) { warm.set(key + ":k", rk.C); warm.set(key + ":p", rp.C); }
+  return { rk, rp, mode };
+}
+
+// One network run to convergence, then: K, dead, directions pinned down, masked LS and parts-sum scores, and the
+// best masked-LS contrast cosine seen along training (the readout applied as if at equilibrium every `every` steps).
+export function runAndScore({ Sigma, B, N, theta, gamma, wmin, seed, k, p, iiScale = 0.03, dt = 0.05, tol = 1e-7, maxSteps = 12000, every = 10, track = 600 }) {
+  const P = { ...E.defaultParams(), theta, gamma, wmin, dt };
+  const s = E.createState({ N, B, seed, p, iiScale });
+  const warm = new Map();
+  let steps = 0, peak = -Infinity, peakStep = 0;
+  while (steps < maxSteps) {
+    const n = steps < track ? every : 50;
+    E.advance(s, Sigma, P, n); steps += n;
+    if (steps <= track) {
+      const H = E.harmonicFrom(s.Wii, s.Wib, N, B);
+      const rp = E.readoutLS(H, s.Wii, s.Wib, s.Mii, s.Mib, N, B, { theta, lam: P.lam, eta: P.eta, gamma, wmin, maxIter: 200, thetaMode: gamma === 1 ? "project" : "fit", x0: warm.get("t") });
+      warm.set("t", rp.C);
+      const c = E.compareCov(rp.C, Sigma, B, { setting: "contrast", k }).cosine;
+      if (c > peak) { peak = c; peakStep = steps; }
+    } else if (s.resid / P.eta < tol) break;
+  }
+  const r = E.stationarity(s, Sigma, P).r / P.eta;
+  const H = E.harmonicFrom(s.Wii, s.Wib, N, B);
+  const cl = E.clustersAuto(H, N, B);
+  const dead = deadMask(s.Wib, s.Mib, N, B, wmin).reduce((a, x) => a + x, 0);
+  const pr = readPair(H, s.Wii, s.Wib, s.Mii, s.Mib, N, B, P, { maxIter: 2000 });
+  const sc = scoreAll(pr.rk.C, pr.rp.C, Sigma, B, k);
+  const ps = partsSum(H, s.Wib, s.Mib, N, B, P, cl.labels, cl.K);
+  const sp = scoreAll(ps.C, E.project1(ps.C, B), Sigma, B, k);
+  const eq = E.readoutEquations(s.Wii, s.Wib, s.Mii, s.Mib, N, B, { theta, lam: P.lam, eta: P.eta, gamma, wmin });
+  const G = measurementGram(H, eq, N, B, { families: ["both"] });
+  const dir = summarise(eigvalsSym(G.both, G.p), 1e-5).rank;
+  return { p, wmin, K: cl.K, dead, dir, pdim: G.p, steps, resid: r,
+    cosK: sc.known.cos, cosC: sc.contrast.cos, bwC: sc.contrast.bw, sub: sc.contrast.sub,
+    psC: sp.contrast.cos, psBW: sp.contrast.bw, peak, peakT: peakStep * dt };
+}
+
+export function identityRow(Sigma, B, k) {
+  const I = new Float64Array(B * B); for (let b = 0; b < B; b++) I[b * B + b] = 1;
+  const id = scoreAll(I, I, Sigma, B, k);
+  return { p: "id", cosK: id.known.cos, cosC: id.contrast.cos, bwC: id.contrast.bw, sub: id.contrast.sub };
+}

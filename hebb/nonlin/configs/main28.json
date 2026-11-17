@@ -1,0 +1,53 @@
+{
+ "defaults": {
+  "res": 28,
+  "N": 3920,
+  "steps": 3000,
+  "n_snap": 24,
+  "n_sub": 256,
+  "nls_iters": 200,
+  "seed": 0
+ },
+ "units": [
+  {
+   "rule": "linear",
+   "input": "pixels",
+   "theta": 0.2638,
+   "extra": {
+    "q": 0.95,
+    "exp": "A28_lin"
+   }
+  },
+  {
+   "rule": "rect",
+   "tau": 0.0,
+   "input": "pixels",
+   "theta": 0.2628,
+   "c": 1.4420684131351027,
+   "extra": {
+    "q": 0.95,
+    "exp": "A28_rect"
+   }
+  },
+  {
+   "rule": "linear",
+   "input": "pixels",
+   "theta": 0.3961,
+   "extra": {
+    "q": 0.97,
+    "exp": "A28_lin"
+   }
+  },
+  {
+   "rule": "rect",
+   "tau": 0.0,
+   "input": "pixels",
+   "theta": 0.3824,
+   "c": 1.4420684131351027,
+   "extra": {
+    "q": 0.97,
+    "exp": "A28_rect"
+   }
+  }
+ ]
+}

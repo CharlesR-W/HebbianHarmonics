@@ -65,3 +65,18 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def main28():
+    """28x28 (B=784, N=5B=3920): linear vs rectified tau=0 at q=0.95, 0.97, seed 0."""
+    t = tables(28)
+    (OUT / "theta_table28.json").write_text(json.dumps(t, indent=1))
+    units = []
+    for q in (0.95, 0.97):
+        i = QS.index(q)
+        units.append(dict(rule="linear", input="pixels", theta=round(t["linear"]["theta"][i], 4), extra=dict(q=q, exp="A28_lin")))
+        T = t["rect_t0"]
+        units.append(dict(rule="rect", tau=0.0, input="pixels", theta=round(T["theta"][i], 4), c=T["c"], extra=dict(q=q, exp="A28_rect")))
+    cfg = {"defaults": dict(res=28, N=3920, steps=3000, n_snap=24, n_sub=256, nls_iters=200, seed=0), "units": units}
+    (OUT / "main28.json").write_text(json.dumps(cfg, indent=1))
+    print(json.dumps(units, indent=1))

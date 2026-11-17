@@ -27,6 +27,7 @@ const JITTER = 1e-3;      // optional private multiplicative jitter per step, w 
 const KEYS = Object.keys(DEF);
 const EQ_TOL = 1e-6;      // the equilibrium readout is claimed only when r/η < EQ_TOL
 const DONE_TOL = 1e-8;    // the run pauses ("converged") when r/η < DONE_TOL
+const SEQ_TOL = 1e-6;     // a tour step counts as converged at r/η < SEQ_TOL (docs/findings.md uses 1e-5)
 const SPEC_TOL = 1e-5;    // a direction of Sym(B) counts as pinned down when its AᵀA eigenvalue > SPEC_TOL × largest
 const MAX_EDGES = 4000;
 const sub = n => String(n).replace(/\d/g, d => "₀₁₂₃₄₅₆₇₈₉"[d]);
@@ -37,8 +38,12 @@ const sci = x => (Number.isFinite(x) ? (x === 0 ? "0" : ui.fmt(x, 2)) : "n/a");
 // Tours: exact states (every key), verified with the engine (see the chapter's report). `seq` steps θ through a list,
 // each step run to convergence; `cont` keeps the weights between steps (otherwise each restarts from the same init).
 const TOURS = [
-  { id: "sweep", group: "c", label: "θ sweep on blocks", params: { fam: "blocks", b: 24, nb: 4, win: 0.5, btw: 0.1, theta: 0.1, p: 1, n: 150, seed: 1 }, seq: [0.1, 0.3, 0.6],
-    note: "Four planted blocks of six inputs (within 0.5, between 0.1). Each step restarts from the same initial weights at a larger $\\theta$: $0.1 \\to$ one cluster on all 24 inputs, $0.3 \\to$ one cluster per block, $0.6 \\to$ one cluster per input." },
+  { id: "sweep", group: "c", label: "θ sweep on blocks", params: { fam: "blocks", b: 24, nb: 4, win: 0.5, btw: 0.1, theta: 0.05, p: 1, n: 150, seed: 1 }, seq: [0.05, 0.15, 0.3, 0.6],
+    note: "Four planted blocks of six inputs (within 0.5, between 0.1; $\\gamma\\kappa_0 = 0.22$). Each step restarts from the same initial weights at a larger $\\theta$: $0.05 \\to$ one cluster on all 24 inputs; $0.15 \\to$ one cluster on ONE block (four block parts exist, the bound population takes one); $0.3 \\to$ one cluster per block; $0.6 \\to$ one cluster per input." },
+  { id: "bound", group: "c", label: "Bound: four parts, one cluster", params: { fam: "blocks", b: 24, nb: 4, win: 0.5, btw: 0.1, theta: 0.15, p: 1, n: 150, seed: 1 },
+    note: "The same blocks at $\\theta = 0.15$: above the between-block correlation, so each block is a stable part, but below $\\gamma\\kappa_0 = 0.22$, so every lateral synapse grows at first. The population moves as one blob and all 150 neurons land on a single block. <a href=\"#many?tour=unbound\">With $\\gamma = 0$</a> (no lateral plasticity) neurons choose independently: four clusters." },
+  { id: "unbound", hidden: true, group: "c", label: "γ = 0 at θ = 0.15", params: { fam: "blocks", b: 24, nb: 4, win: 0.5, btw: 0.1, theta: 0.15, gamma: 0, p: 1, n: 150, seed: 1 },
+    note: "The bound tour without lateral plasticity ($\\gamma = 0$): nothing gates the population, and every block gets a cluster." },
   { id: "signed", group: "c", label: "Signed Σ at θ = 0", params: { fam: "pow", b: 16, alpha: 1.5, cs: 2, theta: 0, p: 1, n: 150, seed: 1 },
     note: "Power-law spectrum with signed correlations and no pruning drift ($\\theta = 0$): synapses die only where covariance is negative. Two clusters on disjoint sets of inputs. <a href=\"#many?tour=signedpos\">Same spectrum, all correlations ≥ 0</a>: one cluster." },
   { id: "signedpos", hidden: true, group: "c", label: "Σ ≥ 0 at θ = 0", params: { fam: "powpos", b: 16, alpha: 1.5, cs: 2, theta: 0, p: 1, n: 150, seed: 1 },
@@ -49,6 +54,10 @@ const TOURS = [
     note: "Hierarchical $\\Sigma_g$: 2 groups of 2 groups of 4 inputs, correlations 0.05 / 0.3 / 0.6 across / between sibling groups / within. Restarting at each $\\theta$: one cluster on all 16 → one on a top-level half → the two halves → one leaf group per half → all four leaf groups → one cluster per input (plus a few neurons that lose every synapse and float to the centroid)." },
   { id: "hyst", group: "c", label: "…without restarting", params: { fam: "hier", b: 16, theta: 0.05, p: 1, n: 150, seed: 1 }, seq: [0.05, 0.15, 0.25, 0.35, 0.45, 0.65], cont: true,
     note: "The same $\\theta$ steps, but keeping the weights between steps. The population never splits: one cluster narrows down a single branch of the tree, all 16 inputs → 8 → 4 → 2 → a single input." },
+  { id: "ringfree", group: "c", label: "Ring: place fields", params: { fam: "ring", b: 16, ell: 1.5, theta: 0.4, gamma: 0, p: 1, n: 160, seed: 1 },
+    note: "Ring covariance ($\\ell = 1.5$): its eigenvectors are Fourier modes, signed and spread round the ring. Without lateral plasticity ($\\gamma = 0$), $\\theta = 0.4$: 16 clusters, one bump of width 4 centred on each input. Localised place fields, not Fourier modes." },
+  { id: "ringpack", group: "c", label: "Ring: packing", params: { fam: "ring", b: 16, ell: 1.5, theta: 0.4, gamma: 1, p: 1, n: 160, seed: 1 },
+    note: "The same with $\\gamma = 1$: two clusters may coexist only if their cross-covariance $h_k^\\top\\Sigma_g h_l \\le \\theta/\\gamma$. Adjacent bumps overlap too much (0.645 > 0.4), so only a few non-overlapping bumps survive." },
   { id: "dense", group: "r", label: "Readout: dense wiring", params: { fam: "blocks", b: 24, nb: 4, win: 0.5, btw: 0.1, theta: 0.3, p: 1, n: 150, seed: 1 },
     note: "Default blocks, every potential synapse present ($p = 1$). Four clusters, every member a copy of its cluster's part: the weights pin down 24 of the 300 directions of $\\Sigma_g$." },
   { id: "sparse", group: "r", label: "Readout: sparse wiring", params: { fam: "blocks", b: 24, nb: 4, win: 0.5, btw: 0.1, theta: 0.3, p: 0.5, n: 150, seed: 1 },
