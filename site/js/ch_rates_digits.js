@@ -152,9 +152,10 @@ export function filmFigure(host, index, ctx) {
       const tiles = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, 32px)", gap: "3px" } });
       const tilesBox = ui.h("div", {}, ui.h("div", { class: "u-help", style: { marginBottom: "4px" }, html: "16 neurons, $h_i$" }), tiles);
       const vBox = ui.h("div", { style: { minWidth: 0 } }), rBox = ui.h("div", { style: { minWidth: 0 } });
-      const row = ui.h("div", { style: { display: "flex", flexWrap: "wrap", gap: "10px 18px", alignItems: "flex-start" } }, tilesBox,
-        ui.h("div", { style: { minWidth: 0, flex: "1 1 190px", maxWidth: "240px" } }, ui.h("div", { class: "u-help", style: { marginBottom: "4px" }, html: "voltage covariance $h_i^\\top\\Sigma_g h_j$" }), vBox),
-        ui.h("div", { style: { minWidth: 0, flex: "1 1 190px", maxWidth: "240px" } }, ui.h("div", { class: "u-help", style: { marginBottom: "4px" }, html: `rate covariance $c^2\\mathrm{Cov}(r_i, r_j)$${pi === 0 ? " (post hoc)" : ""}` }), rBox));
+      const mats = ui.h("div", { style: { display: "flex", gap: "10px 14px", alignItems: "flex-start", flex: "1 1 290px", minWidth: 0 } },
+        ui.h("div", { style: { minWidth: 0, flex: "1 1 140px", maxWidth: "240px" } }, ui.h("div", { class: "u-help", style: { marginBottom: "4px" }, html: "voltage covariance $h_i^\\top\\Sigma_g h_j$" }), vBox),
+        ui.h("div", { style: { minWidth: 0, flex: "1 1 140px", maxWidth: "240px" } }, ui.h("div", { class: "u-help", style: { marginBottom: "4px" }, html: `rate covariance $c^2\\mathrm{Cov}(r_i, r_j)$${pi === 0 ? " (post hoc)" : ""}` }), rBox));
+      const row = ui.h("div", { style: { display: "flex", flexWrap: "wrap", gap: "10px 18px", alignItems: "flex-start" } }, tilesBox, mats);
       body.append(ui.h("div", { style: { flex: "1 1 560px", minWidth: 0 } }, head, row));
       ui.renderMath(row);
       const groups = groupsOf(r);
