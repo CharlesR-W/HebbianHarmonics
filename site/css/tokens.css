@@ -1,0 +1,49 @@
+/* Colour tokens: the ONE source of truth for colour. js/palette.js reads these custom properties at import
+   time, so JS and CSS can never disagree. Change a colour here and nowhere else. Grammar: DESIGN.md "Colour". */
+:root {
+  /* ink and surfaces (text never takes a data colour) */
+  --bg: #fafaf8;
+  --surface: #ffffff;
+  --fg: #16161a;
+  --ink-2: #3f3e3b;
+  --mute: #6b6b70;
+  --mute-2: #8d8c86;
+  --line: #e4e3de;
+  --line-2: #efeee9;
+  --wash: #f2f1ec;
+  --accent: #c2410c;          /* caveats, the "Exploratory report" pill; never a data colour */
+  --focus: #2a78d6;
+
+  /* categorical (identity): fixed order, never cycled. Validated (dataviz validate_palette.js, light surface):
+     adjacent CVD dE >= 9.1, normal-vision dE >= 19.6. The first three are safe all-pairs (scatter). */
+  --c-cat-0: #2a78d6;   /* blue    */
+  --c-cat-1: #eb6834;   /* orange  */
+  --c-cat-2: #1baf7a;   /* aqua    */
+  --c-cat-3: #eda100;   /* yellow  */
+  --c-cat-4: #e87ba4;   /* magenta */
+  --c-cat-5: #008300;   /* green   */
+  --c-cat-6: #6250d6;   /* violet  */
+  --c-cat-7: #e34948;   /* red     */
+  --c-other: #c9c8c1;   /* "other" / unassigned / below threshold */
+
+  /* MNIST digits 0-9 (only ever with labels; never mixed with cat-* in one figure) */
+  --c-digit-0: #2a78d6; --c-digit-1: #16a39a; --c-digit-2: #eda100; --c-digit-3: #d6336c; --c-digit-4: #7a8b12;
+  --c-digit-5: #eb6834; --c-digit-6: #008300; --c-digit-7: #e87ba4; --c-digit-8: #6250d6; --c-digit-9: #33508f;
+
+  /* neurons */
+  --c-interior: #6f6e69;      /* interior neuron with no colour encoding */
+  --c-boundary: #16161a;      /* boundary neuron when B > 8 (no per-neuron hue) */
+  --c-edge: #16161a;          /* synapses: ink, opacity proportional to w / w_max */
+
+  /* sequential "seq" (generic magnitude: counts, errors, phase diagrams): blue, light -> dark */
+  --c-seq-0: #f3f7fc; --c-seq-1: #cde2fb; --c-seq-2: #9ec5f4; --c-seq-3: #6da7ec; --c-seq-4: #3987e5;
+  --c-seq-5: #256abf; --c-seq-6: #184f95; --c-seq-7: #0d366b; --c-seq-8: #081f40;
+
+  /* sequential "ink" (weights / conductances ONLY): warm grey, paper -> ink. Same metaphor as edge opacity. */
+  --c-ink-0: #f5f4f0; --c-ink-1: #e2e1db; --c-ink-2: #c7c6bf; --c-ink-3: #a6a59e; --c-ink-4: #85847e;
+  --c-ink-5: #64635e; --c-ink-6: #464541; --c-ink-7: #2b2b28; --c-ink-8: #16161a;
+
+  /* diverging "div" (covariance, similarity, signed loadings): blue (-) / grey 0 / red (+), zero-centred */
+  --c-div-0: #174a8c; --c-div-1: #2f6db3; --c-div-2: #6a9fd2; --c-div-3: #adc9e6; --c-div-4: #f0efec;
+  --c-div-5: #ebb2a3; --c-div-6: #d6705b; --c-div-7: #b2342c; --c-div-8: #7f1820;
+}

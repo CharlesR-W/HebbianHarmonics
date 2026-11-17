@@ -30,7 +30,18 @@ amending, the page says so and shows the evidence.
   `gamma`, `p`, and the initial condition. `lambda/eta` only sets the weight scale and
   the timescale. Mean-field mode integrates the ODE with the exact `Sigma_g`;
   stochastic mode uses minibatch covariance estimates.
-- Fixed point on unclipped ("active") edges: `h_i^T Sigma_g h_j = theta + (lambda/eta_ij) w_ij`.
+- Fixed point on unclipped ("active") edges (w0 = -eta*theta is shared by both edge
+  types, so gamma rescales the lateral threshold too):
+  I–B: `(H Sigma)_ib = theta + (lambda/eta) w_ib`;
+  I–I: `h_i^T Sigma h_j = theta/gamma + (lambda/(gamma*eta)) w_ij`.
+  Clipped edges satisfy the corresponding `<=` with `w = w_min`. gamma = 0 means
+  no lateral plasticity (handle explicitly, never divide by it).
+- Stationarity: the projected residual `r = max |dw/dt|` over edges, where edges at
+  the floor with negative drift count as 0. Equilibrium statements and the
+  equilibrium readout are only claimed when `r` is below a stated tolerance; the page
+  shows `r` live. Away from equilibrium the exact relation is
+  `h_i^T C h_j = (dw_ij/dt - w0 + lambda w_ij)/eta_ij`; a readout applied mid-training
+  or to the untrained net is labelled "equilibrium assumption violated" (control).
 
 ## 2. What the prototype already shows (scratch/proto*.py) — to be verified, not assumed
 
@@ -132,3 +143,29 @@ labelled as such. Tone: first person, exploratory, title plus a joke "or, ..." s
 All chapters load with zero console errors; screenshots of each chapter inspected;
 engine JS/Python cross-check passes; MNIST numbers on the page match the saved
 artifacts; GPT review rounds addressed; published with `results publish`.
+
+## 7. Amendments after GPT review (round 1) — these override anything above
+
+1. Lateral fixed point uses `theta/gamma` (see §1). Readout equations likewise.
+2. "theta <= 0 gives one cluster" holds only when Sigma has no negative entries.
+   Negative covariances are pruned by the clip at any theta (e.g. Sigma = I - 11^T/3
+   gives three vertex clusters at theta = 0). Chapters must include a signed-covariance
+   preset and distinguish "pruning by drift (w0 < 0)" from "pruning by anticorrelation".
+   Chapter conclusions follow verified results in docs/findings.md, never the reverse.
+3. Readout identifiability: I–B equations observe `H C` (not only `H C H^T`), so they
+   constrain more than the row space of H. With gamma != 1 an unknown theta is NOT a
+   pure `11^T` shift for the combined system. Report, per edge family, the rank /
+   conditioning of the measurement operator on symmetric matrices. Keep three settings
+   apart: parameters known (score the full covariance, no projection); unknown scale;
+   unknown theta (score `P C P`, labelled "contrast-subspace score", P = I - 11^T/B —
+   note this also discards `1 a^T + a 1^T` terms).
+4. Bures–Wasserstein needs PSD: always clip negative eigenvalues of C_hat before it,
+   and report the negative spectral mass removed. Normalisation:
+   `BW(A,B)^2 / tr(B)` with A scaled to minimise it; define the all-zero case as 1.
+5. Allocation protocol: besides descriptive scatter plots, a controlled planted-family
+   experiment — fixed supports and init protocol, vary one planted block's energy
+   (variance) or size, match learned clusters to planted supports, paired seeds, report
+   unresolved/missing modes and seed variability. "Cluster energy" h^T Sigma h is an
+   outcome; planted energy is the controlled input. Cluster definition must be stated
+   and shown robust to tolerance/order (leader clustering in core.clusters is a quick
+   look, not the headline definition).
