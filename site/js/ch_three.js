@@ -58,8 +58,9 @@ export async function init(panel, ctx) {
   function renderKappa() {
     const S = M.sigmaOf(p); let k0 = 0; for (let q = 0; q < 9; q++) k0 += S[q]; k0 /= 9;
     const tc = p.gamma * k0, below = p.theta < tc;
-    kappaLine.innerHTML = `$\\kappa_0 = \\mathbf 1^\\top\\Sigma_g\\mathbf 1/B^2 = ${ui.fmt(k0, 3)}$ (mean covariance of two random starting neurons); collective threshold $\\gamma\\kappa_0 = ${ui.fmt(tc, 3)}$. ` +
-      (below ? "<b>θ is below it</b>: the population binds early and lands on one part." : "θ is above it: neurons choose parts independently.");
+    kappaLine.innerHTML = `$\\kappa_0 = \\mathbf 1^\\top\\Sigma_g\\mathbf 1/B^2 = ${ui.fmt(k0, 3)}$ (mean covariance of two random starting neurons); heuristic collective crossover $\\gamma\\kappa_0 = ${ui.fmt(tc, 3)}$. ` +
+      (below ? "<b>θ is below it</b>: expect the population to bind early and land on one part." : "θ is above it: expect neurons to choose parts independently.") +
+      " (A rule of thumb from the initial lateral drift, not a derived boundary; it moves with the initial weights.)";
     ui.renderMath(kappaLine);
   }
   const gammaS = ui.slider({ label: "lateral gain $\\gamma$", min: 0, max: 2, step: 0.05, value: p.gamma, fmt: x => ui.fmtFixed(x, 2),

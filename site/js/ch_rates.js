@@ -139,11 +139,11 @@ function scoreTable(tbody, S) {
       `live clusters at $q = 0.980$: rectified ${rg(S.rectLiveAtQ98, String)}, linear ${rg(S.linLiveAtQ98, String)}; most major clusters in any 14×14 rectified run: ${S.rectMajorMax}`],
     ["not", "<b>Diverse members</b>", "Members of the cluster are exact clones computing one function.",
       `mean $L_1$ distance to the centroid ≤ ${ui.fmt(S.cloneL1, 2)}`],
-    ["not", "<b>A better code</b>", "Linear probes on the rates are worse than on the pixels, the untrained network or random features.",
+    ["not", "<b>A better code</b>", "Linear probes on the rates are worse than on the pixels, the untrained network or random features; a one-cluster linear network scores the same, so the cluster count sets the score.",
       `rectified (1 cluster) ${rg(p.rectOne)}; linear with ≥ 3 clusters ${rg(p.linMany)}, with 1 cluster ${rg(p.linOne)}; pixels ${f3(p.pixels)}; untrained rates ${f2(p.untrained)}; random ReLU ${f2(p.randrelu)}`],
     ["not", "<b>A test of the allocation law</b>", "Neurons per cluster against energy needs two or more major clusters; the rectified rule never gave them.", "—"],
     ["not", "<b>An unbiased readout on real data</b>", "Inverting $k_\\tau$ overstates the learned part's energy by exactly the measured higher-order excess.",
-      `${ro}<br>Gaussian-trained nets: ${rg(S.readoutSurr, f3)}; linear rule: ${rg(S.readoutLin)}`],
+      `${ro}<br>Gaussian-trained nets: ${rg(S.readoutSurr, f3)} with $\\gamma = 1$, ${rg(S.readoutSurrG0)} with $\\gamma = 0$; linear rule: ${rg(S.readoutLin)}`],
   ];
   const tag = k => (k === "adds" ? '<span class="verdict holds">adds</span>' : '<span class="verdict fails">does not add</span>');
   tbody.replaceChildren(...rows.map(([k, what, how, ev]) => ui.h("tr", {},

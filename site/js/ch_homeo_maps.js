@@ -247,9 +247,13 @@ function ingredientsTable(el, ingr, limit, alloc, pn) {
     ["soft floor ρ = −w + ε/w", "ε = 10⁻³ / 10⁻² / 0.03, θ = 0.2", [0.001, 0.01, 0.03].map(e => { const f = fr(R("rho_softfloor", 0.2, "par", e)); return dead(f) ? "dead" : b(R("rho_softfloor", 0.2, "par", e)); }).join(" / "), "steeper, or lethal", "yes, not robust"],
     pn ? (() => { const r = sg => pn.stationary_diag.find(q => q.kind === "inp" && q.theta === 0.2 && q.sigma === sg);
       return ["private input noise (stationary law)", "σ = 0.2 / 0.4 / 0.8, θ = 0.2", [0.2, 0.4, 0.8].map(sg => r(sg).beta == null ? "WTA" : ui.fmtFixed(r(sg).beta, 1)).join(" / "),
-        `forgets the start; graded only while many neurons are between parts (in transit: ${[0.2, 0.4, 0.8].map(sg => ui.fmtPct(r(sg).transit, 0)).join(" / ")}); θ drops out except for the cutoff`, "yes, via σ, not θ"]; })()
+        `forgets the start; winner-take-all where parts stay intact, graded only while many neurons are between parts (in transit: ${[0.2, 0.4, 0.8].map(sg => ui.fmtPct(r(sg).transit, 0)).join(" / ")}); θ drops out except for the cutoff`, "yes, via σ, not θ"]; })()
+      : null,
+    pn ? (() => { const m = wm => pn.stationary_diag.find(q => isRow(q, "mul", wm) && q.theta === 0.05 && q.sigma === 2);
+      return ["private multiplicative noise", "w_min = 10⁻⁴ / 0.01, θ = 0.05, σ = 2", `– / ${ui.fmtFixed(m(0.01).beta, 1)}`,
+        `default floor: never equilibrates (pruned synapses do not regrow), the start is kept; w_min = 0.01: ${ui.fmtPct(outside(m(0.01)), 0)} off the loudest part at ${ui.fmtPct(m(0.01).transit, 0)} in transit, but ω = N w_min ≥ 1.2 (lone neurons only; lethal for dense lateral networks)`, "only with a large floor"]; })()
       : ["private (per-synapse) noise", "–", "not measured", "open", "?"],
-  ];
+  ].filter(Boolean);
   const tb = ui.h("table", { class: "data" },
     ui.h("thead", {}, ui.h("tr", {}, ...["ingredient", "setting", "β", "effect on allocation", "changes β?"].map(t => ui.h("th", { text: t })))),
     ui.h("tbody", {}, ...rows.map(r => ui.h("tr", {}, ui.h("td", { text: r[0] }), ui.h("td", { text: r[1] }), ui.h("td", { class: "num", text: r[2] }), ui.h("td", { text: r[3] }), ui.h("td", { text: r[4] })))));
@@ -318,47 +322,67 @@ async function privateNoise(slots, index) {
   noiseBeta(slots.beta, st);
   return d;
 }
+// Rows of one model. mul rows are selected by floor and the validated step (dt = 0.0125); add/inp rows are the
+// reflected-scheme reruns at the default floor.
+const MODELS = { inp: "input (covariance estimation)", add: "additive", mul: "multiplicative" };
+const isRow = (r, kind, wmin) => r.kind === kind && (kind !== "mul" || (r.wmin === wmin && r.dt === 0.0125));
+const outside = r => 1 - r.alloc[r.alloc.length - 1];
 function noiseLaw(el, d, v, st) {
   const ctl = ui.h("div", { style: { display: "flex", gap: "18px", flexWrap: "wrap", alignItems: "end" } }), ch = ui.h("div");
-  el.replaceChildren(ctl, ch);
+  const note = ui.h("div", { class: "u-help", style: { marginTop: "4px" } });
+  el.replaceChildren(ctl, ch, note);
   let kind = "inp", th = 0.2;
-  const kS = ui.segmented({ label: "noise model", options: [{ value: "inp", label: "input (covariance estimation)" }, { value: "add", label: "additive" }], value: kind, onChange: x => { kind = x; draw(); } });
-  const tS = ui.segmented({ label: "θ", options: [0.05, 0.2, 0.4].map(x => ({ value: x, label: String(x) })), value: th, onChange: x => { th = x; draw(); } });
-  ctl.append(kS.el, tS.el);
-  const chart = lineChart(ch, { series: [{ name: "", x: [1], y: [1] }], xlog: true, ylog: true, height: 290, xrange: [0.45, 3.3], yrange: [1e-3, 1.2],
+  const OPTS = [{ value: "inp", label: "input" }, { value: "add", label: "additive" }, { value: "mul:0.01", label: "multiplicative, w_min = 0.01" }, { value: "mul:0.03", label: "multiplicative, w_min = 0.03" }];
+  const parse = k => k.startsWith("mul") ? ["mul", +k.split(":")[1]] : [k, 1e-4];
+  const thetas = k => { const [kd, wm] = parse(k); return [...new Set(st.filter(r => isRow(r, kd, wm)).map(r => r.theta))].sort((a, b) => a - b); };
+  const tHost = ui.h("div");
+  const kS = ui.segmented({ label: "noise model", options: OPTS, value: kind, onChange: x => { kind = x; buildTheta(); draw(); } });
+  function buildTheta() {
+    const ts = thetas(kind); if (!ts.includes(th)) th = ts.includes(0.2) ? 0.2 : ts[0];
+    tHost.replaceChildren(ui.segmented({ label: "θ", options: ts.map(x => ({ value: x, label: String(x) })), value: th, onChange: x => { th = x; draw(); } }).el);
+  }
+  ctl.append(kS.el, tHost); buildTheta();
+  const chart = lineChart(ch, { series: [{ name: "", x: [1], y: [1] }], xlog: true, ylog: true, height: 270, xrange: [0.45, 3.3], yrange: [1e-3, 1.2],
     xlabel: "energy of the part: variance v of the input (log)", ylabel: "stationary fraction of neurons", xname: "v", yfmt: v => ui.fmt(v, 2) });
+  const m0 = st.filter(r => isRow(r, "mul", 1e-4)), disj = m0.filter(r => r.tv_weak_strong >= 0.995).length;
+  note.innerHTML = `Multiplicative noise at the default floor ($w_{\\min} = 10^{-4}$) is not drawn: it never equilibrates, and populations started on the weakest and on the loudest input stay disjoint (total variation ≥ 0.995) in ${disj} of ${m0.length} cells.`;
   function draw() {
-    const rows = st.filter(r => r.kind === kind && r.theta === th && r.sigma <= 0.8 && r.alloc.some(x => x < 0.999)).sort((a, b) => a.sigma - b.sigma);
+    const [kd, wm] = parse(kind);
+    const rows = st.filter(r => isRow(r, kd, wm) && r.theta === th && r.sigma <= (kd === "mul" ? 3 : 0.8) && r.alloc.some(x => x < 0.999)).sort((a, b) => a.sigma - b.sigma);
     const series = rows.map((r, k) => {
-      const fit = kind === "inp" ? (r.beta != null ? `β = ${ui.fmtFixed(r.beta, 1)}` : "WTA") : (r.T_exp != null ? `T = ${ui.fmtFixed(r.T_exp, 2)}` : "WTA");
+      const fit = kd === "add" ? (r.T_exp != null ? `T = ${ui.fmtFixed(r.T_exp, 2)}` : "WTA") : (r.beta != null ? `β = ${ui.fmtFixed(r.beta, 1)}` : "WTA");
       return { name: `σ = ${r.sigma}: ${fit}, ${ui.fmtPct(r.transit, 0)} in transit${r.equilibrated ? "" : " (not equilibrated)"}`, x: v, y: r.alloc.map(x => x > 0 ? x : NaN), dots: true, color: catColor(k), width: 1.6 };
     });
-    chart.update({ series });
+    chart.update({ series: series.length ? series : [{ name: "every neuron on the loudest input at every σ", x: [3], y: [1], dots: true, color: P.mute2 }] });
   }
   draw();
 }
 function noiseTime(el, d) {
   const ctl = ui.h("div", { style: { display: "flex", gap: "18px", flexWrap: "wrap", alignItems: "end" } }), ch = ui.h("div");
   el.replaceChildren(ctl, ch);
-  let kind = "inp", sig = 0.3, th = 0.2;
-  const sigmas = k => [...new Set(d.alloc_vs_time.filter(r => r.kind === k && r.theta === th).map(r => r.sigma))].sort((a, b) => a - b);
-  const sHost = ui.h("div");
-  const kS = ui.segmented({ label: "noise model", options: [{ value: "inp", label: "input" }, { value: "add", label: "additive" }], value: kind,
-    onChange: x => { kind = x; const ss = sigmas(kind); if (!ss.includes(sig)) sig = ss[Math.min(ss.length - 1, Math.floor(ss.length / 2))]; buildSigma(); draw(); } });
-  const tS = ui.segmented({ label: "θ", options: [0.05, 0.2, 0.4].map(x => ({ value: x, label: String(x) })), value: th, onChange: x => { th = x; buildSigma(); draw(); } });
-  function buildSigma() {
-    const ss = sigmas(kind); if (!ss.includes(sig)) sig = ss[0];
+  let kind = "inp", sig = 0.3, th = 0.2, wm = 1e-4;
+  const rowsOf = () => d.alloc_vs_time.filter(r => isRow(r, kind, wm));
+  const tHost = ui.h("div"), sHost = ui.h("div"), wHost = ui.h("div");
+  const kS = ui.segmented({ label: "noise model", options: Object.keys(MODELS).map(k => ({ value: k, label: k === "inp" ? "input" : MODELS[k] })), value: kind,
+    onChange: x => { kind = x; if (kind !== "mul") wm = 1e-4; build(); draw(); } });
+  function build() {
+    wHost.replaceChildren(kind === "mul" ? ui.segmented({ label: "floor w_min", options: [1e-4, 0.01, 0.03].map(x => ({ value: x, label: x === 1e-4 ? "10⁻⁴ (default)" : String(x) })), value: wm,
+      onChange: x => { wm = x; build(); draw(); } }).el : "");
+    const ts = [...new Set(rowsOf().map(r => r.theta))].sort((a, b) => a - b); if (!ts.includes(th)) th = ts.includes(0.2) ? 0.2 : ts[0];
+    tHost.replaceChildren(ui.segmented({ label: "θ", options: ts.map(x => ({ value: x, label: String(x) })), value: th, onChange: x => { th = x; build(); draw(); } }).el);
+    const ss = [...new Set(rowsOf().filter(r => r.theta === th).map(r => r.sigma))].sort((a, b) => a - b);
+    if (!ss.includes(sig)) sig = ss[Math.min(ss.length - 1, Math.floor(ss.length / 2))];
     sHost.replaceChildren(ui.segmented({ label: "σ", options: ss.map(x => ({ value: x, label: String(x) })), value: sig, onChange: x => { sig = x; draw(); } }).el);
   }
-  ctl.append(kS.el, tS.el, sHost); buildSigma();
+  ctl.append(kS.el, wHost, tHost, sHost); build();
   const tt = d.snap_times;
-  const chart = lineChart(ch, { series: [{ name: "", x: tt, y: tt.map(() => 0) }], xlog: true, yrange: [0, 1], height: 260, xlabel: "time (units of 1/λ, log)", ylabel: "fraction of neurons", xname: "t", yfmt: v => ui.fmtPct(v, 0) });
+  const chart = lineChart(ch, { series: [{ name: "", x: tt, y: tt.map(() => 0) }], xlog: true, yrange: [0, 1], height: 250, xlabel: "time (units of 1/λ, log)", ylabel: "fraction of neurons", xname: "t", yfmt: v => ui.fmtPct(v, 0) });
   const INIT = { weak: "all start on v = 0.5", strong: "all start on v = 3", rand: "random start" };
   function draw() {
-    const rows = ["weak", "rand", "strong"].map(i => d.alloc_vs_time.find(r => r.kind === kind && r.theta === th && r.sigma === sig && r.init === i)).filter(Boolean);
+    const rows = ["weak", "rand", "strong"].map(i => rowsOf().find(r => r.theta === th && r.sigma === sig && r.init === i)).filter(Boolean);
     const series = [];
-    rows.forEach((r, k) => series.push({ name: `${INIT[r.init]}: on v = 3`, x: tt, y: r.alloc.map(a => a[a.length - 1]), dots: true, color: catColor(k), r: 2.5 }));
-    rows.forEach((r, k) => series.push({ name: `${INIT[r.init]}: in transit`, x: tt, y: r.transit, dash: true, width: 1.2, color: catColor(k) }));
+    rows.forEach((r, k) => series.push({ name: `${INIT[r.init]}: on v = 3`, x: tt.slice(0, r.alloc.length), y: r.alloc.map(a => a[a.length - 1]), dots: true, color: catColor(k), r: 2.5 }));
+    rows.forEach((r, k) => series.push({ name: `${INIT[r.init]}: in transit`, x: tt.slice(0, r.transit.length), y: r.transit, dash: true, width: 1.2, color: catColor(k) }));
     chart.update({ series });
   }
   draw();
@@ -366,18 +390,24 @@ function noiseTime(el, d) {
 function noiseBeta(el, st) {
   const row = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "14px 26px" } });
   const a = ui.h("div"), b = ui.h("div");
-  row.append(ui.h("div", {}, ui.h("div", { class: "chart-title", text: "(a) the filter's exponent" }), a), ui.h("div", {}, ui.h("div", { class: "chart-title", text: "(b) its cost: neurons between parts" }), b));
+  row.append(ui.h("div", {}, ui.h("div", { class: "chart-title", text: "(a) input noise: the filter's exponent" }), a),
+    ui.h("div", {}, ui.h("div", { class: "chart-title", text: "(b) every model: share off the loudest part vs. neurons in transit" }), b));
   el.replaceChildren(row);
   const thetas = [0.05, 0.2, 0.4];
   const ser = (key, th, k) => { const rr = st.filter(r => r.kind === "inp" && r.theta === th).sort((x, y) => x.sigma - y.sigma); return { name: `θ = ${th}`, x: rr.map(r => r.sigma), y: rr.map(r => r[key] == null ? NaN : r[key]), dots: true, color: catColor(k) }; };
   lineChart(a, { height: 240, xlog: true, xrange: [0.09, 5.5], yrange: [0, 8], xlabel: "input-noise level σ (log)", ylabel: "β in n ∝ λ^β", xname: "σ", yfmt: v => ui.fmt(v, 2),
     refs: [{ y: 1, label: "β = 1" }], series: thetas.map((t, k) => ser("beta", t, k)) });
-  lineChart(b, { height: 240, xlog: true, xrange: [0.09, 5.5], yrange: [0, 1], xlabel: "input-noise level σ (log)", ylabel: "fraction in transit", xname: "σ", yfmt: v => ui.fmtPct(v, 0),
-    refs: [{ y: 0.05, label: "5%" }], series: thetas.map((t, k) => ser("transit", t, k)) });
+  const pts = (kind, wmin, name, k) => {
+    const rr = st.filter(r => isRow(r, kind, wmin) && r.equilibrated).sort((x, y) => x.transit - y.transit);
+    return { name, x: rr.map(r => r.transit), y: rr.map(outside), points: true, color: catColor(k), r: 3.5 };
+  };
+  lineChart(b, { height: 240, xrange: [0, 1], yrange: [0, 1], xlabel: "time-averaged fraction in transit", ylabel: "fraction off the loudest part", xname: "transit", xfmt: v => ui.fmtPct(v, 0), yfmt: v => ui.fmtPct(v, 0),
+    refs: [{ x: 0.09, label: "9%" }, { y: 0.05, label: "5%" }],
+    series: [pts("inp", 1e-4, "input", 0), pts("add", 1e-4, "additive", 1), pts("mul", 0.01, "multiplicative, w_min 0.01", 2), pts("mul", 0.03, "multiplicative, w_min 0.03", 3)] });
 }
 
 // ---------------------------------------------------------------------------------------- numbers in the prose
-function fillNumbers(ctx, { phase, alloc, limit, ingr, div }) {
+function fillNumbers(ctx, { phase, alloc, limit, ingr, div, pn }) {
   const L = (t, sh = "exp", sc = 0.2) => limit.rows.find(r => r.theta === t && r.shape === sh && r.scale === sc).beta;
   const pv = (th, g) => alloc.planted.find(r => r.family === "var" && r.theta === th && r.gamma === g);
   const lg = s => ingr.rows.find(r => r.tag === "init_logsigma" && r.theta === 0.2 && r.kw.logsig === s).by_time["4000"].beta;
@@ -389,5 +419,16 @@ function fillNumbers(ctx, { phase, alloc, limit, ingr, div }) {
     "kappa-block": ui.fmt(phase.covs.block12.kappa0, 3),
     "pr-max": ui.fmtFixed(Math.max(...div.axes.p_gamma0.flatMap(r => r.block_pr)), 2),
   };
+  if (pn) {
+    const st = pn.stationary_diag, inp = sg => st.filter(r => isRow(r, "inp", 1e-4) && r.sigma === sg && r.beta != null);
+    const rng = (rows, key, dig) => { const xs = rows.map(r => r[key]); const lo = Math.min(...xs), hi = Math.max(...xs); return ui.fmtFixed(lo, dig) === ui.fmtFixed(hi, dig) ? ui.fmtFixed(lo, dig) : `${ui.fmtFixed(lo, dig)}–${ui.fmtFixed(hi, dig)}`; };
+    const pctRange = rows => { const xs = rows.map(r => Math.round(100 * r.transit)); return `${Math.min(...xs)}–${Math.max(...xs)}%`; };
+    const m01 = st.find(r => isRow(r, "mul", 0.01) && r.theta === 0.05 && r.sigma === 2);
+    Object.assign(vals, {
+      "pn-b025": rng(inp(0.25), "beta", 1), "pn-b08": rng(inp(0.8), "beta", 1), "pn-b5": ui.fmtFixed(inp(5)[0].beta, 2), "pn-b3": ui.fmtFixed(inp(3)[0].beta, 2),
+      "pn-t025": pctRange(inp(0.25)), "pn-t08": pctRange(inp(0.8)),
+      "pn-mul-off": ui.fmtPct(outside(m01), 0), "pn-mul-tr": ui.fmtPct(m01.transit, 0),
+    });
+  }
   ctx.article.querySelectorAll("[data-v]").forEach(e => { if (vals[e.dataset.v] != null) e.textContent = vals[e.dataset.v]; });
 }

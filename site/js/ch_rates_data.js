@@ -100,6 +100,8 @@ export function summarise(index) {
       expected: runs.map(r => mainPart(r)?.energy_ratio_gauss_expected_cov) };
   });
   S.readoutSurr = range(g1.filter(r => (r.exp === "B_rect" || r.exp === "Bown_rect")).map(r => mainPart(r)?.energy_ratio_gauss_both));
+  // the same surrogate nets without lateral plasticity (gamma = 0: input-synapse equations only)
+  S.readoutSurrG0 = range(R.filter(r => r.gamma === 0 && (r.exp === "G0_B_rect" || r.exp === "G0_Bown_rect")).map(r => mainPart(r)?.energy_ratio_gauss_both));
   S.readoutLin = range(R.filter(isLin).map(r => mainPart(r)?.energy_ratio_ls_both));
   S.readoutG0 = range(R.filter(r => r.exp === "G0_A_rect" && r.tau === 0).map(r => mainPart(r)?.energy_ratio_gauss_both));
   return S;

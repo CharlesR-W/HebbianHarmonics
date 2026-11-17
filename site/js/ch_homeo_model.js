@@ -21,14 +21,21 @@ export const INITS = [
   { id: "ln3", label: "log-normal, log-sd 3", logsd: 3, short: "log-sd 3" },
 ];
 export const BATCHES = [0, 8, 32, 128, 512];          // 0 = mean-field (exact Sigma)
-// Private (per-synapse, independent) noise, the three models of findings_private_noise.md F11; sigma per sqrt(1/lambda).
-//   inp: each synapse estimates Cov from its own samples (1/sigma^2 per unit time): Var per step sigma^2 dt (Cxx Cyy + Cxy^2)
-//   add: w += sigma sqrt(dt) xi;  mul: w <- w exp(sigma sqrt(dt) xi); all clipped at the floor afterwards
+// Private (per-synapse, independent) noise, the three models of findings_private_noise.md F11 (revised 2026-11-17);
+// sigma per sqrt(1/lambda). With h frozen over a step, a synapse drifts towards c = (w0 + eta_ij Cov)/lambda at rate lambda.
+//   inp: Ito dw = lam (c - w) dt + noise of a private covariance estimate (1/sigma^2 samples per unit time):
+//        Var per step sigma^2 dt (Cxx Cyy + Cxy^2); reflected at the floor
+//   add: Ito dw = lam (c - w) dt + sigma dW, reflected at the floor
+//   mul: Ito dw = lam (c - w) dt + sigma w dW (mean-neutral), integrated in log w, reflected at log w_min
+// Scheme (F11, mean-field): Strang splitting. Exact half-step of the drift (sticking at w_min), the noise increment
+// reflected at w_min (in log w for mul, whose drift half-steps use dw/dt = lam (c - (1 + sigma^2/2) w)), half-step again.
+// With minibatch plasticity the engine's Euler step is followed by the reflected kick (Lie splitting).
 export const NOISES = [
   { id: "none", label: "none" },
   { id: "inp:0.2", label: "input noise σ = 0.2" }, { id: "inp:0.3", label: "input noise σ = 0.3" },
   { id: "inp:0.4", label: "input noise σ = 0.4" }, { id: "inp:0.6", label: "input noise σ = 0.6" },
   { id: "add:0.3", label: "additive σ = 0.3" }, { id: "add:0.7", label: "additive σ = 0.7" },
+  { id: "mul:1", label: "multiplicative σ = 1" },
 ];
 export const noiseOf = id => { if (!id || id === "none") return null; const [kind, s] = id.split(":"); return { kind, sigma: +s }; };
 
@@ -60,11 +67,11 @@ export const TOURS = [
   { id: "mnist", group: "m", label: "MNIST parts", params: { cov: "mnist49", theta: 0.6, gamma: 1, omega: 0.02, n: 150 },
     note: "Real covariance: MNIST digits at $7\\times7$, $\\theta = 0.6$, $\\gamma = 1$. Eight parts exist, each a small set of 1–5 pixels that brighten together; four are populated, the two most energetic ($\\lambda \\approx 5.3$) with 56–76 neurons each and two quieter ones with 5–15 (seeds 1–3). Compare (d) with the eigenvectors in (e)." },
   { id: "noise-wta", group: "n", label: "Noise: winner", params: { cov: "graded6", theta: 0.2, gamma: 0, omega: 0.02, n: 200, noise: "inp:0.2" },
-    note: "Private input noise $\\sigma = 0.2$ (each synapse estimates its covariance from its own 25 samples per unit time), $\\gamma = 0$. Neurons now hop, and the allocation forgets the start; the law it settles to is winner-take-all: by $t \\approx 200$, about 186–192 of 200 neurons sit on $v = 3$ and 7–13 are in transit (seeds 1–3; the numbers fluctuate)." },
+    note: "Private input noise $\\sigma = 0.2$ (each synapse estimates its covariance from its own 25 samples per unit time), $\\gamma = 0$. Neurons now hop between parts, and the state they settle in is winner-take-all: from $t \\approx 20$ on, 186–197 of 200 neurons sit on $v = 3$ and 3–13 are in transit (seeds 1–3, $t$ = 20 to 1000; the numbers fluctuate). Without noise the same start gives 129, 45, 17, 7 (seed 1)." },
   { id: "noise-graded", group: "n", label: "Noise: graded", params: { cov: "graded6", theta: 0.2, gamma: 0, omega: 0.02, n: 200, noise: "inp:0.4" },
-    note: "The same with $\\sigma = 0.4$: a graded allocation, but about half the neurons (roughly 90–120 of 200) are between parts at any moment; of the rest, roughly 70–95 sit on $v = 3$ and up to about 17 on $v = 2$ around $t = 200$ (seeds 1–3; the numbers fluctuate). That is the price of the graded law (findings F14, F17)." },
+    note: "The same with $\\sigma = 0.4$: the loudest part no longer holds nearly everyone, but 100–120 of 200 neurons are between parts at any moment; of the rest, 67–84 sit on $v = 3$, 6–15 on $v = 2$ and at most 5 elsewhere (seeds 1–3, $t$ = 20 to 1000; the numbers fluctuate). A graded share costs neurons in transit (findings F14, F17)." },
   { id: "noise-bound", group: "n", label: "Noise + lateral", params: { cov: "planted_energy", theta: 0.35, gamma: 1, omega: 0.02, n: 120, noise: "inp:0.3" },
-    note: "Four planted blocks of unequal energy, $\\gamma = 1$, $\\theta = 0.35$ (above the heuristic crossover $\\gamma\\kappa_0 = 0.234$), input noise $\\sigma = 0.3$: all 120 neurons end in one cluster on the loudest block (seeds 1–3, $t = 200$). Without noise the same start populates all four blocks (67–72, 31–36, 9–18, 3–4)." },
+    note: "Four planted blocks of unequal energy, $\\gamma = 1$, $\\theta = 0.35$ (above the heuristic crossover $\\gamma\\kappa_0 = 0.234$), input noise $\\sigma = 0.3$: all 120 neurons are in one cluster on the loudest block from $t = 20$ to 1000, none in transit (seeds 1–3). Without noise the same start populates four blocks (seeds 1–2: 67–72, 31–36, 9–18, 3–4) or three (seed 3: 102, 11, 7)." },
 ];
 export const tourById = id => TOURS.find(t => t.id === id) || null;
 export const tourParams = t => ({ ...DEFAULTS, ...t.params });
@@ -125,12 +132,13 @@ export function createSim(data, p0) {
     const t0 = budgetMs < Infinity ? performance.now() : 0, s = sim.s, N = s.N, B = s.B;
     let k = 0;
     while (k < n) {
+      const nz = noiseOf(sim.p.noise);
       if (sim.p.batch > 0) {
         if (!sim.sampler) sim.sampler = E.makeSampler(sim.Sigma, B, sim.p.seed + 1000);
         E.stepStochastic(s, sim.sampler, sim.P, sim.p.batch, true);
-      } else E.step(s, sim.Sigma, sim.P);
-      const nz = noiseOf(sim.p.noise);
-      if (nz) privateNoise(sim, nz);
+        if (nz) privateNoise(sim, nz, false);
+      } else if (nz) privateNoise(sim, nz, true);
+      else E.step(s, sim.Sigma, sim.P);
       k++;
       if (budgetMs < Infinity && performance.now() - t0 > budgetMs) break;
     }
@@ -146,23 +154,22 @@ export function createSim(data, p0) {
   return sim;
 }
 
-// One step of private noise on every potential synapse (after the deterministic step). Units: weights in eta/lambda,
-// sigma per sqrt(1/lambda), so the rescaled dynamics do not depend on lambda (findings_private_noise.md conventions).
-function privateNoise(sim, { kind, sigma }) {
-  const s = sim.s, N = s.N, B = s.B, H = s.H, S = sim.Sigma, r = sim.jrng, wmin = sim.P.wmin, lam = sim.p.lam, g = sim.P.gamma;
-  const amp = (ETA / lam) * sigma * Math.sqrt(lam * sim.P.dt), Wib = s.Wib, Wii = s.Wii;
-  if (kind === "mul") {
-    const a = sigma * Math.sqrt(lam * sim.P.dt);
-    for (let q = 0; q < N * B; q++) if (s.Mib[q]) Wib[q] = Math.max(wmin, Wib[q] * Math.exp(a * r.normal()));
-    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (s.Mii[i * N + j]) { const w = Math.max(wmin, Wii[i * N + j] * Math.exp(a * r.normal())); Wii[i * N + j] = w; Wii[j * N + i] = w; }
-    return;
+// One step with private noise on every potential synapse. Units: weights in eta/lambda, sigma per sqrt(1/lambda), so
+// the rescaled dynamics do not depend on lambda (findings_private_noise.md conventions).
+// strang = true: the whole mean-field step (drift half-step, reflected kick, drift half-step; h frozen over the step).
+// strang = false: only the reflected kick, after the engine's own (minibatch) step; s.H is then that step's H.
+function privateNoise(sim, { kind, sigma }, strang) {
+  const s = sim.s, N = s.N, B = s.B, S = sim.Sigma, r = sim.jrng, P = sim.P, wmin = P.wmin, lam = sim.p.lam, g = P.gamma;
+  const dt = P.dt, Wib = s.Wib, Wii = s.Wii, Mib = s.Mib, Mii = s.Mii, H = s.H;
+  const sq = sigma * Math.sqrt(lam * dt);                    // sigma sqrt(dt) in rescaled time
+  const amp = (ETA / lam) * sq;                               // additive / input increment scale (weights in eta/lambda)
+  const mul = kind === "mul", kap = mul ? 1 + sigma * sigma / 2 : 1, lw = Math.log(wmin);
+  const decay = Math.exp(-lam * kap * dt / 2), w0 = -ETA * P.theta, ge = g * ETA;
+  if (strang) {
+    for (let k = 0; k < N * N; k++) if (Mii[k] && Wii[k] < wmin) Wii[k] = wmin;
+    for (let k = 0; k < N * B; k++) if (Mib[k] && Wib[k] < wmin) Wib[k] = wmin;
+    E.harmonicFrom(Wii, Wib, N, B, s.L, H);
   }
-  if (kind === "add") {
-    for (let q = 0; q < N * B; q++) if (s.Mib[q]) Wib[q] = Math.max(wmin, Wib[q] + amp * r.normal());
-    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (s.Mii[i * N + j]) { const w = Math.max(wmin, Wii[i * N + j] + amp * r.normal()); Wii[i * N + j] = w; Wii[j * N + i] = w; }
-    return;
-  }
-  // input (covariance-estimation) noise: Isserlis variance of a sample covariance
   if (!sim._HS || sim._HS.length !== N * B) { sim._HS = new Float64Array(N * B); sim._q = new Float64Array(N); }
   const HS = sim._HS, q = sim._q;
   for (let i = 0; i < N; i++) {
@@ -170,17 +177,35 @@ function privateNoise(sim, { kind, sigma }) {
     for (let a = 0; a < B; a++) { let t = 0; for (let b = 0; b < B; b++) t += H[i * B + b] * S[b * B + a]; HS[i * B + a] = t; qi += t * H[i * B + a]; }
     q[i] = qi;
   }
+  // exact flow of dw/dt = lam (c' - kap w) over dt/2, sticking at the floor (c' = c / kap is the target)
+  const half = (w, tgt) => { const x = tgt + (w - tgt) * decay; return x < wmin ? wmin : x; };
+  // the noise increment with standard deviation sd (additive scale) or log-sd sq (mul), reflected at the floor
+  const kick = (w, sd) => {
+    if (mul) { let x = Math.log(w) + (strang ? sq * r.normal() : sq * r.normal() - sq * sq / 2); if (x < lw) x = 2 * lw - x; return Math.exp(x); }
+    const x = w + sd * r.normal(); return x < wmin ? 2 * wmin - x : x;
+  };
+  const one = (w, c, sd) => {
+    if (!strang) return kick(w, sd);
+    const tgt = c / kap;
+    return half(kick(half(w, tgt), sd), tgt);
+  };
   for (let i = 0; i < N; i++) for (let b = 0; b < B; b++) {
-    const k = i * B + b; if (!s.Mib[k]) continue;
-    const v = q[i] * S[b * B + b] + HS[k] * HS[k];
-    Wib[k] = Math.max(wmin, Wib[k] + amp * Math.sqrt(Math.max(v, 0)) * r.normal());
+    const k = i * B + b; if (!Mib[k]) continue;
+    const sd = kind === "inp" ? amp * Math.sqrt(Math.max(q[i] * S[b * B + b] + HS[k] * HS[k], 0)) : amp;
+    Wib[k] = one(Wib[k], (w0 + ETA * HS[k]) / lam, sd);
   }
-  if (g > 0) for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
-    if (!s.Mii[i * N + j]) continue;
-    let c = 0; for (let b = 0; b < B; b++) c += HS[i * B + b] * H[j * B + b];
-    const w = Math.max(wmin, Wii[i * N + j] + amp * g * Math.sqrt(Math.max(q[i] * q[j] + c * c, 0)) * r.normal());
-    Wii[i * N + j] = w; Wii[j * N + i] = w;
+  for (let i = 0; i < N; i++) {
+    if (strang) Wii[i * N + i] = 0;
+    for (let j = i + 1; j < N; j++) {
+      if (!Mii[i * N + j]) continue;
+      let c = 0; for (let b = 0; b < B; b++) c += HS[i * B + b] * H[j * B + b];
+      const sd = kind === "inp" ? amp * g * Math.sqrt(Math.max(q[i] * q[j] + c * c, 0)) : amp;
+      // input noise on a lateral synapse vanishes with gamma: the deterministic step alone
+      const w = sd === 0 && kind === "inp" ? (strang ? half(half(Wii[i * N + j], (w0 + ge * c) / lam), (w0 + ge * c) / lam) : Wii[i * N + j]) : one(Wii[i * N + j], (w0 + ge * c) / lam, sd);
+      Wii[i * N + j] = w; Wii[j * N + i] = w;
+    }
   }
+  if (strang) { s.t++; s.resid = NaN; }
 }
 
 // ---------------------------------------------------------------- analysis

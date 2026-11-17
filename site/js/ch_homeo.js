@@ -14,6 +14,14 @@ export async function init(panel, ctx) {
   host.append(ui.h("p", { class: "mute", text: "loading the covariances…" }));
   const data = await fetch("data/homeo/covs.json").then(r => r.json());
   host.replaceChildren();
+  // secondary figures live in closed <details>: open the one holding a link's target before the shell scrolls to it
+  const openFor = hash => {
+    const m = /^#homeo\/([^?]+)/.exec(hash || ""), el = m && document.getElementById(m[1]);
+    for (let d = el && el.closest("details"); d; d = d.parentElement && d.parentElement.closest("details")) d.open = true;
+  };
+  openFor(location.hash);
+  window.addEventListener("hashchange", () => openFor(location.hash));
+  ctx.article.addEventListener("click", ev => { const a = ev.target.closest && ev.target.closest('a[href^="#homeo/"]'); if (a) openFor(a.getAttribute("href")); }, true);
   const live = initLive(ctx, data);
   await initMaps(ctx, data, { load: (params, why) => live.load(params, why) });
 }
@@ -53,7 +61,7 @@ function initLive(ctx, data) {
   });
   const row = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(260px, 40%), 1fr))", gap: "14px 26px", marginTop: "16px" } });
   L.view.append(row);
-  const stripBox = box(row, "(b) Parts that exist at each $\\theta$", "step line: number of stable parts; dot: clusters populated now; click to set $\\theta$");
+  const stripBox = box(row, "(b) Parts that exist at each $\\theta$", "step line: number of stable parts; dot: clusters populated now; shaded: $\\theta < \\gamma\\kappa_0$, the heuristic collective crossover; click to set $\\theta$");
   const riverBox = box(row, "(c) Neurons per cluster over time", "stacked; colour = cluster (by size); grey: small clusters and dead neurons");
   const partsBox = box(L.view, "(d) The clusters' parts", "member mean of $h_i$ over the inputs, one panel per cluster (largest first), then stable parts with no neurons");
   partsBox.parentElement.style.marginTop = "16px";
@@ -112,7 +120,7 @@ function initLive(ctx, data) {
   const batchS = ui.segmented({ label: "covariance seen by plasticity", options: M.BATCHES.map(x => ({ value: x, label: x ? `batch ${x}` : "exact" })), value: p.batch, stack: true,
     help: "Minibatch: every neuron sees the same samples (shared noise).", onChange: x => { p.batch = x; liveChange(); } });
   const noiseS = ui.select({ label: "private noise (independent per synapse)", options: M.NOISES.map(x => ({ value: x.id, label: x.label })), value: p.noise,
-    help: "Input noise: each synapse estimates its covariance from its own samples, $1/\\sigma^2$ per unit time. Additive: $w \\mathrel{+}= \\sigma\\sqrt{dt}\\,\\xi$. With noise, a neuron counts as in a part when its embedding has cosine $\\ge 0.9$ with it, otherwise as in transit.",
+    help: "Itô noise on every synapse, reflected at the floor (findings F11). Input: each synapse estimates its covariance from its own samples, $1/\\sigma^2$ per unit time. Additive: $\\sigma\\,dW$. Multiplicative: $\\sigma w\\,dW$, integrated in $\\log w$. With noise, a neuron counts as in a part when its embedding has cosine $\\ge 0.9$ with it, otherwise as in transit.",
     onChange: x => { p.noise = x; liveChange(); } });
 
   ui.controls({ parent: L.side, title: "Inputs", primary: [covS, sigmaBox] });
@@ -188,7 +196,10 @@ function initLive(ctx, data) {
   function showRegime() {
     const c = sim.c, pt = M.partsAt(c, p.theta), rg = M.regime(c, p, pt.n);
     const om = p.omega > 0.02 ? ` <b>Floor:</b> $\\omega = ${ui.fmt(p.omega, 2)}$ is above the recommended 0.02; clusters leak towards the population mean (strength $\\sim\\omega/c$), and at high $\\theta$ the network can die.` : "";
-    regimeBox.innerHTML = `<b>Regime: ${rg.name}.</b> ${rg.text}${om}`;
+    const nz = M.noiseOf(p.noise);
+    const nzText = !nz ? "" : nz.kind === "mul" ? " <b>Noise:</b> multiplicative noise at a small floor does not let pruned synapses regrow (findings F11), so the allocation stays close to the noiseless one."
+      : " <b>Noise:</b> neurons hop between parts and the allocation forgets the start; in the families tested the stationary law is winner-take-all unless many neurons are in transit (findings F13–F15). Lateral plasticity plus noise gave one cluster on the loudest part, even above $\\gamma\\kappa_0$.";
+    regimeBox.innerHTML = `<b>Regime: ${rg.name}.</b> ${rg.text}${nzText}${om}`;
     ui.renderMath(regimeBox);
   }
   function showMode() {
@@ -317,7 +328,7 @@ function readParams(ctx, data) {
 function thetaMarks(c, gamma, lo, hi) {
   const st = c.stats, raw = [
     { value: st.kappa0, label: "κ₀", title: `κ₀ = ${f3(st.kappa0)}: mean covariance of two random initial embeddings` },
-    { value: gamma * st.kappa0, label: "γκ₀", title: `γκ₀ = ${f3(gamma * st.kappa0)}: collective threshold` },
+    { value: gamma * st.kappa0, label: "γκ₀", title: `γκ₀ = ${f3(gamma * st.kappa0)}: heuristic collective crossover (not a derived boundary)` },
     { value: st.offdiag_min, label: "cov↓", title: `smallest covariance ${f3(st.offdiag_min)}: below it, exactly one part` },
     { value: st.offdiag_max, label: "cov↑", title: `largest covariance ${f3(st.offdiag_max)}` },
     { value: st.var_min, label: "var↓", title: `smallest variance ${f3(st.var_min)}` },
@@ -434,7 +445,7 @@ function thetaStrip(el, { height = 180, onPick } = {}) {
     const X = scale("linear", lo, hi, m.l, W - m.r), Y = scale("linear", 0, nmax * 1.08, Hh - m.b, m.t);
     const svg = svgEl("svg", { width: W, height: Hh, viewBox: `0 0 ${W} ${Hh}`, role: "img", "aria-label": "number of stable parts against theta" }, hostEl);
     const k0 = c.stats.kappa0 * gamma, vmax = c.stats.var_max;
-    if (gamma > 0 && k0 > lo) { const xb = X(Math.min(k0, hi)); svgEl("rect", { x: m.l, y: m.t, width: Math.max(0, xb - m.l), height: Hh - m.t - m.b, fill: P.seq[1], opacity: 0.55 }, svg); if (xb - m.l > 110) text(svg, m.l + 4, m.t + 11, "collective (heuristic)", { fill: P.ink2, "font-size": 10.5 }); else if (xb - m.l > 54) text(svg, m.l + 4, m.t + 11, "collective", { fill: P.ink2, "font-size": 10.5 }); }
+    if (gamma > 0 && k0 > lo) { const xb = X(Math.min(k0, hi)); svgEl("rect", { x: m.l, y: m.t, width: Math.max(0, xb - m.l), height: Hh - m.t - m.b, fill: P.seq[1], opacity: 0.55 }, svg); if (xb - m.l > 110) text(svg, m.l + 4, m.t + 11, "collective (heuristic)", { fill: P.ink2, "font-size": 10.5 }); else if (xb - m.l > 54) text(svg, m.l + 4, m.t + 11, "heuristic", { fill: P.ink2, "font-size": 10.5 }); }
     if (vmax < hi) { const xa = X(vmax); svgEl("rect", { x: xa, y: m.t, width: W - m.r - xa, height: Hh - m.t - m.b, fill: P.wash }, svg); if (W - m.r - xa > 40) text(svg, xa + 4, m.t + 11, "extinct", { fill: P.ink2, "font-size": 10.5 }); }
     const g = svgEl("g", { class: "grid" }, svg);
     const yt = niceTicks(0, nmax, 3).filter(v => Number.isInteger(v));
