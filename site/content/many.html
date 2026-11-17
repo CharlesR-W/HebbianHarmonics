@@ -2,7 +2,7 @@
 
 <p>Throughout, every neuron is attached to $s$ random inputs with fixed shares summing to one, and the weights follow the distance rule</p>
 
-<div class="eq" id="many-eq-rule" data-num="1">$$\frac{dw_{ij}}{dt} = b - \alpha w_{ij} - \tfrac12 D_{ij}^2, \qquad w_{ij} \ge 0, \qquad\text{fixed point } w_{ij} = \frac{(b - D_{ij}^2/2)_+}{\alpha},$$</div>
+<div class="eq" id="many-eq-rule" data-num="1">$$\begin{gathered}\frac{dw_{ij}}{dt} = b - \alpha w_{ij} - \tfrac12 D_{ij}^2, \qquad w_{ij} \ge 0, \\ \text{fixed point } w_{ij} = \frac{(b - D_{ij}^2/2)_+}{\alpha},\end{gathered}$$</div>
 
 <p>with $D_{ij}^2 = \mathbb E_g[(F_i - F_j)^2]$ over the training bank. An edge can be alive only between neurons whose responses are closer than $\sqrt{2b}$, so $b$ is a squared length. A <b>component</b> is a connected component of the live graph. That is not a cluster in the everyday sense: a chain of neighbours, each within $\sqrt{2b}$ of the next, can be much wider than $\sqrt{2b}$. So every count below comes with widths: the largest distance $D$ of a member from its component's mean response (the prototype), and the <b>span</b>, the largest $D$ between two members, divided by $\sqrt{2b}$. A span ratio above one marks a chain.</p>
 
@@ -57,7 +57,7 @@
 
 <p>Take linear neurons with no potential. Then $u = Hg$, each response is $F_i(g) = h_i^\top g$, and for any fixed $W$</p>
 
-<div class="eq" id="many-eq-law" data-num="2">$$\begin{gathered} D_{ij}^2 = \frac1S \sum_{s} \big(\Delta h^\top g_s\big)^2 = \Delta h^\top \hat C\, \Delta h = \sum_a \hat\lambda_a \big(\Delta h \cdot \hat v_a\big)^2, \\ \Delta h = h_i - h_j, \qquad \hat C = G^\top G/S, \end{gathered}$$</div>
+<div class="eq" id="many-eq-law" data-num="2">$$\begin{gathered} D_{ij}^2 = \frac1S \sum_{s} \big(\Delta h^\top g_s\big)^2 = \Delta h^\top \hat C\, \Delta h \\ = \sum_a \hat\lambda_a \big(\Delta h \cdot \hat v_a\big)^2, \\ \Delta h = h_i - h_j, \qquad \hat C = G^\top G/S, \end{gathered}$$</div>
 
 <p>where $(\hat\lambda_a, \hat v_a)$ are the eigenpairs of the training bank's uncentred second moment $\hat C$. This is an identity, not an approximation. With the eigenpairs of $\Sigma_g$ instead it is off by the sampling error of $\hat C$. Because every row of $H$ sums to one, $\Delta h \cdot \mathbf 1 = 0$: the uniform direction never contributes, and the metric sees only contrasts between inputs. The same displacement of two embeddings costs 64 times more along a contrast of variance 4 than along one of variance 1/16.</p>
 
@@ -65,16 +65,16 @@
   <div class="fig-title">Statement (1): $D^2$ against the anisotropic law, on a frozen network <span class="synthetic-tag">synthetic Σ</span></div>
   <div class="fig-sub">Shrink the training bank and watch the orange cloud spread while the blue points stay on the line.</div>
   <div data-slot="law"></div>
-  <figcaption><b>Plotted:</b> for every pair of 30 linear neurons with $s = 3$ random attachments: horizontal, $D_{ij}^2$ measured on the training bank; vertical, $\sum_a \hat\lambda_a(\Delta h\cdot\hat v_a)^2$ with the eigenpairs of $\hat C$ (blue) and $\sum_a \lambda_a(\Delta h\cdot v_a)^2$ with those of $\Sigma_g$ (orange); grey line: equality; both axes logarithmic. Tiles: the largest absolute deviation from the measured $D^2$, divided by the largest $D^2$ (for the evaluation bank: its own $D^2$ against the $\Sigma_g$ law), and the largest $|\mathbf 1^\top\Delta h|$. <b>Values:</b> computed live (onsite_engine.js, harmonic responses); $B = 8$; Hadamard: eigenvectors the normalised Hadamard basis with the uniform vector first, eigenvalues $1$ (uniform) and $4, 2, 1, 0.5, 0.25, 0.125, 0.0625$ (contrasts); power law: eigenvalues $\propto 1/k$, mean variance 1; random frozen $W$: each pair weighted with probability 0.2, weight uniform on $[0, 0.5]$; evaluation bank of 4096 samples.</figcaption>
+  <figcaption><b>Plotted:</b> for every pair of 30 linear neurons with $s = 3$ random attachments: horizontal, $D_{ij}^2$ measured on the training bank; vertical, $\sum_a \hat\lambda_a(\Delta h\cdot\hat v_a)^2$ with the eigenpairs of $\hat C$ (blue) and $\sum_a \lambda_a(\Delta h\cdot v_a)^2$ with those of $\Sigma_g$ (orange); grey line: equality; both axes logarithmic. Tiles: the largest absolute deviation from the measured $D^2$, divided by the largest $D^2$ on the same bank (for the evaluation bank: its own $D^2$ against the $\Sigma_g$ law, over its own largest $D^2$), and the largest $|\mathbf 1^\top\Delta h|$. <b>Values:</b> computed live (onsite_engine.js, harmonic responses); $B = 8$; Hadamard: eigenvectors the normalised Hadamard basis with the uniform vector first, eigenvalues $1$ (uniform) and $4, 2, 1, 0.5, 0.25, 0.125, 0.0625$ (contrasts); power law: eigenvalues $\propto 1/k$, mean variance 1; random frozen $W$: each pair weighted with probability 0.2, weight uniform on $[0, 0.5]$; evaluation bank of 4096 samples.</figcaption>
 </figure>
 
-<p>In the precomputed check (<span data-mv="r1n"></span> networks: <span data-mv="rseeds"></span> seeds, two covariances, $W = 0$ and random $W$), the law with $\hat C$ holds to <span data-mv="r1chat"></span> of the largest $D^2$; with $\Sigma_g$ it is off by up to <span data-mv="r1sig"></span> on a training bank of <span data-mv="rS"></span> samples, and by <span data-mv="r1eval"></span> against an evaluation bank of <span data-mv="rSe"></span>; $|\mathbf 1^\top \Delta h| \le$ <span data-mv="r1sum"></span>.</p>
+<p>In the precomputed check (<span data-mv="r1n"></span> networks: <span data-mv="rseeds"></span> seeds, two covariances, $W = 0$ and random $W$), the law with $\hat C$ holds to <span data-mv="r1chat"></span> of the largest $D^2$; with $\Sigma_g$ it is off by up to <span data-mv="r1sig"></span> on a training bank of <span data-mv="rS"></span> samples, and by <span data-mv="r1eval"></span> against an evaluation bank of <span data-mv="rSe"></span> (all three relative to the largest training-bank $D^2$); $|\mathbf 1^\top \Delta h| \le$ <span data-mv="r1sum"></span>.</p>
 
 <h3 id="many-res2">(2) When an edge first comes alive</h3>
 
 <p>At $W = 0$ the rule reads $dw_{ij}/dt = b - \tfrac12 D_{ij}^2$, so the edge starts to grow exactly when $D_{ij}^2 &lt; 2b$. For two neurons whose uncoupled embeddings differ along one mode only, $\Delta h = \delta\, v_a$, statement (1) turns this into a threshold on their separation:</p>
 
-<div class="eq" id="many-eq-act" data-num="3">$$\text{the edge lives from } W = 0 \iff \delta &lt; \delta_{on} = \sqrt{2b/\hat\lambda_a}, \qquad \hat\lambda_a = v_a^\top \hat C v_a.$$</div>
+<div class="eq" id="many-eq-act" data-num="3">$$\begin{gathered}\text{edge lives from } W = 0 \iff \delta &lt; \delta_{on}, \\ \delta_{on} = \sqrt{2b/\hat\lambda_a}, \qquad \hat\lambda_a = v_a^\top \hat C v_a.\end{gathered}$$</div>
 
 <p>This is the resolution law in its exact form. At a fixed homeostatic threshold $b$, neurons that differ along a loud direction stay apart even when the difference is small, and neurons that differ along a quiet direction fuse even when it is large. To test it, pairs were planted with attachments $1/B \pm \tfrac{\delta}{2} v_a$, on each of the <span data-mv="r2nmodes"></span> contrast modes of the $B = 8$ covariance above, at <span data-mv="r2nsep"></span> separations around the threshold, with <span data-mv="rseeds"></span> seeds, $b = $ <span data-mv="r2b"></span> and $\alpha = $ <span data-mv="r2a"></span>. The threshold with $\hat\lambda_a$ misclassifies <span data-mv="r2mc"></span> of the <span data-mv="r2n"></span> pairs; the same threshold with $\Sigma_g$'s $\lambda_a$ misclassifies <span data-mv="r2ms"></span>.</p>
 
@@ -93,7 +93,7 @@
 
 <p><b>(3a) A pair.</b> For two neurons with unit input conductance, $D^2(w) = D_0^2/(1 + 2w)^2$ with $D_0^2 = \hat\lambda_a\delta^2$, and the fusion chapter's analysis of $dw/dt = b - \alpha w - D^2(w)/2$ applies. With $\kappa = \alpha$ (times the input conductance), a fused pair exists down to a saddle-node; at fixed $b &gt; \kappa/4$ it survives up to a separation</p>
 
-<div class="eq" id="many-eq-off" data-num="4">$$\delta_{off} = \sqrt{\frac{32\,(b + \kappa/2)^3}{27\,\kappa^2\,\hat\lambda_a}}, \qquad \frac{\delta_{off}}{\delta_{on}} = \sqrt{\frac{16\,(b + \kappa/2)^3}{27\,\kappa^2\, b}},$$</div>
+<div class="eq" id="many-eq-off" data-num="4">$$\begin{gathered}\delta_{off} = \sqrt{\frac{32\,(b + \kappa/2)^3}{27\,\kappa^2\,\hat\lambda_a}}, \\ \frac{\delta_{off}}{\delta_{on}} = \sqrt{\frac{16\,(b + \kappa/2)^3}{27\,\kappa^2\, b}},\end{gathered}$$</div>
 
 <p>while it first fuses at $\delta_{on}$. The ratio does not depend on $\hat\lambda_a$: feedback widens the resolution cell by the same factor along every mode. It is <span data-mv="r3r01"></span> at $\alpha = 0.1$, $b = 0.1$, <span data-mv="r3r001"></span> at $\alpha = 0.01$, $b = 0.1$, and <span data-mv="r3r1"></span> at $\alpha = 1$, $b = 0.1$. Planted pairs swept in $b$ up and then down switch on at most <span data-mv="r3onmax"></span> times the grid step away from $b = D_0^2/2$, and off at most <span data-mv="r3offmax"></span> times the grid step away from the predicted saddle-node, identically on two modes whose bank variances differ by a factor <span data-mv="r3lamratio"></span>.</p>
 
@@ -108,7 +108,7 @@
 
 <ul>
   <li><b>From a cold start the result is finer than (2).</b> The self-consistent count was never below the prediction (<span data-mv="r4below"></span> of <span data-mv="r4cases"></span> cases) and up to <span data-mv="r4ex"></span> above it. No component bridged an uncoupled gap wider than $\delta_{on}$ (largest ratio <span data-mv="r4bridge"></span>): feedback breaks chains, it does not bridge gaps.</li>
-  <li><b>Condensation.</b> Where the uncoupled chain is nearly or fully connected (a predicted count of at most 1.8, seed mean), the $\alpha = 0.01$ fixed point has up to <span data-mv="r4condhi"></span> components on average (fewer at larger $b$, down to <span data-mv="r4condlo"></span>), and every one of them is tight: span$/\sqrt{2b} \le$ <span data-mv="r4condspan"></span> on both banks.</li>
+  <li><b>Condensation.</b> Where the uncoupled chain is nearly or fully connected (a predicted count of at most 1.8, seed mean), the $\alpha = 0.01$ fixed point has between <span data-mv="r4condlo"></span> and <span data-mv="r4condhi"></span> components on average (more at smaller $b$; the one-component end is the largest $b$ of the grid), and every one of them is tight: span$/\sqrt{2b} \le$ <span data-mv="r4condspan"></span> on both banks.</li>
   <li><b>Continuation down is coarser.</b> On mode 3 at $\alpha = 0.01$ and $b = $ <span data-mv="r4b6"></span>, the down-continuation ends with $K = $ <span data-mv="r4down"></span> where the cold start has $K = $ <span data-mv="r4cold"></span> (seed means; prediction <span data-mv="r4pred"></span>; continuation up <span data-mv="r4up"></span>).</li>
 </ul>
 

@@ -97,7 +97,7 @@ export const LIVE_TOURS = [
     path: [0.3, 0.2, 0.13, 0.1, 0.065, 0.042, 0.03],
     note: "$\\alpha = 0.1$: start fused at $b = 0.3$, then lower $b$ step by step to $0.03$, carrying $W$ (continuation). The network stays in a few components. Then press reset ($W = 0$) at the same $b$, or take the next tour." },
   { id: "cold03", label: "Same b from W = 0", p: { sig: "blocks12", pot: "linear", a: 0.1, b: 0.03 },
-    note: "$\\alpha = 0.1$, $b = 0.03$ from $W = 0$: dozens of components where the continuation from a blob kept a few. Same parameters, different history. Compare the $J$ tiles: the objective is not lower on this branch." },
+    note: "$\\alpha = 0.1$, $b = 0.03$ from $W = 0$: dozens of components where the continuation from a blob kept a few. Same parameters, different history. Compare the $J$ tile with the one the previous tour ended on: at this $b$, near the low end of the hysteresis window, the fragmented state has the lower objective, so the fused state the continuation kept is a local minimum and not the better one. Higher in the window the order is usually reversed (panel g above)." },
   { id: "loop", label: "Loop up and down, B = 24", p: { sig: "blocks24", pot: "linear", a: 0.1 },
     path: [...LOOP_UP, ...LOOP_UP.slice(0, -1).reverse()],
     note: "Planted blocks on 24 inputs, $\\alpha = 0.1$: $b$ goes up from $0.005$ to $0.3$ and back, each step run to its fixed point. The dots in panel (b) trace the two branches." },
@@ -199,17 +199,17 @@ export function frozenLaw({ sig = "contrast8", wrand = false, S = 256, seed = 0 
   const eS = O.eigh(Float64Array.from(Sigma), B), eC = O.eigh(secondMoment(G, S, B), B);
   const law = (e, dh) => { let r = 0; for (let k = 0; k < B; k++) { let p = 0; for (let c = 0; c < B; c++) p += dh[c] * e.vectors[c * B + k]; r += e.values[k] * p * p; } return r; };
   const pts = { meas: [], chat: [], sig: [], eval: [] };
-  let mx = 0, eC1 = 0, eS1 = 0, eE1 = 0, sumdh = 0;
+  let mx = 0, mxE = 0, eC1 = 0, eS1 = 0, eE1 = 0, sumdh = 0;
   const dh = new Float64Array(B);
   for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
     let s1 = 0; for (let c = 0; c < B; c++) { dh[c] = H[i * B + c] - H[j * B + c]; s1 += dh[c]; }
     sumdh = Math.max(sumdh, Math.abs(s1));
     const m = D2t[i * N + j], lc = law(eC, dh), ls = law(eS, dh);
     pts.meas.push(m); pts.chat.push(lc); pts.sig.push(ls); pts.eval.push(D2e[i * N + j]);
-    mx = Math.max(mx, m);
+    mx = Math.max(mx, m); mxE = Math.max(mxE, D2e[i * N + j]);
   }
   for (let k = 0; k < pts.meas.length; k++) {
     eC1 = Math.max(eC1, Math.abs(pts.meas[k] - pts.chat[k])); eS1 = Math.max(eS1, Math.abs(pts.meas[k] - pts.sig[k])); eE1 = Math.max(eE1, Math.abs(pts.eval[k] - pts.sig[k]));
   }
-  return { pts, errChat: eC1 / mx, errSig: eS1 / mx, errEval: eE1 / mx, sumdh, S };
+  return { pts, errChat: eC1 / mx, errSig: eS1 / mx, errEval: eE1 / mxE, sumdh, S };
 }

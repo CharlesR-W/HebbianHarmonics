@@ -100,7 +100,7 @@ function numbers(F, R) {
   let condK = [], condSpan = 0;
   for (const a of [1, 3]) bgp.forEach((b, k) => {
     const pk = meanAt(a, 0.01, k, (p, kk) => p.cold[kk][1]), ck = meanAt(a, 0.01, k, (p, kk) => p.cold[kk][0]);
-    if (pk <= 1.8 && ck > 1) { condK.push(ck); pop.filter(p => p.a === a && p.alpha === 0.01).forEach(p => { condSpan = Math.max(condSpan, p.cold[k][3], p.cold[k][5]); }); }
+    if (pk <= 1.8) { condK.push(ck); pop.filter(p => p.a === a && p.alpha === 0.01).forEach(p => { condSpan = Math.max(condSpan, p.cold[k][3], p.cold[k][5]); }); }
   });
   o.r4condlo = f2(Math.min(...condK)); o.r4condhi = f2(Math.max(...condK)); o.r4condspan = f2(condSpan);
   // down-continuation coarser: mode 3, alpha 0.01, b closest to 0.006
