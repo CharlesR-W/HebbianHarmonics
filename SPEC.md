@@ -169,3 +169,19 @@ artifacts; GPT review rounds addressed; published with `results publish`.
    outcome; planted energy is the controlled input. Cluster definition must be stated
    and shown robust to tolerance/order (leader clustering in core.clusters is a quick
    look, not the headline definition).
+
+## 8. After the sweeps — `docs/findings.md` is authoritative for all claims
+
+It overrides §2 wherever they differ. In brief: clusters sit on *parts* (Perron
+vectors of principal submatrices of `A = Sigma - theta 11^T`; stable iff top
+eigenvalue of that submatrix and `(Ah)_b < 0` off support); theta sets which parts
+exist, gamma gates how many a dense population resolves (`theta_c = gamma*kappa0`,
+`kappa0 = 1^T Sigma 1 / B^2`, coarse-to-fine); allocation is not fixed by the
+equilibrium (any allocation is a fixed point) — the transient gives
+`n_k ∝ lambda_k^beta(theta)` with a hard cutoff; members of a cluster are exact
+clones with dense wiring; equilibrium weights store a parts-sketch
+(`C = theta 11^T + sum_k c_k h_k h_k^T/|h_k|^2`), readout is best mid-training or
+with sparse wiring. Defaults: `wmin = 1e-4` for N <= 200 (state the floor as
+`omega = N*wmin`), `W_II ~ U(0, 0.03)`, `W_IB ~ Exp(0.2)`, gamma = 1, dt = 0.05,
+converged when residual < 1e-5 (but a tiny residual can be an unstable symmetric
+state: offer private jitter).
