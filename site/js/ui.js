@@ -6,6 +6,7 @@ import { gradientCss } from "./palette.js";
 
 export const tabsMeta = [
   { id: "idea", label: "The idea" },
+  { id: "talk", label: "The talk" },
   { id: "fusion", label: "Fusion" },
   { id: "many", label: "Many inputs" },
   { id: "diversity", label: "Diversity" },
