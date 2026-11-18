@@ -39,3 +39,5 @@ body:not([data-tab="talk"]) .talk-hud { display: none; }
   .slide { grid-template-columns: 1fr; min-height: 0; }
   .slide > .fig, .slide > .side, .slide > h2, .slide > .claim, .slide > .slide-num { grid-column: 1; grid-row: auto; }
 }
+.slide .talk-foot { font: 13px/1.5 var(--font-sans, Inter, sans-serif); color: var(--mute); max-width: 78ch; margin: 18px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.slide .talk-foot a { color: var(--ink-2); }
