@@ -3,9 +3,39 @@
 //                #<tab>/<id>       scroll to the element with that id inside the chapter
 //                #<tab>?k=v&...    chapter state (read/write it through ctx, never directly)
 //                #<id>             any id: finds the chapter holding it (after that chapter has loaded)
-import { parseHash, renderMath, tabsMeta } from "./ui.js";
+import { parseHash, renderMath, tabsMeta, tabAliases, HOME_TAB } from "./ui.js";
 
 const TABS = tabsMeta.map(t => t.id);
+// Anchors that moved or were removed: old deep links (#old/old-sim?tour=…, #talk/talk-hierarchy) go to the surviving
+// place, always chapter-qualified so a cold load can lazy-load the chapter. [tab, anchor | null (chapter top)].
+const anchorMoves = {
+  old: { "old-watch": ["perron", "perron-sim"], "old-sim": ["perron", "perron-sim"], "old-collapse": ["perron", "perron-collapse"],
+    "old-parts": ["perron", "perron-parts"], "old-eq-part": ["perron", "perron-eq-part"] },
+  talk: { "talk-hierarchy": ["primer", "primer-perron"], "talk-expansion": ["primer", "primer-nonlinear"],
+    "talk-allocation": ["allocation", null] },
+};
+// Old addresses -> new: #talk… -> #primer… (ids inside were renamed talk-* -> primer-*); anchors that moved chapter
+// (also as bare #id); #old?k=v (the old chapter's simulation state) -> #perron?k=v; a bare #<tab>-… id ->
+// #<tab>/<tab>-… (so it loads that chapter). Rewrites the URL in place.
+const bareMoves = Object.fromEntries(Object.values(anchorMoves).flatMap(m => Object.entries(m)));
+const at = (t2, a2, qs) => `#${t2}${a2 ? "/" + a2 : ""}${qs}`;
+function redirect() {
+  const raw = location.hash.replace(/^#/, ""); if (!raw) return;
+  const { tab, anchor, params } = parseHash();
+  const qi = raw.indexOf("?"), qs = qi < 0 ? "" : raw.slice(qi);
+  let to = null;
+  if (anchor && anchorMoves[tab]?.[anchor]) to = at(...anchorMoves[tab][anchor], qs);
+  else if (tabAliases[tab]) { const t2 = tabAliases[tab]; to = at(t2, anchor && anchor.replace(new RegExp(`^${tab}-`), `${t2}-`), qs); }
+  else if (!anchor && tab === "old" && [...params.keys()].length) to = `#perron${qs}`;
+  else if (!TABS.includes(tab) && bareMoves[tab]) to = at(...bareMoves[tab], qs);
+  else if (!TABS.includes(tab)) {
+    const m = /^([a-z]+)-(.*)$/.exec(tab);
+    if (m && tabAliases[m[1]]) { const t2 = tabAliases[m[1]]; to = at(t2, `${t2}-${m[2]}`, qs); }
+    else if (m && TABS.includes(m[1])) to = at(m[1], tab, qs);
+  }
+  if (to && to !== location.hash) history.replaceState(history.state, "", to);
+}
+
 const chapters = {};          // tab -> { loaded: Promise, ctx }
 let current = null;
 
@@ -47,7 +77,9 @@ function makeCtx(tab, panel) {
     },
     // merge into the URL state; null/undefined deletes a key. Uses replaceState (no history entry, no hashchange)
     // unless {push: true}. Numbers are written with up to 4 significant digits, booleans as 1/0.
+    // Ignored while another chapter is shown (an async callback must not rewrite the URL to a hidden chapter).
     setParams(obj, { push = false } = {}) {
+      if (current !== tab) return;
       const p = ctx.params;
       for (const [k, v] of Object.entries(obj)) {
         if (v == null) p.delete(k);
@@ -100,11 +132,12 @@ async function loadChapter(tab) {
 }
 
 async function route() {
+  redirect();
   let { tab, anchor, params } = parseHash();
   if (!TABS.includes(tab)) {
     // a bare #id: look for it in the loaded chapters; otherwise the first chapter
     const el = tab && document.getElementById(tab), p = el && el.closest(".tab-panel");
-    anchor = p ? tab : null; tab = p ? p.dataset.tab : TABS[0];
+    anchor = p ? tab : null; tab = p ? p.dataset.tab : HOME_TAB;
   }
   const changed = tab !== current, prev = current;
   if (changed && prev && chapters[prev]) chapters[prev].ctx._hooks.hide.forEach(f => f());

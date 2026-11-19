@@ -1,16 +1,30 @@
-// Chapter "idea": the front door. One live figure (a small network: drag an input and watch the voltages relax;
-// one neuron's on-site potential and transfer curve; a pair's response functions; the slow rule with its fixed
-// point; the envelope identity checked by finite differences), plus a few numbers read from fusion.json.
+// Chapter "idea": the front door. One live figure, linear neurons only (the on-site potential is introduced in the
+// nonlinear chapter): a small network in neuron space next to the same neurons at their harmonic embeddings in input
+// space (linked hover); drag an input and watch the voltages relax; a pair's responses; the distance rule with its
+// fixed point; the envelope identity checked by finite differences. Plus a few numbers read from fusion.json.
 // Model side in ch_idea_model.js, drawing in ch_idea_draw.js.
 import * as ui from "./ui.js";
 import { P, catColor } from "./palette.js";
 import * as O from "./onsite_engine.js";
 import * as M from "./ch_idea_model.js";
-import { miniPlot, networkView } from "./ch_idea_draw.js";
+import { miniPlot, networkView, simplexView } from "./ch_idea_draw.js";
 
 const { N, B, S } = M;
 const VRANGE = [-2.5, 2.5];
-const KEYS = ["g1", "g2", "g3", "b", "a", "pot", "k", "st", "seed"];
+const KEYS = ["g1", "g2", "g3", "b", "a", "seed"];
+// Linear neurons throughout this chapter: the potential is pinned to "lin" (ch_idea_model.js keeps the rectifier).
+const LIN = { pot: "lin", k: 3, st: 0.7 };
+const TOURS = [
+  { id: "relax", label: "One stimulus, relaxing",
+    note: "$W = 0$. The voltages start at $u = 0$ and flow downhill in $E$ (fast time $\\tau$) to the unique minimum, $u = Hg$. At $W = 0$ each $h_i$ is just the neuron's attachment shares.",
+    params: { g1: 1.5, g2: -1.2, g3: 0.3, b: 0.05, a: 1, seed: 27 }, relax: true },
+  { id: "learn", label: "Learn to the fixed point",
+    note: "$b = 0.05$, $\\alpha = 1$, from $W = 0$. Synapses grow between neurons that respond alike and pull their embeddings together in input space; the network drawing does not move. When the run stops, every pair in (b) is on the line $w = (b - D^2/2)_+/\\alpha$; the envelope identity (c) holds at every step on the way.",
+    params: { b: 0.05, a: 1, seed: 27 }, run: true, speed: 0.25 },
+  { id: "fuse", label: "Strong fusion",
+    note: "$b = 0.3$, $\\alpha = 0.1$: every pair comes within range, the edges grow to several times the attachment conductance, all eight embeddings converge towards one point in the triangle, and the pair in (a) lies close to the diagonal.",
+    params: { b: 0.3, a: 0.1, seed: 27 }, run: true, speed: 16 },
+];
 
 export async function init(panel, ctx) {
   fillSweepNumbers(ctx);           // not awaited: the figure must not wait for the fetch
@@ -34,13 +48,12 @@ async function fillSweepNumbers(ctx) {
 
 // ------------------------------------------------------------ the live figure
 function readParams(ctx) {
-  const tourId = ctx.param("tour", null), tour = M.TOURS.find(t => t.id === tourId) || null;
-  const p = {};
+  const tourId = ctx.param("tour", null), tour = TOURS.find(t => t.id === tourId) || null;
+  const p = { ...LIN };
   for (const k of KEYS) p[k] = ctx.param(k, M.DEFAULTS[k]);
-  if (p.pot !== "lin") p.pot = "rect";
   p.b = clamp(p.b, ...M.LIMITS.b); p.a = clamp(p.a, ...M.LIMITS.a);
   for (const k of ["g1", "g2", "g3"]) p[k] = clamp(p[k], ...M.LIMITS.g);
-  p.seed = Math.round(clamp(p.seed, 0, 99)); p.k = clamp(p.k, 0, 20); p.st = clamp(p.st, 0, 2);
+  p.seed = Math.round(clamp(p.seed, 0, 99));
   if (tour) Object.assign(p, tour.params);
   const i = Math.round(ctx.param("i", 0)) - 1, j = Math.round(ctx.param("j", 0)) - 1;
   const sel = i >= 0 && i < N && j >= 0 && j < N && i !== j ? [i, j] : null;
@@ -59,9 +72,13 @@ function initFigure(ctx) {
 
   // ---------------------------------------------------------- layout
   const L = ui.simLayout({ parent: ctx.slot("sim") });
-  const netBox = ui.h("div");
-  L.view.append(netBox);
+  const netBox = ui.h("div"), sxBox = ui.h("div");
+  L.view.append(ui.h("div", { class: "space-pair" }, netBox, sxBox));
+  let hot = null;
+  const hover = i => { hot = i; nv.setHot(i); sx.setHot(i); };
+  const sx = simplexView(sxBox, { N, range: VRANGE, onHover: hover, onPick: i => pick(i), tip: i => neuronTip(i) });
   let nv = makeNetwork();
+  let Hcur = computeH();
   ui.colorbar({ parent: L.view, map: "div", range: VRANGE, label: "voltage: inputs $g_b$ (squares), neurons $u_i$ (circles)", ticks: [-2, -1, 0, 1, 2], fmt: x => ui.fmt(x, 2) });
   const tp = ui.transport({
     parent: L.view, watch: fig, autoplay: false, maxHistory: 300,
@@ -73,7 +90,7 @@ function initFigure(ctx) {
     onReset: () => restart(),
   });
 
-  const tours = ui.chips({ parent: L.side, label: "Tours", items: M.TOURS, active: tour ? tour.id : null, onPick: t => applyTour(t) });
+  const tours = ui.chips({ parent: L.side, label: "Tours", items: TOURS, active: tour ? tour.id : null, onPick: t => applyTour(t) });
 
   const gS = [0, 1, 2].map(b => ui.slider({ label: `input $g_${b + 1}$`, min: M.LIMITS.g[0], max: M.LIMITS.g[1], step: 0.05, value: g[b], fmt: x => ui.fmtFixed(x, 2),
     onInput: x => { g[b] = x; stimulusChanged(); } }));
@@ -90,27 +107,22 @@ function initFigure(ctx) {
     help: "An edge can live only where $D_{ij}^2 &lt; 2b$.", onInput: x => { p.b = x; slowParams(); } });
   const sA = ui.slider({ label: "stiffness $\\alpha$", min: M.LIMITS.a[0], max: M.LIMITS.a[1], log: true, sig: 2, value: p.a, fmt: x => ui.fmt(x, 2),
     help: "A live edge reaches at most $b/\\alpha$; each neuron's attachments total 1.", onInput: x => { p.a = x; slowParams(); } });
-  const segP = ui.segmented({ label: "on-site potential", options: [{ value: "lin", label: "none (linear)" }, { value: "rect", label: "leaky rectifier" }], value: p.pot,
-    onChange: v => { p.pot = v; potentialChanged(); } });
-  const sK = ui.slider({ label: "slope below threshold $k_{lo}$", min: 0, max: 10, step: 0.5, value: p.k, fmt: x => ui.fmtFixed(x, 1),
-    help: "$V_i(u) = \\tfrac{k_{lo}}{2}(u - t_i)_-^2$ ($k_{hi} = 0$). Used when the potential is the leaky rectifier.", onInput: x => { p.k = x; potentialChanged(); } });
-  const sT = ui.slider({ label: "threshold spread $\\sigma_t$", min: 0, max: 1.5, step: 0.05, value: p.st, fmt: x => ui.fmtFixed(x, 2),
-    help: "$t_i = \\sigma_t z_i$ with fixed $z_i \\sim \\mathcal N(0,1)$.", onInput: x => { p.st = x; potentialChanged(); } });
-  const sSeed = ui.slider({ label: "seed (attachments, thresholds, bank)", min: 0, max: 40, step: 1, value: p.seed, fmt: x => String(x),
+  const sSeed = ui.slider({ label: "seed (attachments, bank)", min: 0, max: 40, step: 1, value: p.seed, fmt: x => String(x),
     onChange: x => { p.seed = x; rebuild(); } });
-  ui.controls({ parent: L.side, title: "Learning (slow dynamics)", primary: [sB, sA, segP], advanced: [sK, sT, sSeed], advancedLabel: "More controls" });
+  ui.controls({ parent: L.side, title: "Learning (slow dynamics)", primary: [sB, sA], advanced: [sSeed], advancedLabel: "More controls" });
 
   const stats = ui.stats({ parent: L.side, items: [
     { key: "fast", label: "relaxation $\\max_i |\\partial E/\\partial u_i|$", fmt: x => ui.fmt(x, 2), help: "For the stimulus shown, at the voltages drawn (current units). Zero at the equilibrium." },
     { key: "K", label: "components", fmt: String, help: "Connected components of the live graph (w > 1e-9), singletons included." },
     { key: "r", label: "plasticity residual $r$", fmt: x => ui.fmt(x, 2), help: "max |dw/dt| over pairs, projected (a dead edge pushed below zero counts 0). A fixed point is claimed below 1e-6." },
-    { key: "eq", label: "neuronal residual (bank)", fmt: x => ui.fmt(x, 2), help: "max over neurons and the 256 training stimuli of |dE/du_i| after the exact equilibrium solve." },
+    { key: "eq", label: "neuronal residual (bank)", fmt: x => ui.fmt(x, 2), help: "max over neurons and the 256 training stimuli of |dE/du_i| after the exact linear solve." },
     { key: "env", label: "envelope check", fmt: x => ui.fmt(x, 2), help: "max over the 28 pairs of |central difference of E*(W) in w_ij (step 1e-4) − D_ij²/2|." },
     { key: "w", label: "strongest edge $\\max w$", fmt: x => ui.fmt(x, 3), help: "Compare with b/α, the most an edge can reach, and with the attachment total 1." },
   ] });
   ui.legend({ parent: L.side, items: [
     { label: "input $g_b$, clamped (drag it); outline: its colour", color: catColor(0), shape: "square" },
     { label: "interior neuron, fill: its voltage $u_i$", color: P.interior, shape: "dot" },
+    { label: "$h_i$ at $W = 0$ (input space)", color: P.mute2, shape: "ring" },
     { label: "attachment $a_{ib}$ (fixed), width $\\propto a_{ib}$", color: catColor(1), shape: "line" },
     { label: "synapse $w_{ij}$ (learned), opacity $w_{ij}/\\max w$", color: P.edge, shape: "line" },
     { label: "selected neuron $i$ (solid ring), partner $j$ (dashed)", color: P.accent, shape: "ring" },
@@ -127,29 +139,31 @@ function initFigure(ctx) {
     grid.append(ui.h("div", { style: { minWidth: "0" } }, t, b));
     return { t, b };
   };
-  const pa = box(), pb = box(), pc = box(), pd = box(), pe = box();
-  const plA = miniPlot(pa.b, { height: 200, xlabel: "voltage u", ylabel: "V(u)" });
-  const plB = miniPlot(pb.b, { height: 200, xlabel: "input current I", ylabel: "voltage u" });
-  const plC = miniPlot(pc.b, { height: 200, xlabel: "F_i(g)", ylabel: "F_j(g)" });
+  const pc = box(), pd = box(), pe = box();
+  const plC = miniPlot(pc.b, { height: 200, xlabel: "u_i(g)", ylabel: "u_j(g)" });
   const plD = miniPlot(pd.b, { height: 200, xlabel: "D²_ij", ylabel: "w_ij" });
   const plE = miniPlot(pe.b, { height: 200, xlabel: "D²_ij / 2 (local)", ylabel: "∂E*/∂w_ij (global)" });
   function titles() {
     const [i, j] = sel;
-    pa.t.innerHTML = `(a) On-site potential of neuron ${i + 1}`;
-    pb.t.innerHTML = `(b) Transfer curve of neuron ${i + 1}`;
-    pc.t.innerHTML = `(c) Responses of neurons ${i + 1} and ${j + 1}`;
-    pd.t.innerHTML = "(d) The fixed point, all 28 pairs";
-    pe.t.innerHTML = "(e) Envelope identity, all 28 pairs";
+    pc.t.innerHTML = `(a) Responses of neurons ${i + 1} and ${j + 1}`;
+    pd.t.innerHTML = "(b) The fixed point, all 28 pairs";
+    pe.t.innerHTML = "(c) Envelope identity, all 28 pairs";
   }
 
   // ---------------------------------------------------------- dynamics
   function makeNetwork() {
     netBox.replaceChildren();
     return networkView(netBox, { A: m.net.A, N, B, range: VRANGE, getG: b => g[b],
-      onPick: i => pick(i),
+      onPick: i => pick(i), onHover: hover,
       onDrag: (b, v) => { g[b] = clamp(+v.toFixed(2), ...M.LIMITS.g); gS[b].set(g[b]); stimulusChanged(true); },
       onDragEnd: () => writeUrl(),
       tip: i => neuronTip(i) });
+  }
+  // H column b = equilibrium for g = e_b (linear neurons)
+  function computeH() {
+    const H = new Float64Array(N * B);
+    for (let b = 0; b < B; b++) { const e = [0, 0, 0]; e[b] = 1; const u = M.equilibriumOne(m.net, e); for (let i = 0; i < N; i++) H[i * B + b] = u[i]; }
+    return H;
   }
   function setW(W) { m.net.W.set(W); sim.refresh(); sim.lastChange = NaN; }
   function restart() {
@@ -170,6 +184,7 @@ function initFigure(ctx) {
   function afterW(withEnvelope) {
     stopRelax();
     uStar = M.equilibriumOne(m.net, g); uDisp.set(uStar); tau = 0;
+    Hcur = computeH();
     if (withEnvelope) env = M.envelopeCheck(m.net, m.G, sim.D2);
     drawAll();
   }
@@ -197,15 +212,10 @@ function initFigure(ctx) {
     tours.moved(); writeUrl(true);
     drawSlow();
   }
-  function potentialChanged() {
-    M.setPotential(m, p); sim.refresh(); sim.lastChange = NaN;
-    tours.moved(); writeUrl(true);
-    afterW(true);
-  }
   function rebuild() {
     tp.pause(); stopRelax();
     m = M.build(p); sim = M.createSim(m, p);
-    nv = makeNetwork();
+    nv = makeNetwork(); Hcur = computeH();
     sel = M.closestPair(sim.D2); titles();
     tours.moved(); writeUrl(true);
     tp.reset();
@@ -234,7 +244,7 @@ function initFigure(ctx) {
     const seedChanged = t.params.seed != null && t.params.seed !== p.seed;
     Object.assign(p, t.params);
     if (t.params.g1 != null) { g = [p.g1, p.g2, p.g3]; gS.forEach((s, b) => s.set(g[b])); }
-    sB.set(p.b); sA.set(p.a); segP.set(p.pot); sK.set(p.k); sT.set(p.st); sSeed.set(p.seed);
+    sB.set(p.b); sA.set(p.a); sSeed.set(p.seed);
     if (seedChanged) { m = M.build(p); sim = M.createSim(m, p); nv = makeNetwork(); sel = M.closestPair(sim.D2); titles(); }
     else { M.setPotential(m, p); sim.setParams({ b: p.b, alpha: p.a, dt: M.dtOf(p.a) }); }
     tp.reset();
@@ -247,7 +257,7 @@ function initFigure(ctx) {
     if (r.tour) { tours.set(r.tour.id); applyTour(r.tour); return; }
     const seedChanged = r.p.seed !== p.seed;
     p = r.p; g = [p.g1, p.g2, p.g3]; if (r.sel) sel = r.sel;
-    gS.forEach((s, b) => s.set(g[b])); sB.set(p.b); sA.set(p.a); segP.set(p.pot); sK.set(p.k); sT.set(p.st); sSeed.set(p.seed);
+    gS.forEach((s, b) => s.set(g[b])); sB.set(p.b); sA.set(p.a); sSeed.set(p.seed);
     if (seedChanged) rebuild(); else { M.setPotential(m, p); sim.setParams({ b: p.b, alpha: p.a, dt: M.dtOf(p.a) }); sim.refresh(); sim.lastChange = NaN; afterW(true); }
     titles();
   });
@@ -257,33 +267,13 @@ function initFigure(ctx) {
   function drawAll() { drawFast(); drawSlow(); }
   function drawFast() {
     nv.update({ u: uDisp, g, W: m.net.W, sel });
-    const [i] = sel, net = m.net;
-    stats.set("fast", M.maxAbs(M.gradE(net, uDisp, g)), tau > 0 || relaxAnim ? `fast time τ = ${ui.fmtFixed(tau, 1)}` : "at equilibrium");
-    // (a) V_i(u)
-    const us = [], Vs = [], Is = [], lin = [];
-    const d = M.degree(net, i);
-    for (let k = 0; k <= 160; k++) { const u = -3 + 6 * k / 160; us.push(u); Vs.push(M.Vof(net, i, u)); Is.push(d * u + M.dVof(net, i, u)); lin.push(u); }
-    const ui_ = uDisp[i], Ii = M.current(net, uDisp, g, i), Istar = M.current(net, uStar, g, i);
-    const Vmax = Math.max(0.5, M.Vof(net, i, -3)), hasV = net.klo[i] > 0 || net.khi[i] > 0;
-    plA.draw({ note: `u${sub(i + 1)} = ${ui.fmtFixed(ui_, 3)}`, xr: [-3, 3], yr: [-0.04 * Vmax, Vmax * 1.04], layers: [
-      ...(hasV ? [{ type: "vline", v: net.t[i], label: `t${sub(i + 1)}`, color: P.mute }] : []),
-      { type: "line", x: us, y: Vs, color: P.fg },
-      { type: "dots", x: [ui_], y: [M.Vof(net, i, ui_)], color: P.accent, r: 5, stroke: P.surface,
-        tip: () => ui.tipRows(`neuron ${i + 1}`, [{ name: "u_i", value: ui.fmt(ui_, 3) }, { name: "V_i(u_i)", value: ui.fmt(M.Vof(net, i, ui_), 3) }, { name: "threshold t_i", value: ui.fmt(net.t[i], 3) }]) },
-    ] });
-    // (b) transfer curve: u against I = d_i u + V_i'(u); dashed: no potential, u = I/d_i
-    plB.draw({ xr: [Math.min(...Is) * 1.04, Math.max(...Is) * 1.04], yr: [-3, 3], note: `leak d${sub(i + 1)} = ${ui.fmtFixed(d, 3)}` + (hasV ? `, threshold t${sub(i + 1)} = ${ui.fmtFixed(net.t[i], 2)}` : ", no potential"), layers: [
-      ...(hasV ? [{ type: "hline", v: net.t[i], label: `t${sub(i + 1)}`, color: P.mute }] : []),
-      { type: "line", x: lin.map(u => d * u), y: lin, color: P.mute2, dash: "5 4", width: 1.2 },
-      { type: "line", x: Is, y: us, color: P.fg },
-      { type: "dots", x: [Istar], y: [uStar[i]], color: P.fg, ring: true, r: 6 },
-      { type: "dots", x: [Ii], y: [ui_], color: P.accent, r: 5, stroke: P.surface,
-        tip: () => ui.tipRows(`neuron ${i + 1}`, [{ name: "input current I_i", value: ui.fmt(Ii, 3) }, { name: "voltage u_i", value: ui.fmt(ui_, 3) }, { name: "equilibrium u_i*", value: ui.fmt(uStar[i], 3) }]) },
-    ] });
+    sx.update({ H: Hcur, H0: m.net.A, u: uDisp, sel });
+    if (hot != null) hover(hot);
+    stats.set("fast", M.maxAbs(M.gradE(m.net, uDisp, g)), tau > 0 || relaxAnim ? `fast time τ = ${ui.fmtFixed(tau, 1)}` : "at equilibrium");
   }
   function drawSlow() {
     const net = m.net, [i, j] = sel, U = sim.U, D2 = sim.D2;
-    // (c) the pair's responses over the training bank
+    // (a) the pair's responses over the training bank
     const xi = new Array(S), yj = new Array(S);
     let lo = Infinity, hi = -Infinity;
     for (let s = 0; s < S; s++) { xi[s] = U[s * N + i]; yj[s] = U[s * N + j]; lo = Math.min(lo, xi[s], yj[s]); hi = Math.max(hi, xi[s], yj[s]); }
@@ -294,7 +284,7 @@ function initFigure(ctx) {
         { type: "dots", x: xi, y: yj, color: P.cat[0], r: 2, opacity: 0.55 },
         { type: "dots", x: [uStar[i]], y: [uStar[j]], color: P.accent, r: 5, stroke: P.surface },
       ] });
-    // (d) w against D^2, every pair, on the fixed-point line
+    // (b) w against D^2, every pair, on the fixed-point line
     const xmax = 4 * p.b, wcap = p.b / p.a;
     const px = [], py = [], pcol = [], idx = [];
     let beyond = 0;
@@ -308,7 +298,7 @@ function initFigure(ctx) {
         { type: "dots", x: px, y: py, color: pcol, r: 3.5, tip: k => pairTip(idx[k]), click: k => pickPair(idx[k]) },
         ...(sd2 <= xmax ? [{ type: "dots", x: [sd2], y: [net.W[i * N + j]], color: P.accent, ring: true, r: 7 }] : []),
       ] });
-    // (e) envelope identity
+    // (c) envelope identity
     if (env) {
       let emax = 0; for (let q = 0; q < env.half.length; q++) emax = Math.max(emax, env.half[q], env.fd[q]);
       emax = emax * 1.05 || 1;
@@ -325,7 +315,7 @@ function initFigure(ctx) {
     const fp = M.fixedPointErrors(net, D2, p.b, p.a);
     stats.set("K", c.K, `${fp.live} live edge${fp.live === 1 ? "" : "s"} of 28`);
     stats.set("r", sim.residual, sim.residual < M.CLAIM_TOL ? "fixed point (r &lt; 10⁻⁶)" : "not stationary");
-    stats.set("eq", sim.eqResidual, "exact piecewise-linear solve");
+    stats.set("eq", sim.eqResidual, "exact linear solve");
     if (env) stats.set("env", env.err, `finite-difference step ${ui.fmt(M.FD_STEP, 1)}`);
     stats.set("w", wmax, `b/α = ${ui.fmt(wcap, 3)}`);
   }
@@ -339,9 +329,10 @@ function initFigure(ctx) {
   function neuronTip(i) {
     const net = m.net;
     return ui.tipRows(`neuron ${i + 1}`, [
-      { name: "voltage u_i", value: ui.fmt(uDisp[i], 3) }, { name: "threshold t_i", value: ui.fmt(net.t[i], 3) },
-      { name: "input current I_i", value: ui.fmt(M.current(net, uDisp, g, i), 3) }, { name: "d_i (leak)", value: ui.fmt(M.degree(net, i), 3) },
-      ...[0, 1, 2].map(b => ({ name: `attachment a_i${"₁₂₃"[b]}`, value: ui.fmt(net.A[i * B + b], 3), color: catColor(b), shape: "square" })),
+      { name: "voltage u_i", value: ui.fmt(uDisp[i], 3) },
+      ...[0, 1, 2].map(b => ({ name: `embedding h_i${"₁₂₃"[b]}`, value: ui.fmt(Hcur[i * B + b], 3), color: catColor(b), shape: "square" })),
+      ...[0, 1, 2].map(b => ({ name: `attachment a_i${"₁₂₃"[b]}`, value: ui.fmt(net.A[i * B + b], 3) })),
+      { name: "d_i (total conductance)", value: ui.fmt(M.degree(net, i), 3) },
     ], "Click to select it; the previous selection becomes the partner.");
   }
   const sub = n => String(n).split("").map(c => "₀₁₂₃₄₅₆₇₈₉"[+c]).join("");

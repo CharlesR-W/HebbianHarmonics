@@ -1,24 +1,24 @@
-// The talk: a slide-like overview. Three parts (talk_a/b/c), each an HTML fragment of <section class="slide">
+// The primer: a slide-like overview. Three parts (primer_a/b/c), each an HTML fragment of <section class="slide">
 // plus a module exporting init(root, ctx). This file loads them and adds keyboard stepping.
 const PARTS = ["a", "b", "c"];
 
 export async function init(panel, ctx) {
   await Promise.all(PARTS.map(async part => {
-    const root = panel.querySelector(`.talk-part[data-part="${part}"]`);
+    const root = panel.querySelector(`.primer-part[data-part="${part}"]`);
     try {
-      const r = await fetch(`content/talk_${part}.html`, { cache: "no-cache" });
+      const r = await fetch(`content/primer_${part}.html`, { cache: "no-cache" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       root.innerHTML = await r.text();
       ctx.renderMath(root);
-      const mod = await import(`./talk_${part}.js`);
+      const mod = await import(`./primer_${part}.js`);
       if (typeof mod.init === "function") await mod.init(root, ctx);
     } catch (e) {
-      console.error(`talk part ${part}:`, e);
+      console.error(`primer part ${part}:`, e);
       root.insertAdjacentHTML("beforeend", `<p class="placeholder">Part ${part} failed to load: ${e.message}</p>`);
     }
   }));
   const slides = () => [...panel.querySelectorAll(".slide")];
-  const count = panel.querySelector(".talk-count");
+  const count = panel.querySelector(".primer-count");
   slides().forEach((s, i) => { if (!s.querySelector(".slide-num")) { const n = document.createElement("div"); n.className = "slide-num"; n.textContent = String(i + 1).padStart(2, "0"); s.prepend(n); } });
   const currentIdx = () => {
     const mid = innerHeight * 0.4; let best = 0, bd = Infinity;

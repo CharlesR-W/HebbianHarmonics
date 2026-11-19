@@ -46,7 +46,7 @@ export function graphView(el, { height = 460, tooltip, onHover } = {}) {
     if (!box || st.refit || box.mode !== st.mode || outside) {
       box = { ...fb, r: fb.r * 1.08, mode: st.mode }; st.refit = false;
     }
-    const pad = { l: 34, r: 34, t: 38, b: 40 };
+    const pad = { l: 34, r: 34, t: Math.max(38, corner.hidden ? 0 : corner.offsetHeight + 46), b: 40 };
     const s = Math.min((W - pad.l - pad.r) / (2 * box.r), (H - pad.t - pad.b) / (2 * box.r));
     const ox = (pad.l + W - pad.r) / 2, oy = (pad.t + H - pad.b) / 2;
     proj = (x, y) => [ox + (x - box.cx) * s, oy - (y - box.cy) * s];

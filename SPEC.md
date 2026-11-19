@@ -128,30 +128,36 @@ Conventions for every experiment (from the plan review, 2026-11-17):
 
 ## 4. Chapters (tabs)
 
-0. **idea** — the note retold for the new model: energy, on-site potential as transfer
-   function, response functions, the rule as an envelope-theorem gradient, a boxed
-   "what we found" keyed to T1–T4.
-1. **fusion** — live, B = 3 (linear case drawn in the simplex; nonlinear case by classical
-   MDS of `D`, stated on the page) and small N. Sliders: b, alpha, nonlinearity,
-   heterogeneity, attachment sparsity; Sigma presets. Linked: point cloud with live edges,
-   `D^2` matrix with the `2b` contour, `w` vs `D^2` scatter on the theory curve, residual.
-2. **many** — B up to ~24, planted blocks / hierarchy / power-law spectra. Cluster count
-   and radius vs b (live + precomputed sweep with seeds), up/down hysteresis, the
-   resolution law.
-3. **diversity** — Q-diversity and Q-eigen.
-4. **allocation** — Q-allocation (a)–(c).
-5. **readout** — Q-readout.
-6. **old rule** — one chapter condensing v1: the covariance rule, why it collapses, parts
-   not eigenvectors, clones, transient allocation, rectified output; with the corrections
-   of `docs/v1/review_corrections.md` applied. Reuses at most one live v1 figure.
-7. **method** — engineering choices table and caveats; what was not done (stability
-   Hessian eq. 12, lagged statistics, generative phase, real data).
+Structure changed on 2026-11-19 (curated story, linear first then nonlinear): see
+`docs/PLAN_curation.md`. The earlier list (idea, fusion, many, diversity, allocation,
+readout, old rule, method) is superseded by this one.
+
+Main path:
+
+1. **primer** (`#primer`, formerly "The talk") — slide-style overview of the main ideas.
+2. **idea** — harmonic embedding on a linear resistor network; both rules (covariance rule,
+   and the distance rule as an energy gradient via the envelope theorem).
+3. **perron** — covariance rule: clusters are Perron vectors of principal submatrices of
+   `A = Sigma - theta 11^T`; worked cases, many inputs, big precomputed runs.
+4. **readout** — distance rule: exact recovery of `P C P` from the weights.
+5. **nonlinear** — on-site potentials, response functions as the clustered objects, what
+   carries over, what was and was not obtained; linear vs rectifier big runs.
+
+Appendix:
+
+6. **fusion** — fusion under the distance rule, bistability, percolation regimes.
+7. **many** — many inputs: hysteresis, the resolution law.
+8. **diversity** — within-cluster diversity (Q-diversity, Q-eigen).
+9. **allocation** — Q-allocation: no allocation law found.
+10. **old** ("More on the covariance rule") — clones, allocation from the transient, rectified
+    output, synthetic data only.
+11. **method** ("Choices & caveats") — engineering choices, what was not done.
 
 ## 5. Form and code
 
 - Keep the existing shell (`site/index.html`, `main.js`, `ui.js`, `charts.js`,
   `view3d.js`, CSS, vendored KaTeX/fonts) and `site/DESIGN.md` conventions; replace
-  chapter content. v1 chapter files, MNIST/nonlin data and code leave the tree (git
+  chapter content. v1 chapter files, MNIST/nonlin data and code have left the tree (git
   history keeps them) except what chapter 6 needs.
 - Reference implementation `hebb/onsite.py` (numpy); browser engine
   `site/js/onsite_engine.js` (pure ES module, no deps); node-vs-numpy parity test.

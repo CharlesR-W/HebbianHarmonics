@@ -1,0 +1,85 @@
+<section class="slide wide" id="primer-readout">
+  <h2>Read the input statistics out of the weights</h2>
+  <p class="claim">For linear neurons with stationary weights, each live synapse is one linear equation on the training inputs' contrast second moment \(P\hat C P\). Given the attachments and the rule, solve them.</p>
+  <div class="side">
+    <span class="status" data-status="shown">derived and shown</span>
+    <p class="eq">\[ (h_i - h_j)^{\top} C\, (h_i - h_j) = 2\,(b - \alpha\, w_{ij}) \]</p>
+    <ul class="points">
+      <li>Exact once the equations are full rank and well conditioned.</li>
+      <li>More neurons than inputs makes it work: more live synapses, more equations.</li>
+      <li>Contrasts only, and a second moment is not the input distribution.</li>
+    </ul>
+    <a class="see explore-link" href="#readout">See it live</a>
+  </div>
+  <div class="fig">
+    <div class="tb-pair tb-21">
+      <div class="tb-panel"><div id="primer-c-readout" class="rd-row" role="group" aria-label="Weights, then embeddings, then the recovered contrast covariance next to the true one"></div><p id="primer-c-readout-stat" class="rd-stat"></p></div>
+      <div class="tb-panel"><svg id="primer-c-rank-svg" viewBox="0 0 420 360" role="img" aria-label="Rank of the readout equations against the number of neurons, for three values of b"></svg></div>
+    </div>
+    <p class="fig-cap">Left, computed in your browser on a toy (18 neurons, 9 inputs, block covariance \(C\)): \(W\) is the rule's fixed point, \(H = (L + \mathrm{diag}(A\mathbf 1))^{-1}A\) follows from \(W\) and the attachments \(A\), and \(PCP\) is solved by least squares from the live synapses alone. Right (precomputed, data/big/readout_vs_N.json): rank of those equations, out of the 66 contrasts of 12 inputs, against \(N\), for three values of \(b\), mean of 3 seeds; legend: the smallest full-rank \(N\) and the cosine there of the recovered \(P\hat C P\) with the truth.</p>
+  </div>
+</section>
+
+<section class="slide" id="primer-nonlinear">
+  <h2>Nonlinear neurons: what carries over</h2>
+  <p class="claim">Give each neuron a transfer function. The geometry and the readout of distances survive; the hoped-for expansion code does not appear.</p>
+  <div class="side">
+    <span class="status" data-status="shown">shown</span>
+    <ul class="points">
+      <li>Carries over: the rule and its exact fixed point, now for whole response functions. Live synapses still state exact response distances; dead pairs give lower bounds.</li>
+      <li>Hoped for: many neurons per group, each a different function of the shared pattern, a rich code for downstream readers.</li>
+      <li>Measured: differences within a compact group are real but small, about 1–2% of the variance with spread thresholds (linear: 0.1–0.3%), and fusing makes such neurons more linear.</li>
+    </ul>
+    <a class="see explore-link" href="#nonlinear">See it live</a>
+  </div>
+  <div class="fig">
+    <svg class="tb-fan" viewBox="0 0 640 400" role="img" aria-label="Neuron response curves as functions of one input pattern"></svg>
+    <p class="fig-cap tb-fancap"></p>
+    <div class="fig-ctl">
+      <button type="button" class="tb-hope" aria-pressed="true">Hoped for</button>
+      <button type="button" class="tb-meas" aria-pressed="false">Measured</button>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="primer-knobs">
+  <h2>Plasticity parameters are clustering knobs</h2>
+  <p class="claim">The constants in a plasticity rule play the role of the settings of a clustering algorithm.</p>
+  <div class="side">
+    <span class="status" data-status="shown">shown</span>
+    <ul class="points">
+      <li>Covariance rule: the threshold \(\theta\) sets how many inputs each group spans.</li>
+      <li>Distance rule: \(b\) sets the resolution (how alike is "alike"); \(\alpha\) how tight the groups are and how much they remember their history.</li>
+      <li>So we can ask what trade-off a given homeostatic or pruning rule is making.</li>
+    </ul>
+    <a class="see explore-link" href="#fusion">See it live</a>
+  </div>
+  <div class="fig">
+    <span class="space-badge" data-space="input">input space · 1-D toy</span>
+    <svg id="primer-c-knobs-svg" viewBox="0 0 640 300" role="img" aria-label="Thirty neurons grouped by colour; groups change with the two sliders"></svg>
+    <p class="fig-cap">Toy illustration of the distance rule's two knobs, not a simulation: each dot is a neuron placed by its response along one input direction; colour is its group. No synapses drawn.</p>
+    <div class="fig-ctl">
+      <label>resolution b <input type="range" id="primer-c-b" min="0" max="100" value="45"></label>
+      <label>tightness α <input type="range" id="primer-c-alpha" min="0" max="100" value="30"></label>
+    </div>
+  </div>
+</section>
+
+<section class="slide title-slide" id="primer-end">
+  <h2>What we get, and what is open</h2>
+  <div class="side">
+    <ul class="points">
+      <li>Harmonic embeddings are the natural variables: each neuron is a point in the simplex of inputs, and Hebb's rule acts there.</li>
+      <li>Clusters are Perron parts of the thresholded input covariance, not its eigenvectors.</li>
+      <li>A local rule that descends a global energy, and weights from which the input statistics can be read back (exact for linear neurons, contrasts only).</li>
+      <li>Plasticity parameters as clustering knobs.</li>
+    </ul>
+    <p class="open-head">Open</p>
+    <ul class="points open">
+      <li>Directed networks, through a directed Laplacian.</li>
+      <li>An allocation law: how many neurons each input pattern gets (none found in the basic model; <a href="#allocation">Allocation</a>).</li>
+      <li>An expansion code with real diversity inside a group (<a href="#diversity">Diversity</a>); noise.</li>
+    </ul>
+    <a class="see explore-link big" href="#idea">Read the chapters</a>
+  </div>
+</section>

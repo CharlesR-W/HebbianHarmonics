@@ -410,3 +410,94 @@ Added after an independent review of the chapters (2026-11-17):
 - **G3 scope, continued.** The headline holds for random attachments that mix several input modes, and means the absence of a stable count plateau. It is not a claim that fusion never makes a few tight clusters: along a single mode at small α it does (G9 condensation), with a count that moves with b and with history. Nor is prior grouping by the attachments shown to be necessary in general.
 - **G16 cluster-Gram scope.** "For tight clusters q is the spectrum of (νn)^{1/2} PᵀP (νn)^{1/2}" is exact for identical members only, approximate for tight clusters, and can fail badly for wide components (G16, 25–110% at percolation); in general q is the spectrum of the full centred neuron Gram matrix.
 - **G18 mechanism attribution.** The drain to quiet inputs is a property of the energy together with the ridge α_A/2‖a_i‖², not of the energy alone: every pure attachment has zero equilibrium energy whatever its input's variance, and the ridge, which charges for concentrating a row, is what makes rows spread, which is cheapest over quiet inputs. The drain depends on α_A (at α_A = 0.1 pure attachments to loud inputs survive). What holds without qualification is that the energy never rewards listening to a loud input.
+
+## Big runs (N ≫ B), 2026-11-19
+
+Precomputed for the explorer (`site/data/big/`, format and every field in `site/data/big/README.md`). Scripts in `hebb/big/`; engines imported unchanged (`hebb/core.py`, `hebb/onsite.py`). The distance-rule integrators in `hebb/big/dist_engine.py` (numpy linear path; torch float64 rectifier path with batched Cholesky Newton) follow `onsite.run` step for step and match it to 1e-15 in W and U, with identical step counts, on small cases (`hebb/big/validate.py` → `scratch/out/big/validate_cpu.json`). Every run below converged: covariance rule residual ≤ 1e-7 (claim threshold 1e-6), distance rule ≤ 9.6e-10 (claim 1e-6) over all 177 + 45 units. Nothing failed or was left unconverged.
+
+### B1. Covariance rule: big-N clusters sit on Perron parts, not on eigenvectors (identity for the fit; empirical for which parts are populated)
+
+`hebb/big/cov_runs.py` → `cov_all.json` (films `A_cov_*`, `B_cov_*`). Mean-field, dense masks, γ = λ = η = 1, floor scaled with N: w_min = 0.009/N (ω = N·w_min = 0.009, as in the live demo), and every setting repeated at ω/3. B = 3: N = 300, seeds 0–2. B = 12–16: N = 400, seed 0.
+
+- **Every major cluster is a stable part.** Over all 30 runs and every cluster with ≥ 2% of the neurons: cosine of the centroid with the Perron vector of A_SS on its above-floor support ≥ 0.9999; top-eigenvalue test passed in every cluster; off-support (A h)_b ≤ −0.057 (no violation); cosine with the nearest exactly enumerated stable part ≥ 0.9999. Members are clones: largest member-to-centroid L1 spread 1e-10 or below.
+- **Not eigenvectors.** Best |cosine| of a part with an eigenvector of Σ (degenerate eigenspaces grouped):
+
+| Σ (N = 400) | θ | stable parts (enumerated) | clusters (≥ 2%) | best-eigenvector cosine |
+|---|---|---|---|---|
+| blocks12 (3×4, 0.5 / 0.1) | 0.2 | 3 (blocks) | 1 (bound, one block) | 0.816 |
+| | 0.35 | 3 (blocks) | 3 | 0.814–0.816 |
+| | 0.6 | 12 (corners) | 8 | 0.864–0.866 |
+| hier16 (0.8 / 0.5 / 0.25 / 0.05) | 0.2 | 2 (halves) | 1 (bound) | 0.707 |
+| | 0.35 | 4 (quarters) | 2 | 0.707 |
+| | 0.6 | 8 (pairs) | 6 (4 at ω/3) | 0.706–0.707 |
+| ring16 (ℓ = 1.5) | 0.3 | 16 (width-5 bumps) | 3 | 0.657–0.659 |
+| | 0.5 | 16 (width 3) | 4 | 0.570–0.571 |
+| | 0.7 | 16 (width 2) | 6 | 0.488–0.490 |
+
+- **Which parts are populated is not fixed by Σ and θ.** θ below κ₀ = mean entry of Σ (blocks 0.275, hier 0.26) gives one bound cluster on one part (old.html's crossover). Above it, only a subset of the stable parts is populated (8 of 12 corners; 3–6 of 16 ring bumps, the γ = 1 packing constraint), and that subset moved with the floor: hier16 at θ = 0.6 has 6 clusters at ω and 4 at ω/3. The Perron fit did not move with the floor.
+- **B = 3 films (seeds 0–2).** θ = 0.4: three corner clusters (sizes 105/103/92, 108/103/89, 104/98/98). θ = 0.2: one bound cluster on one corner, all three seeds. ρ₁₂ = 0.6, θ = 0.5: the g₁g₂ midpoint (207–217 neurons) and the g₃ corner (83–93). Converged in 400–600 steps (t = 20–30).
+- **One-cluster statement** (R3): only for entrywise-positive A; not exercised by these films (every film has θ above some entry of Σ).
+
+### B2. Distance rule at N ≫ B: linear vs rectifier, matched protocol (empirical)
+
+`hebb/big/dist_runs.py` (runs; rectifier arms on Modal, CPU fan-out) and `hebb/big/dist_export.py` (analysis) → `dist_A.json`, `dist_B.json` (films `A_dist_*`, `B_dist_*`). Three arms share seed, attachments (s = 3), W = 0, banks (S = 256 training, 4096 evaluation) and b: linear; rectifier (klo = 3, khi = 0, σ_t = 0.7); homogeneous rectifier (σ_t = 0, control). α = 1. Regimes are named after the linear arm at that b. Family A: Σ = I₃, N = 300, 3 seeds. Family B: B = 12, N = 400, `blocks` and `power` (the sweeps2 presets), 2 seeds. Each arm also on a 13-point b grid (seed 0) for matched comparisons. Mean ± sd over seeds, all at the same b:
+
+| | arm | K | largest / N | edge density | diam_max | span/√(2b) | proto_err (within comp.) | affine_err (per neuron) |
+|---|---|---|---|---|---|---|---|---|
+| A, b = 0.0017 (percolation) | linear | 34 ± 9 | 0.49 ± 0.12 | 0.012 | 0.50 | 16 | 0.084 | 0 |
+| | rect | 231 ± 6 | 0.02 | 0.0017 | 0.08 | 2.3 | 0.005 | 0.091 |
+| | rect σ_t = 0 | 3 ± 0 | 0.96 | 0.023 | 0.52 | 15 | 0.28 | 0.116 |
+| B blocks, b = 0.018 (percolation) | linear | 78 ± 3 | 0.44 ± 0.11 | 0.011 | 0.68 | 5.8 | 0.26 | 0 |
+| | rect | 117 ± 3 | 0.49 | 0.009 | 0.91 | 7.8 | 0.38 | 0.087 |
+| | rect σ_t = 0 | 8 ± 0 | 0.96 | 0.032 | 0.79 | 6.1 | 0.59 | 0.116 |
+| B blocks, b = 0.1 (fused) | linear | 2 ± 2 | 0.87 | 0.81 | 0.04 | 0.1 | 0.0011 | 0 |
+| | rect | 4 ± 2 | 0.91 | 0.82 | 0.48 | 1.7 | 0.025 | 0.022 |
+| | rect σ_t = 0 | 2 ± 0 | 1.00 | 1.00 | 0.03 | 0.1 | 0.0018 | 0.117 |
+| B power, b = 0.18 (fused) | linear | 1 | 1.00 | 1.00 | 0.02 | 0.05 | 0.0011 | 0 |
+| | rect | 3 | 0.98 | 0.97 | 0.17 | 0.5 | 0.013 | 0.006 |
+| | rect σ_t = 0 | 1 | 1.00 | 1.00 | 0.02 | 0.05 | 0.0024 | 0.115 |
+
+(All regimes, both Σ and the α = 0.1 runs are in the JSONs; `proto_err` = held-out relative error of member ≈ a + c·prototype, size-weighted over multi-member components, as in `diversity.py`; `affine_err` = held-out relative error of an affine fit of a neuron's response from the full input.)
+
+- **Same b, different regime.** Threshold spread makes the rectifier fuse later than the linear network where inputs are few (family A: 231 vs 34 components at the linear percolation b) and about as late in family B (117 vs 78 blocks; 32 vs 41 power); the homogeneous rectifier fuses much earlier in every case (3, 8, 2 components). This is the 2026-11-17 correction "σ_t pushes the closest pairs apart", now at N = 300–400.
+- **Matched edge density** (`matched[...]`; ratio = rectifier b / linear b at the same density, log-interpolated on the linear seed-0 grid): family A 2–6× (e.g. density 0.018 at b = 0.0095 against the linear arm's 0.019 at b = 0.003). Family B depends on Σ and regime: 1.6–2.2× while fragmented (both Σ), about 1.0–1.2× near percolation on `blocks`, and below 1 on `power` from percolation to fusion (0.56–0.91 on the grid; the percolation regime run itself, b = 0.045, density 0.030, matches the linear arm at b ≈ 0.062, ratio 0.73). Corrected 2026-11-19: an earlier "1–2× in family B up to percolation" read the nearest grid point (b = 0.056, density 0.080) instead of the run; the page now interpolates at each regime run's own density (`matched[sigma].regime_match`). At matched density near percolation both arms form chains (span 5–19 edge ranges), so `proto_err` there measures chain width, not diversity.
+- **Within-cluster diversity, compact components only** (`diversity.proto_err_w_compact`: size-weighted `proto_err` over multi-member components whose span is ≤ 2 edge ranges √(2b); added 2026-11-19, because the run-level `proto_err_w` averages over every multi-member component, chains included: fused blocks rectifier seed 1 has a 23-neuron component spanning 2.28 edge ranges, and excluding it moves 0.0253 to 0.0187). Fragmented and fused regimes of family B, seed means: rectifier 0.0097–0.021 (fragmented: blocks 0.021, power 0.0097; fused: blocks 0.021, power 0.013), linear 0.0011–0.0033, homogeneous rectifier 0.0018–0.010. Family A's fragmented components are mostly pairs (5–9 multi-member components in the rectifier arm); every arm ≤ 0.0007 there (per seed). So threshold heterogeneity adds about 1–2% of member variance not explained by the prototype in compact components, an order of magnitude more than the linear arm but still small; d_eff ≤ 1.07. At percolation the all-component `proto_err_w` measures chain width. This agrees in size with G12's controlled rank-one result (about 2%), which remains the reference for that number. Note: `span_over_range` is the largest span over all components; `span_largest_over_range` (added) is the largest component's.
+- **Fusion linearises the heterogeneous rectifier.** Per-neuron affine error falls from 0.087–0.091 (fragmented, near W = 0) to 0.022 (blocks) and 0.006 (power) at the fused b, and to 0.016 / 0.005 at b ≥ 0.3 where all edges are live; members then become copies (proto_err ≤ 0.0012 at b ≥ 0.3, ≤ 0.0004 at b ≥ 0.56). The homogeneous rectifier stays nonlinear (0.115) but its members are copies of each other.
+- **α = 0.1** (family A, b = 0.0017, films `*_percolation_a0.1`): linear 50 components (largest 0.29 N) vs 34 at α = 1; rectifier 239 vs 231.
+
+### B3. Readout at N ≫ B
+
+**Linear arm** (covariance readout, `hebb/sweeps2/readout.analyse` unchanged; `dist_B.json` `runs[].readout`), N = 400, B = 12, 66-dim contrast space:
+
+- Percolation and fused b: rank 66/66 in all 8 runs, cosine with P Ĉ P 1.0000 (to 4 decimals), with P Σ P 0.989–0.997 (sampling). Condition number 3.9–115. Errors separately: fixed point ≤ 1.7e-9, sampling 0.078–0.156, inverse on the identifiable subspace ≤ 9e-7.
+- Fragmented b = 0.003: blocks rank 56–63 (cosine 0.90, identity baseline 0.54), power rank 23–30 (cosine 0.68–0.77, identity baseline 0.69–0.70): at this b the trained weights are barely better than a fitted multiple of the identity on `power`.
+- 1% multiplicative weight noise: 1.000 at percolation, 0.70–0.995 in the fused regime (as in G21: information sits in tiny deviations from b/α).
+
+**Rectifier arms** (distance readout only, R1; `runs[].distance_readout`):
+
+- Run set (corrected 2026-11-19; the earlier numbers mixed run sets): the rectifier arm (σ_t = 0.7), α = 1, all 58 runs of both families (regime b values, seeds 0–2 / 0–1, and the seed-0 b grids). Bounds are rounded outward.
+- Live edges give the training-bank D exactly: max |√(2(b − αw)) − D| ≤ 5e-6 (4.7e-6; ≤ 6e-8 at the regime b values; the larger values at tiny D, where the square root amplifies the 1e-9 residual). Against the evaluation bank the median relative error is 1.6–7.1% (sampling).
+- Dead pairs: D ≥ √(2b) holds for ≥ 99.95% of cross-component pairs on the evaluation bank (minimum 99.957%; 100% on the training bank). Homogeneous-rectifier control (58 runs): ≥ 99.74%, train error ≤ 8e-6.
+- Pairs identified exactly = live-edge fraction: 0.0002 (fragmented) to 0.009–0.03 (percolation) to 0.82–0.97 (fused rectifier). Near percolation 24% (blocks) and 73% (power) of pairs have only a shortest-path upper bound, which overestimates D by a median factor 1.5–1.7 (family B, both rectifier arms).
+- Completed-distance MDS of the largest component vs the measured-distance MDS (response-function space): Procrustes disparity 0.27 (blocks) and 0.52 (power) at percolation, 0.004 in the fused blocks regime. So the completed geometry is a usable approximation only once most pairs are live edges.
+
+### B4. Readout vs N (family C, R5)
+
+`hebb/big/readout_vs_n.py` → `readout_vs_N.json`. Linear distance rule, B = 12, `blocks`, α = 1, three seeds, cold start. Mean rank (of 66) and mean cosine with P Ĉ P:
+
+| b \ N | 40 | 80 | 160 | 320 | 500 |
+|---|---|---|---|---|---|
+| 0.01 | 5.3 / 0.22 | 16.7 / 0.45 | 53 / 0.84 | 66 / 1.000 | 66 / 1.000 |
+| 0.036 | 30.7 / 0.58 | 66 / 0.996 | 66 / 1.000 | 66 / 1.000 | 66 / 1.000 |
+| 0.1 | 66 / 1.000 | 66 / 1.000 | 66 / 1.000 | 66 / 1.000 | 66 / 1.000 |
+
+- **Rank follows the live-edge count until it saturates** (rank = live edges in every rank-deficient run but one), and the edge count at fixed b grows faster than N: at b = 0.01, 5 live edges at N = 40, 534 at N = 500. Full rank arrives while the network is still in pieces: N = 320 and 500 at b = 0.01 have 175 and 202 components.
+- **Conditioning improves with N:** the seed-mean log₁₀ condition number at b = 0.1 (full rank throughout) falls from 3.5 (N = 40) to 1.3 (N = 500). The worst full-rank case (N = 80, b = 0.036, seed 0: rank 66 at 1e-8 but 62 at 1e-4, condition 6.8e5) recovers cosine 0.987, not 1: full rank without good conditioning is not enough (as in the G21 correction).
+- **Errors, separately:** fixed point ≤ 1.9e-9; sampling ‖PĈP − PΣP‖/‖PΣP‖ = 0.091 (mean); inverse problem on the identifiable subspace ≤ 1.4e-3. Against P Σ P the cosine at full rank is 0.996, which is the sampling error, not the readout.
+- **Wording that the data support:** exact identifiability of the training-bank contrast second moment P Ĉ P, for stationary noiseless weights, known attachments and rule parameters, and a full-rank, well-conditioned live-edge operator; at fixed B that condition is met at smaller b as N grows.
+
+### Not done, deviations
+
+- Distance-rule films have 20–46 frames, not 60–120: from W = 0 the flow converges in 20–80 Euler steps and every step is already a frame.
+- Rectifier runs used Modal CPU containers (2 cores each, 118 units, ~66 container-minutes, under $0.50), not GPUs: the workspace's GPU slots were occupied by another project's jobs, and a unit took 20–240 s on CPU.
+- No family B covariance readout for the rectifier (by design, R1), no hierarchy for the distance rule, one seed for family B covariance runs, two for family B distance runs.

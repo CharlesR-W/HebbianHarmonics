@@ -4,17 +4,24 @@
 // appends it for you. Callbacks: onInput (continuous, sliders only) and onChange (committed value).
 import { gradientCss } from "./palette.js";
 
+// The tab shown for an empty hash (it carries the masthead).
+export const HOME_TAB = "primer";
+export const tabAliases = { talk: "primer" };
+// Main path first, then the appendix (group "appendix": drawn after a divider in the tab bar). Old ids that moved
+// are in `tabAliases` (main.js rewrites them); `anchorMoves` sends deep links to anchors that moved or were removed.
 export const tabsMeta = [
-  { id: "idea", label: "The idea" },
-  { id: "talk", label: "The talk" },
-  { id: "fusion", label: "Fusion" },
-  { id: "many", label: "Many inputs" },
-  { id: "diversity", label: "Diversity" },
-  { id: "allocation", label: "Allocation" },
-  { id: "readout", label: "Readout" },
-  { id: "old", label: "The old rule" },
-  { id: "method", label: "Choices & caveats" },
-].map(t => ({ ...t, title: t.id === "idea" ? "Hebbian Learning on a Nonlinear Resistor Network" : `${t.label} · Hebbian Learning on a Nonlinear Resistor Network` }));
+  { id: "primer", label: "Primer", group: "main" },
+  { id: "idea", label: "The idea", group: "main" },
+  { id: "perron", label: "Perron parts", group: "main" },
+  { id: "readout", label: "Reading the weights", group: "main" },
+  { id: "nonlinear", label: "Nonlinear neurons", group: "main" },
+  { id: "fusion", label: "Fusion", group: "appendix" },
+  { id: "many", label: "Many inputs", group: "appendix" },
+  { id: "diversity", label: "Diversity", group: "appendix" },
+  { id: "allocation", label: "Allocation", group: "appendix" },
+  { id: "old", label: "More on the covariance rule", group: "appendix" },
+  { id: "method", label: "Choices & caveats", group: "appendix" },
+].map(t => ({ ...t, title: t.id === HOME_TAB ? "Hebbian Learning on a Resistor Network" : `${t.label} · Hebbian Learning on a Resistor Network` }));
 
 // ---------------------------------------------------------------- basics
 // #tab/anchor?k=v  ->  { tab, anchor, params: URLSearchParams }
@@ -68,6 +75,26 @@ const sup = n => String(n).split("").map(c => SUP[c]).join("");
 export const fmtFixed = (v, d = 2) => (Number.isFinite(v) ? v.toFixed(d).replace("-", "−") : "n/a");
 export const fmtPct = (v, d = 0) => (Number.isFinite(v) ? (100 * v).toFixed(d) + "%" : "n/a");
 export const fmtInt = v => (Number.isFinite(v) ? Math.round(v).toLocaleString("en-GB") : "n/a");
+
+// ---------------------------------------------------------------- space badges (DESIGN.md "Neuron space and input space")
+// Every graphic says which space it lives in. spaceBadge(kind, text?): kind "neuron" | "input" | "function".
+// In HTML: <span class="space-badge" data-space="input">input space</span>.
+const SPACE_TEXT = { neuron: "neuron space", input: "input space", function: "response-function space" };
+export function spaceBadge(kind, text) { return h("span", { class: "space-badge", "data-space": kind, text: text || SPACE_TEXT[kind] || kind }); }
+// panelHead(titleHtml, kind, badgeText?) -> <div class="panel-head"><div class="chart-title">…</div><badge></div>
+export function panelHead(title, kind, text) {
+  const t = h("div", { class: "chart-title", html: title }); renderMath(t);
+  return h("div", { class: "panel-head" }, t, kind ? spaceBadge(kind, text) : null);
+}
+// synapseToggle({checked = false, label = "show synapses", onChange(on)}) -> {el, get(), set(on)}: the opt-in for
+// drawing synapse lines over an input-space panel.
+export function synapseToggle(o = {}) {
+  const input = h("input", { type: "checkbox" }); input.checked = !!o.checked;
+  const el = h("label", { class: "syn-toggle" }, input, o.label || "show synapses");
+  input.addEventListener("change", () => o.onChange?.(input.checked));
+  if (o.parent) o.parent.append(el);
+  return { el, get: () => input.checked, set(v) { input.checked = !!v; } };
+}
 
 // ---------------------------------------------------------------- tooltip (one global #tooltip element)
 const tipEl = () => document.getElementById("tooltip");

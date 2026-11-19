@@ -1,9 +1,9 @@
 # HebbianHarmonics site: design contract for chapter authors
 
 Read this file and `SPEC.md`; nothing else is needed. Section 0 says what changed for v2; the rest is the
-contract every chapter follows. Code examples below were written for v1 and use its names (`engine.js`, `theta`,
-`data/mnist/...`); the APIs they show are unchanged. The `#old` chapter (`content/old.html`, `js/ch_old.js`,
-`js/ch_old_model.js`) is a complete chapter that uses most components (sim layout, transport, tours, controls,
+contract every chapter follows. Code examples below were written for v1 and use its names (`engine.js`, `theta`);
+the APIs they show are unchanged. The `#perron` chapter (`content/perron.html`, `js/ch_perron.js`,
+`js/ch_perron_model.js`; the v1 live figure, formerly in `#old`) is a complete chapter that uses most components (sim layout, transport, tours, controls,
 stat tiles, legend, linked heatmap, side notes, callouts, a disclosure) and is the nearest working example.
 
 ## 0. What changed in v2 (2026-11-17)
@@ -14,20 +14,26 @@ stat tiles, legend, linked heatmap, side notes, callouts, a disclosure) and is t
   `data/sweeps2/*.json` (each file carries its config). Use SPEC §1 notation in new chapters ($F_i$, $D_{ij}$,
   $b$, $\alpha$, $V_i$, $t_i$, $k_{lo}$, $k_{hi}$, $\sigma_t$, $s$, attachments $a_{ib}$); the v1 notation paragraph
   in section 4 applies to the old-rule chapter only.
-- **Tabs**, in order (id: label): `idea` The idea · `fusion` Fusion (centrepiece, marked with three squares) ·
-  `many` Many inputs · `diversity` Diversity · `allocation` Allocation · `readout` Readout · `old` The old rule ·
-  `method` Choices & caveats. Kickers: "Chapter 1 · live simulation" (fusion) to "Chapter 7" (method); the page
-  title, subtitle and the kicker/title of each chapter are in `index.html` and the labels in `ui.js` `tabsMeta`
-  (`main.js` routes from `tabsMeta`, so adding a tab means editing those two places only).
-- **v1 survives only in `#old`.** `js/engine.js` (with `ENGINE.md`, `hebb/core.py` and
-  `tests/test_engine_parity.py`) is kept for that chapter's one live figure; no new chapter should import it.
-  The other v1 chapters, their data (`data/mnist`, `data/nonlin`, `data/sweeps`, `data/homeo`) and the v1
+- **Tabs** (2026-11-19 curation; see `docs/PLAN_curation.md`). Main path, in order (id: label): `primer` Primer
+  (slides; marked with three squares) · `idea` The idea · `perron` Perron parts · `readout` Reading the weights ·
+  `nonlinear` Nonlinear neurons. Then the **appendix**, drawn after a divider with a small "Appendix" label (class
+  `tab-group`; appendix tabs carry class `tab-app`): `fusion` Fusion · `many` Many inputs · `diversity` Diversity ·
+  `allocation` Allocation · `old` More on the covariance rule · `method` Choices & caveats. Kickers: "Part 2" …
+  "Part 4" on the main path, "Appendix A" … "Appendix F" in the appendix. The empty hash shows `idea` (it carries
+  the masthead, whose call to action points to the primer). Labels and groups are in `ui.js` `tabsMeta`; kickers,
+  titles and the tab bar in `index.html` (`main.js` routes from `tabsMeta`, so adding a tab means editing those two
+  places only). **Old addresses keep working:** `#talk…` redirects to `#primer…` (`tabAliases` in `ui.js`; ids
+  `talk-*` became `primer-*`), and anchors that moved chapter are rewritten by `anchorMoves` in `main.js`
+  (`#old/old-sim?tour=…` → `#perron/perron-sim?tour=…`; `#old?k=v` → `#perron?k=v`).
+- **v1 survives in `#perron` (and the text of `#old`).** `js/engine.js` (with `ENGINE.md`, `hebb/core.py` and
+  `tests/test_engine_parity.py`) is kept for the covariance-rule live figure; no other chapter should import it.
+  **All data are synthetic** (MNIST was dropped). The other v1 chapters, their data and the v1
   experiment code were removed (git history keeps them); the v1 write-ups are in `docs/v1/`.
 - **Placeholders.** Each new chapter starts as `content/<tab>.html` (the chapter's question and an
   "In preparation" note) and an empty `js/ch_<tab>.js`. Each author owns one disjoint pair of files, plus
   optional helper modules named `js/ch_<tab>_*.js` imported by `ch_<tab>.js` (as `ch_old_model.js`).
 - **Ids are page-global.** Every chapter is loaded into the same document, so prefix element ids with the tab
-  (`id="fusion-bistable"`, `id="readout-eq-rank"`); `#old` uses `old-`.
+  (`id="fusion-bistable"`, `id="readout-eq-rank"`); `#old` uses `old-`, `#perron` `perron-`, `#primer` `primer-`.
 
 ## 1. Files and who owns what
 
@@ -41,13 +47,17 @@ site/
   js/ui.js              components + helpers (sections 7)                                    (design system)
   js/charts.js          heatmap, filmstrip, lineChart, scatter, barChart, barMultiples, imageGrid (section 8)
   js/view3d.js          3D point/line viewer + simplex helpers (section 9)
+  js/netview.js         neuron-space network diagram, seeded random layout (section 9b)
+  js/filmplayer.js      player for the precomputed films in data/big/ (section 9c)
   js/palette.js         colour grammar for JS (reads css/tokens.css) (section 6)
   js/onsite_engine.js   the v2 simulation engine (separate owner; see SPEC.md §5)
-  js/engine.js          the v1 engine, used only by the old-rule chapter (see ENGINE.md)
+  js/engine.js          the v1 engine, used only by the covariance-rule figure in #perron (see ENGINE.md)
   vendor/               KaTeX 0.16 and fonts (Source Serif 4, Inter, JetBrains Mono); nothing from a CDN
   content/<tab>.html    chapter prose fragment                                               (chapter author)
   js/ch_<tab>.js        chapter module                                                       (chapter author)
   data/sweeps2/         precomputed v2 sweeps (hebb/sweeps2/*.py)                            (data owner)
+  data/big/             precomputed big-N films (hebb/big/*.py; format in data/big/README.md) (data owner)
+  content/primer*.html, js/ch_primer.js, js/primer_[abc].js, css/primer.css   the Primer slides
 ```
 
 A chapter author edits only `content/<tab>.html`, `js/ch_<tab>.js` and their own data files. If you need a new
@@ -75,7 +85,7 @@ maths, numbers side notes and adds heading anchors, then does `import("./ch_<tab
 your module added are handled too). Chapters load lazily, once; switching tabs does not re-run `init`.
 
 **Fragments** are plain HTML: no `<html>`, `<head>`, `<body>` or `<script>`. Mark the places your module fills with
-`data-slot="name"` and get them with `ctx.slot("name")`. Reference data with relative URLs (`data/mnist/meta.json`).
+`data-slot="name"` and get them with `ctx.slot("name")`. Reference data with relative URLs (`data/sweeps2/resolution.json`).
 
 **Chapter module** contract:
 
@@ -127,7 +137,7 @@ loaded chapter holding it). A link to the hash you are already on still re-appli
   optional **Values:** part listing only the parameters needed to reproduce the figure ($B$, $N$, $\theta$, seed,
   ...). No "clearly", "as expected", "shows that"; interpretation belongs in the prose around the figure.
 - **Synthetic data are labelled** in the figure title or caption: `<span class="synthetic-tag">synthetic Σ</span>`.
-  Precomputed figures say where the numbers come from (`data/mnist/...`, run id).
+  Precomputed figures say where the numbers come from (`data/sweeps2/...`, `data/big/<id>`, run id).
 - **Every live simulation states its mode** (mean-field with exact $\Sigma_g$, or minibatch with batch size).
 - Numbers in prose that come from data are formatted like the UI (`ui.fmt`: 3 significant figures, true minus).
 - Spelling: British ("colour", "normalise"), as in the rest of the page.
@@ -214,7 +224,6 @@ the same values as `P` (read from the CSS at import, so they cannot drift).
 |---|---|---|---|
 | categorical (identity) | `--c-cat-0` … `--c-cat-7` | `P.cat[i]`, `catColor(i)` | clusters (ordered by size, largest = 0), series, boundary neurons when $B \le 8$. Fixed order, never cycled: past 8 everything folds to "other" |
 | other / unassigned | `--c-other` | `P.other` | unassigned neurons, the folded tail, below-threshold |
-| MNIST digits | `--c-digit-0` … `-9` | `P.digit[d]` | digit classes only, always with labels; never in the same figure as `cat` colours |
 | sequential `seq` | `--c-seq-0` … `-8` (blue) | `cmap("seq")` | generic magnitudes: counts, errors, phase diagrams |
 | sequential `ink` | `--c-ink-0` … `-8` (paper → ink) | `cmap("ink")` | **weights / conductances only**; same metaphor as synapse opacity |
 | diverging `div` | `--c-div-0` … `-8` (blue − / grey 0 / red +) | `cmap("div")` | covariance, similarity, signed loadings, eigenvectors. Always a symmetric range `[-m, m]` |
@@ -327,6 +336,9 @@ separators), `showTip(clientX, clientY, htmlOrNode)`, `hideTip()`,
 `tipRows(head, [{name, value, color?, shape?: "dot"|"square"}], noteHtml?)`, `animate(el, fn(dt))` (rAF loop that
 runs only while `el` is on screen; returns `{stop(), running}`), `parseHash()`, `tabsMeta`.
 
+**Space badges and the synapse toggle** (section 9a): `spaceBadge(kind, text?)`, `panelHead(titleHtml, kind, text?)`,
+`synapseToggle({checked = false, label = "show synapses", onChange(on), parent?})` → `{el, get(), set(on)}`.
+
 ## 8. `js/charts.js`
 
 All charts: `const c = kind(el, opts); c.update(partialOpts); c.destroy()`. They fill the container's width, redraw
@@ -398,7 +410,7 @@ fixed size `tile`), e.g. one row per cluster or "linear" / "rectified". Returns 
 ```js
 imageGrid(ctx.slot("parts"), { arrays: parts, w: 14, h: 14, map: "div", tile: 48,
   rows: [{ label: "linear", count: 8 }, { label: "rectified", count: 8 }], colors: parts.map((_, i) => catColor(i % 8)) });
-imageGrid(ctx.slot("top"), { sprite: { src: "data/mnist/digits.png", tileW: 28, tileH: 28, cols: 100 }, indices: top, labels: top.map(i => String(lab[i])) });
+imageGrid(ctx.slot("top"), { sprite: { src: "data/<run>/tiles.png", tileW: 28, tileH: 28, cols: 100 }, indices: top, labels: top.map(i => String(lab[i])) });
 ```
 
 Low-level exports for chart-like figures of your own: `svgEl(tag, attrs, parent)`, `scale(kind, d0, d1, r0, r1)`
@@ -424,7 +436,7 @@ first (drawing more than ~5,000 synapses is unreadable anyway).
 moving points don't make the camera jitter; `v.fit()` refits), `hull` (true: grey lines between all anchors, i.e.
 the simplex edges), `pointSize` (4 px), `edgeWidth` (1), `edgeAlpha` (0.6, the opacity of a weight-1 edge),
 `edgeColor` (ink), `trailColor` (ink), `depthFade` (0.35), `hint` (true: "drag to orbit · scroll to zoom"),
-`tooltip(index, kind)` → HTML or Node, `kind` = `"point"` | `"anchor"`.
+`tooltip(index, kind)` → HTML or Node, `kind` = `"point"` | `"anchor"`. `badge`: `"input"` | `"function"` | `{kind, text}` draws a space badge top left (section 9a).
 
 Methods:
 
@@ -457,6 +469,95 @@ function draw(sim) {
   v.setPoints(baryToXYZ(sim.H, B, verts), rowsOf(sim.H).map(h => mixBary(h, bcol)));
   v.setEdges(sim.edgePairs, sim.edgeWeights.map(w => w / wmax));
 }
+```
+
+## 9a. Neuron space and input space (the graphics convention)
+
+**Every graphic is either neuron space or input / function space, and says so with a badge.**
+
+- **Neuron space**: the network itself. Nodes are neurons (circles) and inputs (squares, ink outline), edges are
+  synapses with width and opacity rising with $w/\max w$. Nodes sit at **seeded random positions** (uniform in the
+  panel with a minimum spacing), so the physical layout is visibly unrelated to what a neuron computes. Never place
+  neurons by their embedding or in a tidy hand-made layout. Draw it with `netview.js` (canvas) or, inside an SVG
+  figure, with positions from `randomLayout` (same algorithm). Pies or other glyphs as nodes are fine.
+- **Input space**: neurons at their embedding: rows $h_i$ of $H$ in the simplex for $B = 3$; a stated projection
+  (classical MDS, PCA, a coordinate pair) for $B > 3$. Organised layouts stay. **Synapse lines are not drawn by
+  default**; cluster membership is colour. Where the lines carry meaning, offer `ui.synapseToggle` ("show
+  synapses", off by default).
+- **Response-function space**: the same for nonlinear neurons (MDS of measured response distances $D$, PCA of
+  responses); badge "response-function space". A completed-distance MDS is labelled an approximation.
+- Plain charts (against $b$, $t$, $N$), tables and matrix heatmaps carry no badge.
+- **Both views**: when the point is how the two relate (clusters form in input space while the network stays a
+  tangle in neuron space), put them side by side in a `div.space-pair` (two columns, stacks on phones) with linked
+  highlighting (hover a neuron in one, ring it in the other: `netview.setHighlight(i)`, `view3d.highlight(i)`) and
+  the same cluster colours. Examples: `#perron-sim`, the film player.
+
+**Badges.** Colours are tokens in `css/tokens.css` (`--space-neuron-*`, `--space-input-*`, `--space-function-*`;
+chrome, never data colours), styled once in `css/ui.css` (`.space-badge`, with a dot, triangle or wave glyph).
+In HTML: `<span class="space-badge" data-space="neuron">neuron space</span>` (`data-space` = `neuron` | `input` |
+`function`), e.g. inside a `.fig-title` or a panel title. In JS: `ui.spaceBadge(kind, text?)`,
+`ui.panelHead(titleHtml, kind, text?)` (a chart title with its badge), `view3d(el, {badge: "input"})`, and netview
+draws its own (top left; `badge: false` turns it off).
+
+## 9b. `js/netview.js`
+
+**`netview(el, opts)`** appends a neuron-space network (canvas, HiDPI, redraws on resize and when its tab is shown).
+Options: `N` neurons, `B = 0` inputs, `seed = 1` (layout seed: same `N`, `B`, `seed` → same picture; inputs take the
+first `B` slots, so their places do not depend on `N`), `aspect = 1.5` (layout box; the panel is drawn at
+`width / aspect` between `minHeight = 220` and `maxHeight = 460`, or at a fixed `height`), `radius` (px; default
+from the spacing), `colors` (CSS or array of N; default `P.interior`), `inputColors` (default `boundaryColor(b, B)`),
+`inputLabels` (default `g₁ g₂ …`), `labels` (text inside neurons when they are big enough), `edgeWidth = 3.2`
+(px at $w = w_{\max}$), `denseAt = 150` (above this many edges, lines thin and fade so clusters stay legible),
+`badge` (`"neuron space"`; `false` for none), `corner` (HTML note top right), `tooltip(i, kind)` → HTML | Node,
+`onHover(i | null, kind)`, `onSelect(i | null, kind)` (`kind` = `"neuron"` | `"input"`), `glyph(ctx2d, i, x, y, r)`
+→ `true` if it drew neuron `i` itself (pies).
+
+| method | |
+|---|---|
+| `setColors(c)`, `setInputColors(c)` | one CSS colour or an array |
+| `setSizes(m)` | radius multipliers (number or array of N) |
+| `setLabels(l)`, `setInputLabels(l)` | |
+| `setEdges(pairs, w, {wmax?})` | `pairs` flat `[i, j, …]` (an index ≥ N is input index − N, as in `view3d.setEdges`); `w` conductances, any scale, ≤ 0 skipped; width and opacity ∝ `w / wmax` (default `max w`; pass `wmax` to hold a scale across frames). Keep it to ≲ 1,500 edges (the strongest) |
+| `setHighlight(i \| [i…] \| null, kind = "neuron")` | ring and darken its synapses; does **not** call `onHover`/`onSelect`, so link panels with it |
+| `setSelected(i \| null, kind)` | a persistent dashed ring |
+| `positions()` | `{neurons, inputs}` in [0, 1]² |
+| `setCorner(html)`, `render()`, `destroy()`, `.el`, `.canvas` | |
+
+`randomLayout(n, {seed = 1, aspect = 1.5, spacing = 0.62})` → `Float32Array(2n)` in [0, 1]²: dart throwing, each
+point uniform and at least `spacing · sqrt(area / n)` from the earlier ones. Use it for SVG figures.
+
+```js
+import { netview } from "./netview.js";
+const pair = ui.h("div", { class: "space-pair" }, leftBox, rightBox); L.view.append(pair);
+const v = view3d(leftBox, { height: 440, badge: "input", tooltip: tipFor });
+const nv = netview(rightBox, { N, B: 3, seed: 11, tooltip: (i, kind) => tipFor(i, kind === "input" ? "anchor" : "point"),
+  onHover: (i, kind) => v.highlight(kind === "neuron" ? i : null) });
+v.onHover(i => nv.setHighlight(i));
+function draw(f) { nv.setColors(colors); nv.setEdges(pairs, weights); }        // same colours as the 3D view
+```
+
+## 9c. `js/filmplayer.js`
+
+Replays a precomputed film from `data/big/` (format: `docs/PLAN_curation.md` "Film data format" and
+`data/big/README.md`): lazy-loads `<id>.json` + `<id>.bin`, play / pause / scrub on the frame axis (frames are
+spaced in log time; the label shows $t$), and draws the state twice with linked highlighting: input space (space
+`"simplex"`: rows of $H$ in the triangle) or response-function space (`"pca"`: first two principal axes, fixed by
+the final frame, with a "3-D (third axis)" toggle when the third axis carries ≥ 1% of the variance), and neuron
+space (netview, layout seeded by `network_layout_seed`, the file's display edges plus the strongest input
+synapses). Colour: cluster at the end of the run (`final.labels`, re-ranked by size). A readout line gives frame,
+$t$, residual, live edges and components.
+
+**`filmPlayer(el, {base = "data/big/", id?, filter?(indexEntry) → bool, picker = true, fps = 6, inputEdges = 600,
+height = 420, onFrame?(f, film), colors?(film, clusterColors) → css[], countLabels = false})`** → `{load(id) → Promise, go(f), play(), pause(), frame, film, destroy()}`.
+`colors` overrides the per-neuron colours (the perron chapter uses the barycentric mix for $B = 3$); `countLabels` labels
+neurons that coincide on screen (a collapsed cluster) with their number. Linear runs (`nonlin = "linear"`) are badged
+"input space" also when drawn on principal axes; nonlinear runs "response-function space". Without `id` it shows the first film of the index that passes `filter`; the picker (a select) offers the rest.
+Also exported: `loadIndex(base)`, `loadFilm(id, base)` → film with `coord(f)`, `H(f)`, `edges(f)`, `inW(f)`
+decoders, for chapter-specific figures over the same files.
+
+```js
+import { filmPlayer } from "./filmplayer.js";
+filmPlayer(ctx.slot("film"), { filter: e => e.family === "A" && e.rule === "cov", id: "A_cov_pair_th0.5" });
 ```
 
 ## 10. Performance and lifecycle rules

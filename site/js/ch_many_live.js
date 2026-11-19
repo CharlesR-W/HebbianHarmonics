@@ -1,10 +1,12 @@
 // Chapter "many": the live population sim. N neurons with s random fixed attachments to B inputs (up to 24),
 // simulated with onsite_engine.js; b acts on the running network (continuation), every other control restarts
-// from W = 0. Views: classical MDS of the responses with live edges (3D), log10(D^2/2b) sorted by component,
+// from W = 0. Views: classical MDS of the responses (3D, response-function space; live edges behind a toggle)
+// beside the network itself (netview, neuron space, linked hover), log10(D^2/2b) sorted by component,
 // the converged states recorded against b (cold / up / down), and a component table with diameters on both banks.
 import * as ui from "./ui.js";
 import { heatmap, lineChart } from "./charts.js";
 import { view3d } from "./view3d.js";
+import { netview } from "./netview.js";
 import { P, catColor } from "./palette.js";
 import * as O from "./onsite_engine.js";
 import * as M from "./ch_many_model.js";
@@ -26,8 +28,28 @@ export function buildLive(slot, ctx, F) {
 
   // ------------------------------------------------------------ layout
   const L = ui.simLayout({ parent: slot });
-  const v = view3d(L.view, { height: 440, hull: false, pointSize: 4.5, edgeAlpha: 0.55, depthFade: 0.3, pitch: 0.7, yaw: -0.6, tooltip: (i, kind) => (kind === "point" ? tipNeuron(i) : null) });
+  // left: function space (MDS of D, 3D); right: the network in neuron space (random layout); hover links them
+  const v3Host = ui.h("div"), nvHost = ui.h("div");
+  const synRow = ui.h("div", { style: { display: "flex", flexWrap: "wrap", gap: "4px 14px", alignItems: "center", margin: "6px 0 2px" } });
+  L.view.append(ui.h("div", { class: "space-pair" }, v3Host, nvHost), synRow);
+  const v = view3d(v3Host, { height: 440, hull: false, pointSize: 4.5, edgeAlpha: 0.55, depthFade: 0.3, pitch: 0.7, yaw: -0.6, badge: "function", tooltip: (i, kind) => (kind === "point" ? tipNeuron(i) : null) });
   const cornerEl = v.el.querySelector(".v3-corner");
+  let synOn = false, nv = null, nvKey = "";
+  ui.synapseToggle({ parent: synRow, label: "show synapses in the function-space view", onChange: on => { synOn = on; if (cur) draw3d(cur, curW); } });
+  synRow.append(ui.h("span", { class: "u-help", text: "Hover a neuron in either panel to ring it in both; hover an input square to ring the neurons attached to it." }));
+  v.onHover(i => { nv?.setHighlight(i); });
+  function ensureNet(N, B) {
+    const key = `${N}|${B}`; if (nv && key === nvKey) return;
+    nv?.destroy(); nvKey = key;
+    nv = netview(nvHost, { N, B, seed: 11, aspect: 0.95, maxHeight: 440, minHeight: 300, radius: 6.5, edgeWidth: 2.6,
+      tooltip: (i, kind) => (kind === "neuron" ? tipNeuron(i) : tipInput(i)),
+      onHover: (i, kind) => {
+        if (i == null) { nv.setHighlight(null); v.highlight(null); return; }
+        if (kind === "neuron") { nv.setHighlight(i); v.highlight(i); return; }
+        const att = attachedTo(i); nv.setHighlight(att); v.highlight(att);
+      } });
+  }
+  const attachedTo = b => { const net = sys.sim.net, out = []; for (let i = 0; i < net.N; i++) if (net.A[i * net.B + b] > 0) out.push(i); return out; };
   const tp = ui.transport({
     parent: L.view, watch: fig, speeds: [{ value: 1, label: "×1" }, { value: 10, label: "×10" }, { value: 200, label: "max" }], speed: 200,
     autoplay: true, maxHistory: 200, timeFmt: t => `t = ${ui.fmt(t, 3)}`,
@@ -58,7 +80,8 @@ export function buildLive(slot, ctx, F) {
   ui.legend({ parent: L.side, items: [
     { label: "neuron; colour: its component", color: catColor(0), shape: "dot" },
     { label: "singleton", color: P.interior, shape: "dot" },
-    { label: "live edge", color: P.edge, shape: "line" },
+    { label: "input $g_b$ (neuron space only)", color: P.boundary, shape: "square" },
+    { label: "live synapse, width ∝ $w_{ij}$", color: P.edge, shape: "line" },
   ] });
 
   // below: matrix, recorded fixed points, component table
@@ -97,9 +120,15 @@ export function buildLive(slot, ctx, F) {
       cols[i] = compColor(a.cs, i); sizes[i] = a.cs.st[a.cs.labels[i]].size === 1 ? 3.4 : 4.8;
     }
     v.setPoints(xyz, cols, sizes);
-    const pr = [], al = [];
-    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) { const w = W[i * N + j]; if (w > 1e-9) { pr.push(i, j); al.push(w / a.wmax); } }
-    v.setEdges(Uint32Array.from(pr), Float32Array.from(al));
+    const pr = [], al = [], ww = [];
+    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) { const w = W[i * N + j]; if (w > 1e-9) { pr.push(i, j); al.push(w / a.wmax); ww.push(w); } }
+    const P2 = Uint32Array.from(pr);
+    v.setEdges(synOn ? P2 : new Uint32Array(0), synOn ? Float32Array.from(al) : new Float32Array(0));
+    // neuron space: the same neurons and live lateral synapses (width and opacity ∝ w / max w), inputs as squares
+    ensureNet(N, sys.sim.net.B);
+    nv.setColors(cols); nv.setSizes(sizes.map(s => s / 4.8));
+    nv.setEdges(P2, Float32Array.from(ww));
+    nv.setCorner(`${pr.length / 2} live synapses`);
     v.setCorner(`classical MDS of $D_{ij}$, training bank<br>3 axes carry ${ui.fmtPct(a.md.explained, 0)} of the positive spectrum`);
     ui.renderMath(cornerEl);
   }
@@ -168,8 +197,9 @@ export function buildLive(slot, ctx, F) {
 
   // ------------------------------------------------------------ loop
   let stamp = 0;
+  let curW = null;
   function show(a, W, D2, heavy) {
-    draw3d(a, W); showStats(a); cur = a;
+    curW = W; draw3d(a, W); showStats(a); cur = a;
     if (heavy) { drawMatrix(a, D2); drawTable(a); rec.setCursor(a.b); }
   }
   function tick(speed) {
@@ -270,6 +300,11 @@ export function buildLive(slot, ctx, F) {
     rows.push({ name: "attachments", value: att.join(", ") });
     if (p.pot === "rect") rows.push({ name: "threshold tᵢ", value: ui.fmt(net.t[i], 3) });
     return ui.tipRows(`neuron ${i}`, rows);
+  }
+  function tipInput(b) {
+    if (!sys) return null;
+    const net = sys.sim.net, att = attachedTo(b);
+    return ui.tipRows(`input g${b + 1}`, [{ name: "neurons attached", value: att.length ? att.map(i => `${i} (${ui.fmt(net.A[i * net.B + b], 2)})`).join(", ") : "none" }], "ringed in both panels");
   }
   function tipPair(r, c) {
     if (!order || !sys) return null;

@@ -1,6 +1,6 @@
-// Chapter "old" (the v1 covariance rule, condensed): model side, no DOM. Presets, tours, the simulation wrapper
+// Chapter "perron" (the v1 covariance rule): model side, no DOM. Presets, tours, the simulation wrapper
 // and the per-frame analysis, on the v1 engine (engine.js, parity-tested against hebb/core.py). Kept separate
-// from ch_old.js so the tours can be checked headless with exactly the page's code (import this module in node
+// from ch_perron.js so the tours can be checked headless with exactly the page's code (import this module in node
 // and call runTour for each entry of TOURS).
 import * as E from "./engine.js";
 

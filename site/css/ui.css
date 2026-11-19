@@ -184,3 +184,42 @@ input[type=range] { accent-color: var(--fg); }
 .sg-chip { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .sg-chip i { width: 14px; height: 14px; border-radius: 3px; background: var(--sw); display: inline-block; }
 @media (max-width: 640px) { .sg-row { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- space badges and the neuron-space network view (netview.js) ---------- */
+.space-badge { display: inline-flex; align-items: center; gap: 5px; font: 600 10.5px/1.6 var(--sans); letter-spacing: .05em; text-transform: uppercase;
+  padding: 0 7px 0 6px; border-radius: 4px; border: 1px solid; vertical-align: 2px; white-space: nowrap; margin-left: 4px; }
+.space-badge::before { content: ""; width: 9px; height: 9px; flex: none; background: currentColor; }
+.space-badge[data-space="neuron"] { color: var(--space-neuron-fg); background: var(--space-neuron-bg); border-color: var(--space-neuron-line); }
+.space-badge[data-space="neuron"]::before { border-radius: 50%; width: 8px; height: 8px; }
+.space-badge[data-space="input"] { color: var(--space-input-fg); background: var(--space-input-bg); border-color: var(--space-input-line); }
+.space-badge[data-space="input"]::before { clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.space-badge[data-space="function"] { color: var(--space-function-fg); background: var(--space-function-bg); border-color: var(--space-function-line); }
+.space-badge[data-space="function"]::before { content: "∿"; background: none; width: auto; height: auto; font-size: 13px; line-height: 1; letter-spacing: 0; }
+.panel-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0 0 4px; }
+.panel-head .chart-title { margin: 0; }
+.panel-head .space-badge { margin-left: 0; }
+.nv-badge, .v3-badge { position: absolute; left: 0; top: 0; margin: 0; pointer-events: none; z-index: 2; }
+.nv-corner { position: absolute; right: 0; top: 0; text-align: right; max-width: 60%; pointer-events: none; }
+.space-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 14px 22px; align-items: start; }
+.space-pair > * { min-width: 0; }
+.syn-toggle { display: inline-flex; align-items: center; gap: 6px; font: 12.5px/1.3 var(--sans); color: var(--ink-2); cursor: pointer; user-select: none; }
+.syn-toggle input { accent-color: var(--fg); margin: 0; }
+.v3 .v3-badge { left: 10px; top: 8px; }
+.v3.has-badge .v3-corner { top: 34px; }
+/* film player (filmplayer.js) */
+.filmplayer .fp-head { margin: 0 0 10px; max-width: 520px; }
+.filmplayer .fp-readout { font-variant-numeric: tabular-nums; margin-top: 4px; }
+.filmplayer .fp-note { margin-top: 6px; }
+
+/* Scroll cue for wide tables: a shadow appears on the side that has more columns (background-attachment trick:
+   the local covers hide the scroll-fixed shadows at either end). */
+.table-scroll {
+  --ts-bg: var(--bg);
+  background:
+    linear-gradient(to right, var(--ts-bg) 30%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(to left, var(--ts-bg) 30%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, .35), transparent) left / 16px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, .35), transparent) right / 16px 100% no-repeat scroll;
+}
+.card .table-scroll, .fig.card .table-scroll { --ts-bg: var(--surface); }
+.table-scroll td.num { white-space: nowrap; }

@@ -307,7 +307,9 @@ function scFigure(ctx) {
   const row = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "14px 28px", alignItems: "start" } });
   const left = ui.h("div", { style: { minWidth: "0" } }), right = ui.h("div", { style: { minWidth: "0" } });
   row.append(left, right); slot.append(row);
-  const plane = planePlot(left, { height: 400 });
+  left.append(ui.panelHead("The plane of response functions $x\\,s + y\\,c$", "function"));
+  const planeBox = ui.h("div"); left.append(planeBox);
+  const plane = planePlot(planeBox, { height: 400 });
   const readP = () => { const t = SCTOURS.find(x => x.id === ctx.param("sct", "")); if (t) return { p: { ...t.p }, t };
     return { p: { sc2: Math.max(0.02, Math.min(1, ctx.param("sc2", 0.1))), na: Math.round(Math.max(1, Math.min(NTOT - 1, ctx.param("na", 12)))), leak: ctx.param("leak", 0) > 0 ? 0.2 : 0 }, t: null }; };
   let { p, t: tour } = readP();

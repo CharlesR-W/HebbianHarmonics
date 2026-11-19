@@ -1,0 +1,200 @@
+[
+ {
+  "title": "Covariance rule, 3 independent inputs, theta = 0.2 (N = 300)",
+  "family": "A",
+  "rule": "cov",
+  "nonlin": "linear",
+  "B": 3,
+  "N": 300,
+  "id": "A_cov_ind_th0.2",
+  "file": "A_cov_ind_th0.2.json",
+  "bytes": 673784
+ },
+ {
+  "title": "Covariance rule, 3 independent inputs, theta = 0.4 (N = 300)",
+  "family": "A",
+  "rule": "cov",
+  "nonlin": "linear",
+  "B": 3,
+  "N": 300,
+  "id": "A_cov_ind_th0.4",
+  "file": "A_cov_ind_th0.4.json",
+  "bytes": 663636
+ },
+ {
+  "title": "Covariance rule, correlated pair rho12 = 0.6, theta = 0.5 (N = 300)",
+  "family": "A",
+  "rule": "cov",
+  "nonlin": "linear",
+  "B": 3,
+  "N": 300,
+  "id": "A_cov_pair_th0.5",
+  "file": "A_cov_pair_th0.5.json",
+  "bytes": 685481
+ },
+ {
+  "title": "Distance rule, linear, 3 independent inputs, b = 0.0003 (fragmented), alpha = 1 (N = 300)",
+  "family": "A",
+  "rule": "dist",
+  "nonlin": "linear",
+  "B": 3,
+  "N": 300,
+  "id": "A_dist_ind3_lin_fragmented",
+  "file": "A_dist_ind3_lin_fragmented.json",
+  "bytes": 75511
+ },
+ {
+  "title": "Distance rule, linear, 3 independent inputs, b = 0.01 (fused), alpha = 1 (N = 300)",
+  "family": "A",
+  "rule": "dist",
+  "nonlin": "linear",
+  "B": 3,
+  "N": 300,
+  "id": "A_dist_ind3_lin_fused",
+  "file": "A_dist_ind3_lin_fused.json",
+  "bytes": 291559
+ },
+ {
+  "title": "Distance rule, linear, 3 independent inputs, b = 0.0017 (percolation), alpha = 1 (N = 300)",
+  "family": "A",
+  "rule": "dist",
+  "nonlin": "linear",
+  "B": 3,
+  "N": 300,
+  "id": "A_dist_ind3_lin_percolation",
+  "file": "A_dist_ind3_lin_percolation.json",
+  "bytes": 129402
+ },
+ {
+  "title": "Distance rule, linear, 3 independent inputs, b = 0.0017 (percolation), alpha = 0.1 (N = 300)",
+  "family": "A",
+  "rule": "dist",
+  "nonlin": "linear",
+  "B": 3,
+  "N": 300,
+  "id": "A_dist_ind3_lin_percolation_a0.1",
+  "file": "A_dist_ind3_lin_percolation_a0.1.json",
+  "bytes": 252683
+ },
+ {
+  "title": "Distance rule, rectifier, 3 independent inputs, b = 0.0003 (fragmented), alpha = 1 (N = 300)",
+  "family": "A",
+  "rule": "dist",
+  "nonlin": "rect",
+  "B": 3,
+  "N": 300,
+  "id": "A_dist_ind3_rect_fragmented",
+  "file": "A_dist_ind3_rect_fragmented.json",
+  "bytes": 44023
+ },
+ {
+  "title": "Distance rule, rectifier, 3 independent inputs, b = 0.01 (fused), alpha = 1 (N = 300)",
+  "family": "A",
+  "rule": "dist",
+  "nonlin": "rect",
+  "B": 3,
+  "N": 300,
+  "id": "A_dist_ind3_rect_fused",
+  "file": "A_dist_ind3_rect_fused.json",
+  "bytes": 166011
+ },
+ {
+  "title": "Distance rule, rectifier, 3 independent inputs, b = 0.0017 (percolation), alpha = 1 (N = 300)",
+  "family": "A",
+  "rule": "dist",
+  "nonlin": "rect",
+  "B": 3,
+  "N": 300,
+  "id": "A_dist_ind3_rect_percolation",
+  "file": "A_dist_ind3_rect_percolation.json",
+  "bytes": 57586
+ },
+ {
+  "title": "Distance rule, rectifier, 3 independent inputs, b = 0.0017 (percolation), alpha = 0.1 (N = 300)",
+  "family": "A",
+  "rule": "dist",
+  "nonlin": "rect",
+  "B": 3,
+  "N": 300,
+  "id": "A_dist_ind3_rect_percolation_a0.1",
+  "file": "A_dist_ind3_rect_percolation_a0.1.json",
+  "bytes": 106609
+ },
+ {
+  "title": "Covariance rule, blocks12, theta = 0.35 (N = 400)",
+  "family": "B",
+  "rule": "cov",
+  "nonlin": "linear",
+  "B": 12,
+  "N": 400,
+  "id": "B_cov_blocks12_th0.35",
+  "file": "B_cov_blocks12_th0.35.json",
+  "bytes": 671267
+ },
+ {
+  "title": "Covariance rule, hier16, theta = 0.35 (N = 400)",
+  "family": "B",
+  "rule": "cov",
+  "nonlin": "linear",
+  "B": 16,
+  "N": 400,
+  "id": "B_cov_hier16_th0.35",
+  "file": "B_cov_hier16_th0.35.json",
+  "bytes": 780442
+ },
+ {
+  "title": "Covariance rule, ring16, theta = 0.5 (N = 400)",
+  "family": "B",
+  "rule": "cov",
+  "nonlin": "linear",
+  "B": 16,
+  "N": 400,
+  "id": "B_cov_ring16_th0.5",
+  "file": "B_cov_ring16_th0.5.json",
+  "bytes": 807902
+ },
+ {
+  "title": "Distance rule, linear, 12 inputs in 4 blocks, b = 0.018 (percolation), alpha = 1 (N = 400)",
+  "family": "B",
+  "rule": "dist",
+  "nonlin": "linear",
+  "B": 12,
+  "N": 400,
+  "id": "B_dist_blocks_lin_percolation",
+  "file": "B_dist_blocks_lin_percolation.json",
+  "bytes": 289080
+ },
+ {
+  "title": "Distance rule, rectifier, 12 inputs in 4 blocks, b = 0.018 (percolation), alpha = 1 (N = 400)",
+  "family": "B",
+  "rule": "dist",
+  "nonlin": "rect",
+  "B": 12,
+  "N": 400,
+  "id": "B_dist_blocks_rect_percolation",
+  "file": "B_dist_blocks_rect_percolation.json",
+  "bytes": 139916
+ },
+ {
+  "title": "Distance rule, linear, 12 inputs, power-law spectrum, b = 0.045 (percolation), alpha = 1 (N = 400)",
+  "family": "B",
+  "rule": "dist",
+  "nonlin": "linear",
+  "B": 12,
+  "N": 400,
+  "id": "B_dist_power_lin_percolation",
+  "file": "B_dist_power_lin_percolation.json",
+  "bytes": 442005
+ },
+ {
+  "title": "Distance rule, rectifier, 12 inputs, power-law spectrum, b = 0.045 (percolation), alpha = 1 (N = 400)",
+  "family": "B",
+  "rule": "dist",
+  "nonlin": "rect",
+  "B": 12,
+  "N": 400,
+  "id": "B_dist_power_rect_percolation",
+  "file": "B_dist_power_rect_percolation.json",
+  "bytes": 320366
+ }
+]

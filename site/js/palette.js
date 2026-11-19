@@ -11,7 +11,6 @@ export const P = {
   line: v("--line"), wash: v("--wash"), accent: v("--accent"),
   cat: list("--c-cat-", 8),          // clusters, series, boundary neurons (B <= 8): identity, fixed order
   other: v("--c-other"),             // unassigned / "other" / folded
-  digit: list("--c-digit-", 10),     // MNIST digit classes
   interior: v("--c-interior"), boundary: v("--c-boundary"), edge: v("--c-edge"),
   seq: list("--c-seq-", 9), ink: list("--c-ink-", 9), div: list("--c-div-", 9),
 };

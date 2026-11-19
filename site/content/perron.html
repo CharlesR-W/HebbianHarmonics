@@ -1,0 +1,105 @@
+<p class="lede">Take the note's rule literally: Hebb's covariance rule, with a constant pruning drift, on the linear resistor network of <a href="#idea">the idea chapter</a>. The network organises itself into clusters of identical neurons, and the place each cluster sits is not an eigenvector of the input covariance. It is a <b>part</b>: a non-negative Perron vector of a principal submatrix of the thresholded covariance $A = \Sigma_g - \theta\mathbf 1\mathbf 1^\top$. This chapter derives that, watches it on three inputs, and checks it on networks of 300–400 neurons with up to 16 inputs.</p>
+
+<h2 id="perron-rule">The covariance rule</h2>
+
+<p>Every interior voltage is a fixed linear function of the input, $u_i = h_i^\top g$, where $h_i$, row $i$ of the harmonic kernel $H$, is a probability vector over the inputs (<a href="#idea">the idea chapter</a>). So the covariance Hebb's rule needs is an inner product of embeddings, and the rule, with a regulariser that depends on the weight only, reads</p>
+
+<div class="eq" id="perron-eq-rule" data-num="1">$$\frac{dw_{ij}}{dt} = \eta\big(h_i^\top \Sigma_g h_j - \theta\big) - \lambda w_{ij}, \qquad w_{ij} \ge w_{\min}.$$</div>
+
+<p>A synapse onto input $b$ sees $(\Sigma_g h_i)_b$ in place of $h_i^\top\Sigma_g h_j$; lateral synapses learn with gain $\gamma$, so their threshold is $\theta/\gamma$. With $\theta &gt; 0$ a synapse grows only where its two neurons covary by more than $\theta$, and otherwise decays to the floor $w_{\min}$. Because every row of $H$ sums to one, adding $c$ to every entry of $\Sigma_g$ adds exactly $c$ to every covariance the rule sees, so (with $\gamma = 1$) the network only ever sees</p>
+
+<div class="eq" id="perron-eq-a" data-num="2">$$A = \Sigma_g - \theta\,\mathbf 1\mathbf 1^\top .$$</div>
+
+<p>Pruning by $\theta$ and pruning by negative covariances are one mechanism: $\theta$ is measured from the level the inputs share.<span class="sidenote">In the live figure: $\lambda = \eta = 1$, Euler steps $dt = 0.05$, mean-field (exact $\Sigma_g$ every step). The floor matters: every clipped synapse still conducts, so each neuron leaks towards the population mean with total conductance $\omega = N w_{\min}$. The big runs below keep $\omega = 0.009$, as in the live figure, whatever $N$.</span></p>
+
+<h2 id="perron-parts">Clusters are parts, not eigenvectors</h2>
+
+<p>The note expected one cluster per eigenmode of the input. What a cluster sits on is fixed by a short calculation. Inside a cluster all members share one embedding $h$, so they are at equal voltage for every stimulus and the lateral synapses among them carry no current. If the synapses to other clusters are pruned to the floor, and the floor is negligible, no lateral current reaches the cluster at all. Kirchhoff then gives $h_b \propto w_{ib}$, and the fixed point of (<a href="#perron/perron-eq-rule">1</a>) on the input synapses gives</p>
+
+<div class="eq" id="perron-eq-part" data-num="3">$$\begin{gathered}A_{SS}\, h_S = c\, h_S, \qquad c &gt; 0, \qquad h_S &gt; 0, \\ (A h)_b \le 0 \ \text{ for } b \notin S,\end{gathered}$$</div>
+
+<p>where $S$ is the support of $h$ and $c = (h^\top\Sigma_g h - \theta)/\lVert h\rVert^2$ is a member's summed input conductance (with $\lambda = \eta = 1$). A cluster is a non-negative eigenvector of a principal submatrix of $A$: a <b>part</b>. Neither $N$, nor $\gamma$, nor the lateral weights appear; a finite floor adds small corrections. A part is stable if $c$ is strictly the top eigenvalue of $A_{SS}$ (so $h_S$ is its Perron vector) and the off-support inequality is strict; this test is sufficient, not necessary. In words, a stable part is a local maximum of non-negative PCA of $\Sigma_g - \theta\mathbf 1\mathbf 1^\top$: a thresholded Perron vector, localised on a support whose size $\theta$ sets.</p>
+
+<aside class="callout key"><p class="callout-title">Key point</p><p>Under the covariance rule a cluster's embedding is the Perron vector of $A_{SS}$, $A = \Sigma_g - \theta\mathbf 1\mathbf 1^\top$, on its support $S$ (derived). It is non-negative and localised; an eigenvector of $\Sigma_g$ is neither, in general.</p></aside>
+
+<h3 id="perron-cases">Three inputs, worked out</h3>
+
+<p><b>Independent unit inputs.</b> On a support of size $k$, $A_{SS} = I - \theta\mathbf 1\mathbf 1^\top$; the uniform vector has eigenvalue $1 - k\theta$ and the others $1$. For $\theta &gt; 0$ the uniform vector is the top one only if $k = 1$, so for $0 &lt; \theta &lt; 1$ only the corners are stable parts (each with $c = 1 - \theta$); for $\theta \ge 1$ there are none and the network dies. (Here $\Sigma_g = I$, so every vector is an eigenvector: this case cannot tell parts from eigenvectors.)</p>
+
+<p><b>A correlated pair</b> ($\rho_{12}$, unit variances, $g_3$ independent). On $\{1, 2\}$ the midpoint $(\tfrac12, \tfrac12)$ has eigenvalue $1 + \rho_{12} - 2\theta$ and $(1, -1)$ has $1 - \rho_{12}$, so the midpoint is a stable part exactly when $\theta &lt; \rho_{12}$. In general a corner $g_b$ is a part if and only if $\Sigma_{bb} &gt; \theta$ and $\Sigma_{ab} \le \theta$ for every other input $a$. With $\rho_{12} = 0.6$ and <a class="explore-link" href="#perron/perron-sim?tour=edge-midpoint">$\theta = 0.5$</a>, one cluster sits at $g_3$ and one at the midpoint of the $g_1$–$g_2$ edge. The midpoint happens to lie along the top eigenvector of $\Sigma_g$, but the signed eigenvector $(1, -1, 0)$ has no cluster, and the number of clusters is set by $\theta$. <a class="explore-link" href="#perron/perron-sim?tour=midpoint-splits">Raise $\theta$ above $\rho_{12}$</a> and the midpoint stops being a part; the corners $g_1$ and $g_2$, which are not eigenvectors of this $\Sigma_g$, become parts instead.</p>
+
+<figure class="fig full card" id="perron-sim">
+  <div class="fig-title">Harmonic embeddings of $N$ interior neurons over time under the covariance rule, three clamped inputs, in input space and in neuron space <span class="synthetic-tag">synthetic Σ</span></div>
+  <div class="fig-sub">Drag to orbit, scroll to zoom, hover anything. $\theta$, $\gamma$ and $\Sigma_g$ act on the running network; the seed and $N$ restart it. The scrubber replays the run.</div>
+  <div data-slot="sim"></div>
+  <figcaption><b>Plotted:</b> top left, in input space: squares are the inputs $g_1, g_2, g_3$, drawn just outside the corner they define (coloured leader); each circle is an interior neuron $i$ at its harmonic embedding $h_i$ (barycentric position in the triangle of inputs), raised by $\kappa\, h_i^\top\Sigma_g h_i$ with $\kappa = 0.8/\max_b \Sigma_{bb}$ (or flat); colour: the $h_i$-weighted mix of the input colours; grey, smaller: dead neurons (every synapse at $w_{\min}$). Once the clustering is clear-cut, a cluster of $n_c$ neurons is drawn with radius $\propto 0.8 + 2\sqrt{n_c/N}$. Ink lines (only with "show synapses"): synapses, opacity $w/\max w$ over the current frame, at most the 4,000 strongest. Fading ink: the last 10 frames of each neuron's path. Faint mesh: the surface $\kappa\, h^\top\Sigma_g h$ over the triangle; dashed: the flat triangle. Top right, in neuron space: the same network with every neuron and input at a fixed random position (seeded), same colours; lines are the 1,500 strongest synapses (lateral and input), width and opacity rising with $w/\max w$; hovering a neuron in either panel rings it in the other. Below: (a) $H\Sigma_g H^\top$ with neurons sorted by cluster (band colour: the colour of the cluster's mean embedding), diverging map, range $\pm\max_b\Sigma_{bb}$; (b) number of neurons in each cluster against time, stacked, dead neurons in grey. Orange line: the time shown. Clusters: single linkage on the embeddings in $L_1$, cut at the largest gap between merge heights; the count includes only clusters with at least $\max(2, 2\%\,N)$ members. Member spread: the largest $L_1$ distance between a member's $h_i$ and its cluster's mean embedding. Stationarity $r$: $\max |dw/dt|$ over synapses, synapses at the floor with negative drift counting 0. <b>Values:</b> $B = 3$, $\lambda = \eta = 1$, $dt = 0.05$, mean-field (exact $\Sigma_g$ every step), paused when $r &lt; 10^{-5}$; defaults $N = 90$, $\theta = 0.4$, $\gamma = 1$, $w_{\min} = 10^{-4}$, lateral weights starting at $w_{\min}$, $W_{IB} \sim \mathrm{Exp}(0.2)$, independent unit-variance inputs, seed 0; tours set their own $\Sigma_g$, $\theta$, $\gamma$ and seed.</figcaption>
+</figure>
+
+<h3 id="perron-collapse">Pruning, and binding</h3>
+
+<p>With independent inputs and <a class="explore-link" href="#perron/perron-sim?tour=neutral-identity">no pruning</a>, every lateral synapse grows, the feedback closes, and all 90 neurons end on one point near the centroid. With positively correlated inputs the statement is exact: if $\theta$ is below every entry of $\Sigma_g$, then $A$ is entrywise positive, and by Perron–Frobenius the only part is the full-support Perron vector of $A$, so there is exactly one place a cluster can sit. That covers the note's starting point (a regulariser $w_0 - \lambda w$ with $w_0 \ge 0$) for any inputs whose covariances are all positive.</p>
+
+<p>Pruning is necessary but not sufficient. At <a class="explore-link" href="#perron/perron-sim?tour=corners-collective">$\theta = 0.2$</a> the three corners are the only stable parts, yet the population still becomes one blob and slides as one body to a single corner. A lateral synapse that starts near zero grows if $\gamma\,h_i^\top\Sigma_g h_j &gt; \theta$, and for independent random starting embeddings the mean of $h_i^\top\Sigma_g h_j$ is $\kappa_0 = \mathbf 1^\top\Sigma_g\mathbf 1/B^2$ ($\tfrac13$ here). So, from such a start, below $\theta \approx \gamma\kappa_0$ the population binds before any neuron has committed, and a bound population behaves like one neuron. Above it (<a class="explore-link" href="#perron/perron-sim?tour=three-corners">$\theta = 0.4$</a>) neurons choose independently and every corner is populated. This crossover is a heuristic read off the initial drift, not a derived phase boundary; it moves with the starting weights.</p>
+
+<h2 id="perron-big">Big networks: 300 neurons on three inputs</h2>
+
+<p>The browser can run about a hundred neurons. The films below were computed offline with the same rule and engine (<code>hebb/core.py</code>, of which the live figure's engine is a port) for $N = 300$, three seeds per setting, with the floor scaled so that $\omega = N w_{\min} = 0.009$ as in the live figure, and every setting repeated at $\omega/3$. All runs converged (residual below $10^{-7}$).</p>
+
+<figure class="fig full card" id="perron-film3">
+  <div class="fig-title">Covariance rule, $B = 3$, $N = 300$: replayed from precomputed runs <span class="synthetic-tag">synthetic Σ</span></div>
+  <div class="fig-sub">Pick a run; play or scrub through training (frames are spaced in log time). Hover a neuron in either panel to find it in the other.</div>
+  <div data-slot="films3"><p class="u-help">loading…</p></div>
+  <p class="u-help" data-slot="films3-note"></p>
+  <figcaption><b>Plotted:</b> left, in input space: each interior neuron at its harmonic embedding $h_i$ (barycentric position in the triangle of inputs); squares: the inputs, drawn just outside the corner they define with a leader to it, so a cluster at a corner is not hidden. Right, in neuron space: the same neurons and inputs at seeded random positions; lines are the strongest lateral synapses above the floor (at most 1,500 per frame) and the 300 strongest input synapses, width and opacity rising with $w$. Colour: the $h_i$-weighted mix of the input colours at the end of the run, so a neuron that ends at a corner has that input's colour. Neurons that coincide (a cluster of clones) are labelled with their number. <b>Values:</b> $B = 3$, $N = 300$, $\lambda = \eta = \gamma = 1$, $dt = 0.05$, mean-field, $w_{\min} = 0.009/N$, $W_{IB} \sim \mathrm{Exp}(0.2)$, lateral weights starting at the floor, seed 0; independent unit inputs at $\theta = 0.4$ and $0.2$, or $\rho_{12} = 0.6$ at $\theta = 0.5$. Source: <code>data/big/A_cov_*</code> (<code>hebb/big/cov_runs.py</code>).</figcaption>
+</figure>
+
+<p>The three cases of the live figure come out the same at $N = 300$, in every seed:</p>
+
+<div data-slot="films3-seeds"><p class="u-help">loading…</p></div>
+
+<p>At $\theta = 0.4$ every seed has one cluster per corner, with sizes the start decides. At $\theta = 0.2$, below $\gamma\kappa_0 = \tfrac13$, the whole population binds and lands on one corner, a different one for seed 1. With the correlated pair the midpoint of $g_1$–$g_2$ takes about two thirds of the neurons and $g_3$ the rest. Lowering the floor to $\omega/3$ changed no cluster's place.</p>
+
+<h2 id="perron-many">Twelve and sixteen inputs</h2>
+
+<p>With more inputs the difference between parts and eigenvectors is plain. Three covariances, each at three values of $\theta$, $N = 400$: 12 inputs in three correlated blocks; 16 in a binary hierarchy; 16 on a ring, where the eigenvectors of $\Sigma_g$ are Fourier modes. The input space is now 12- or 16-dimensional, so the film shows a projection: the principal axes of $\Sigma_g^{1/2} h_i$ (before projection, distance between neurons is the RMS difference of their responses; the 2-D view approximates it).</p>
+
+<figure class="fig full card" id="perron-filmB">
+  <div class="fig-title">Covariance rule, $B = 12$–$16$, $N = 400$: replayed from precomputed runs <span class="synthetic-tag">synthetic Σ</span></div>
+  <div class="fig-sub">Pick a run; play or scrub. Picking a run also shows its clusters in the figure below.</div>
+  <div data-slot="filmsB"><p class="u-help">loading…</p></div>
+  <figcaption><b>Plotted:</b> left, in input space: each interior neuron at $x_i = \Sigma_g^{1/2} h_i$ projected on the first two principal axes of the final frame (the same axes in every frame; the axis labels give each axis's share of the variance; the toggle adds the third axis in 3-D). Right, in neuron space: the neurons and the $B$ inputs at seeded random positions; lines are the strongest lateral synapses above the floor (at most 1,500 per frame) and the 400 strongest input synapses. Colour: cluster at the end of the run, largest first; past the eighth, grey. Neurons that coincide are labelled with their number. <b>Values:</b> $N = 400$, $\lambda = \eta = \gamma = 1$, $dt = 0.05$, mean-field, $w_{\min} = 0.009/N$, seed 0; blocks at $\theta = 0.35$, hierarchy at $0.35$, ring at $0.5$. Source: <code>data/big/B_cov_*</code>.</figcaption>
+</figure>
+
+<p>For every cluster the derivation predicts the embedding, exactly in the limit of a negligible floor: the Perron vector of $A_{SS}$ on the cluster's support $S$ (the inputs whose synapses stay above the floor). The figure puts the prediction beside the cluster's actual mean embedding and beside the eigenvector of $\Sigma_g$ that comes closest.</p>
+
+<figure class="fig wide card" id="perron-partsfig">
+  <div class="fig-title">Each cluster against its predicted part and against the closest eigenvector of $\Sigma_g$ <span class="synthetic-tag">synthetic Σ</span></div>
+  <div class="fig-sub">Pick a run (or pick it in the film above). Hover a bar for the three values.</div>
+  <div data-slot="parts"><p class="u-help">loading…</p></div>
+  <figcaption><b>Plotted:</b> one panel per cluster with at least 2% of the neurons (largest first, colours as in the film), over the inputs $g_1 \dots g_B$: bars, the cluster centroid (mean $h_i$ of its members); ink dots, the predicted part (the Perron vector of $A_{SS}$, $A = \Sigma_g - \theta\mathbf 1\mathbf 1^\top$, on the cluster's support, zero elsewhere, from the exact enumeration of stable parts); grey dashed, the eigenvector of $\Sigma_g$ closest to the centroid (where an eigenvalue is degenerate, the centroid's projection on its eigenspace). All three scaled to unit length; one shared vertical range per run. Panel subtitles: cosine of the centroid with the part and with that eigenvector. <b>Values:</b> $N = 400$, $\omega = 0.009$, seed 0, $\Sigma_g$ and $\theta$ as named in the picker. Source: <code>data/big/cov_all.json</code>.</figcaption>
+</figure>
+
+<p>The part and the centroid coincide, and the eigenvector does not: on the blocks it spreads over all three blocks with signs; on the hierarchy it is a signed contrast between branches (or, at $\theta = 0.2$, the uniform vector), where the part covers one branch; on the ring it is a sine wave, where the part is a bump, a place field whose width $\theta$ sets.</p>
+
+<p>Over all <span data-pv="nruns">30</span> big runs ($B = 3$ included) and all <span data-pv="nclusters">…</span> clusters with at least 2% of the neurons: the centroid's cosine with its predicted Perron vector is at least <span data-pv="perronmin">…</span>, <span data-pv="topok">every</span> cluster passes the top-eigenvalue test, the off-support inequality holds with margin (largest $(Ah)_b$ off the support <span data-pv="offmax">…</span>), and the members are clones (largest member-to-centroid $L_1$ distance <span data-pv="spreadmax">…</span>). The closest eigenvector of $\Sigma_g$ reaches a cosine of only <span data-pv="eiglo">…</span>–<span data-pv="eighi">…</span> with a cluster at $B = 12$–$16$. Where a cluster sits is the derivation's prediction, up to the small corrections a finite floor makes, not a fitted model; what is empirical is <em>which</em> parts are populated.</p>
+
+<details class="more"><summary>The Perron report, run by run</summary>
+<div data-slot="parts-table"><p class="u-help">loading…</p></div>
+<p class="u-help">Table: the Perron report of every $B = 12$–$16$ run (seed 0), from <code>data/big/cov_all.json</code>; grey rows: the same setting at the floor $\omega/3$. Sizes: the cluster sizes, largest first (past four: the three largest, then the smallest in brackets). Clusters: at least 2% of the $N = 400$ neurons. The top-eigenvalue test: the eigenvector of $A_{SS}$ closest to the centroid is the top one, positive, with a simple positive eigenvalue. Off-support: $\max_{b \notin S}(A h)_b$, which a part needs $\le 0$.</p>
+</details>
+
+<p>And that is not fixed by $\Sigma_g$ and $\theta$. Below $\theta \approx \kappa_0$ (0.275 for the blocks, 0.26 for the hierarchy) the population binds into one cluster on one part, as on three inputs. Above it only a subset of the stable parts is populated (8 of 12 corners for the blocks at $\theta = 0.6$, 3–6 of 16 bumps on the ring), and the subset can move with the floor (hierarchy at $\theta = 0.6$: 6 clusters at $\omega$, 4 at $\omega/3$) while the Perron fit does not.</p>
+
+<h2 id="perron-more">Clones and allocation</h2>
+
+<p>Members of a cluster are exact copies of one another in every tested condition, so a cluster is one function repeated, not a reservoir of different features; and the number of neurons each part receives is inherited from the start, not set by the parameters (at equilibrium any split among compatible parts is a fixed point, up to the floor). Both, with the attempts to break them, are in the appendix: <a class="explore-link" href="#old">More on the covariance rule</a></p>
+
+<aside class="callout found">
+  <p class="callout-title">What the covariance rule does, against the note</p>
+  <ul>
+    <li><span class="verdict holds">holds</span>Neurons separate into a few discrete clusters at a fixed point; $\theta$ sets how large a part's support is, and with it how many parts there are.</li>
+    <li><span class="verdict amended">amended</span>Clusters need pruning: if $A = \Sigma_g - \theta\mathbf 1\mathbf 1^\top$ is entrywise positive there is one place for a cluster; and from a fresh start a population with $\theta$ below roughly $\gamma\kappa_0$ binds into one cluster.</li>
+    <li><span class="verdict amended">amended</span>Clusters sit on parts, Perron vectors of $A$ on a support (derived; every populated cluster of every big run fits its part to cosine $\ge 0.9999$), not on eigenvectors of $\Sigma_g$ (best cosine 0.49–0.87 at $B = 12$–$16$).</li>
+    <li><span class="verdict fails">fails</span>Each cluster as a reservoir of different features: members are clones; and which parts get how many neurons comes from the start (<a href="#old">appendix</a>).</li>
+  </ul>
+</aside>

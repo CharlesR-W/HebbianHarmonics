@@ -7,6 +7,7 @@ import { P, catColor } from "./palette.js";
 import * as O from "./onsite_engine.js";
 import * as M from "./ch_fusion_model.js";
 import { graphView, matrixView, wdScatter, svgPlot, svgEl } from "./ch_fusion_draw.js";
+import { netview } from "./netview.js";
 
 const SUB = "₁₂₃";
 const SUPS = { "-": "⁻", 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹" };
@@ -24,7 +25,29 @@ export function initSim(slot, ctx, hooks = {}) {
 
   // ------------------------------------------------------------ layout
   const L = ui.simLayout({ parent: slot });
-  const gv = graphView(L.view, { height: 470, tooltip: (i, kind) => tipNeuron(i, kind), onHover: i => gv.highlight(i == null ? [] : [i]) });
+  // left: input space (rows of H in the triangle) or response-function space (MDS of D); right: neuron space
+  // (netview, seeded-random layout). Hovering a neuron in either, or a pair in (a) / (b), rings it in both.
+  const pairWrap = ui.h("div", { class: "space-pair" });
+  const gvCol = ui.h("div"), nvCol = ui.h("div");
+  pairWrap.append(gvCol, nvCol); L.view.append(pairWrap);
+  const gvBadge = ui.spaceBadge("input");
+  const synT = ui.synapseToggle({ checked: ctx.param("syn", "") === "1", onChange: on => { ctx.setParams({ syn: on ? "1" : null }); if (cur) drawView(cur); } });
+  const gvHead = ui.h("div", { class: "panel-head" }, ui.h("div", { class: "chart-title", text: "Response functions" }), gvBadge);
+  gvCol.append(gvHead, ui.h("div", { style: { margin: "0 0 2px" } }, synT.el));
+  const gvBox = ui.h("div"); gvCol.append(gvBox);
+  const gv = graphView(gvBox, { height: 470, tooltip: (i, kind) => tipNeuron(i, kind), onHover: i => linkHover(i == null ? [] : [i]) });
+  nvCol.append(ui.panelHead("The network: neurons at random places", "neuron"), ui.h("div", { class: "u-help", style: { margin: "0 0 2px" }, html: "edges: live synapses, width ∝ w<sub>ij</sub>" }));
+  const nvBox = ui.h("div"); nvCol.append(nvBox);
+  let nv = null, nvN = 0;
+  function ensureNet(N) {
+    if (nv && nvN === N) return;
+    if (nv) nv.destroy();
+    nvN = N;
+    nv = netview(nvBox, { N, B: M.B, seed: 11, aspect: 1.05, maxHeight: 470, minHeight: 260, radius: 6, edgeWidth: 3.6, badge: false,
+      inputColors: P.boundary, tooltip: (i, kind) => tipNeuron(i, kind === "input" ? "anchor" : "point"),
+      onHover: (i, kind) => linkHover(i == null || kind !== "neuron" ? [] : [i]) });
+  }
+  function linkHover(list, pair = null) { gv.highlight(list, pair); nv?.setHighlight(list.length ? list : null); }
   const tp = ui.transport({
     parent: L.view, watch: fig, autoplay: true, maxHistory: 300,
     speeds: [{ value: 1, label: "×1" }, { value: 4, label: "×4" }, { value: 16, label: "×16" }, { value: 64, label: "×64" }], speed: 4,
@@ -67,7 +90,7 @@ export function initSim(slot, ctx, hooks = {}) {
     { label: "response $F_i$, colour: its component (largest first)", color: P.cat[0], shape: "dot" },
     { label: "singleton (no live edge)", color: P.other, shape: "dot" },
     { label: "input $g_1, g_2, g_3$ (clamped)", color: P.boundary, shape: "square" },
-    { label: "live edge, opacity $w_{ij}/\\max w$", color: P.edge, shape: "line" },
+    { label: "live synapse, width ∝ $w_{ij}$", color: P.edge, shape: "line" },
   ] });
 
   // ------------------------------------------------------------ linked panels
@@ -85,9 +108,9 @@ export function initSim(slot, ctx, hooks = {}) {
   const rBox = box(L.below, "(c) Residuals over time", "log scale; dashed: the claim tolerance $10^{-6}$");
   const tBox = box(L.below, "(d) Components with at least two members", "diameter and span on the training bank / evaluation bank");
   ui.renderMath(mid); ui.renderMath(L.below);
-  const mx = matrixView(mBox, { size: 300, tooltip: (i, j) => tipPair(i, j), onHover: pr => gv.highlight(pr || [], pr) });
+  const mx = matrixView(mBox, { size: 300, tooltip: (i, j) => tipPair(i, j), onHover: pr => linkHover(pr || [], pr) });
   const cbar = ui.colorbar({ parent: mBox, map: "seq", range: [0, 1], label: "$D_{ij}^2$ (training bank), clipped at $4b$", width: 230 });
-  const sc = wdScatter(sBox, { height: 270, tooltip: (i, j) => tipPair(i, j), onHover: pr => gv.highlight(pr || [], pr) });
+  const sc = wdScatter(sBox, { height: 270, tooltip: (i, j) => tipPair(i, j), onHover: pr => linkHover(pr || [], pr) });
   let rCursor = null;
   const rc = svgPlot(rBox, { height: 210, ylog: true, xrange: [0, 1], yrange: [1e-16, 10], xlabel: "time t", ylabel: "residual", yfmt: logLabel, render: () => {} });
   const rLeg = ui.legend({ parent: rBox, items: [{ label: "plasticity residual $r$", color: P.cat[0], shape: "line" }, { label: "neuronal residual", color: P.cat[1], shape: "line" }, { label: "claim tolerance $10^{-6}$", color: P.mute2, shape: "dash" }] });
@@ -102,13 +125,17 @@ export function initSim(slot, ctx, hooks = {}) {
     const simplex = useSimplex(f), lay = simplex ? f.xySimplex : f.xyMds, N = f.N;
     const colors = [], sizes = [];
     for (let i = 0; i < N; i++) { colors.push(compColor(f.rank[i])); sizes.push(f.rank[i] < 0 ? 3.8 : 4.6); }
-    const edges = [];
-    if (f.wmax > 0) for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) { const w = f.W[i * N + j]; if (w > 1e-9) edges.push({ i, j, a: w / f.wmax }); }
-    gv.set({ xy: lay.xy, anchors: lay.anchors, anchorLabels: ["g₁", "g₂", "g₃"], colors, sizes, edges, mode: simplex ? "simplex" : "mds",
-      scaleBar: simplex ? null : { len: Math.sqrt(2 * f.b), label: "edge range √(2b)" } });
+    const edges = [], pairs = [], ws = [];
+    if (f.wmax > 0) for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) { const w = f.W[i * N + j]; if (w > 1e-9) { edges.push({ i, j, a: w / f.wmax }); pairs.push(i, j); ws.push(w); } }
+    ensureNet(N);
+    nv.setColors(colors); nv.setSizes(sizes.map(r => r / 4.6)); nv.setEdges(pairs.length ? pairs : null, ws, { wmax: f.wmax });
+    gvBadge.dataset.space = simplex ? "input" : "function";
+    gvBadge.textContent = simplex ? "input space" : "response-function space";
     gv.setCorner(simplex
       ? "Linear neurons: rows $h_i$ of $H$ in the triangle of inputs."
       : `MDS of $D$ (training bank): the two drawn dimensions hold ${ui.fmtPct(f.xyMds.explained, 0)} of the positive spectrum.`);
+    gv.set({ xy: lay.xy, anchors: lay.anchors, anchorLabels: ["g₁", "g₂", "g₃"], colors, sizes, edges: synT.get() ? edges : [], mode: simplex ? "simplex" : "mds",
+      scaleBar: simplex ? null : { len: Math.sqrt(2 * f.b), label: "edge range √(2b)" } });
   }
   function orderOf(f) {
     const N = f.N, out = [], groups = [];

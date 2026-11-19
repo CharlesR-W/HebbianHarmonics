@@ -4,6 +4,7 @@ import * as ui from "./ui.js";
 import { lineChart, scatter, hidpi } from "./charts.js";
 import { P, catColor } from "./palette.js";
 import * as M from "./ch_allocation_model.js";
+import { netview } from "./netview.js";
 
 const SUBD = "₀₁₂₃₄₅₆₇₈₉";
 export const sub = n => String(n).split("").map(d => SUBD[+d] ?? d).join("");
@@ -39,8 +40,17 @@ export function baseFigure(ctx, slot) {
 
   const L = ui.simLayout({ parent: slot });
   // ---------------------------------------------------------------- panels
+  // input space: one simplex per block (synapses opt-in); below, the whole network in neuron space; hover links them
+  let synOn = false, hi = null, nv = null, nvN = -1;
+  const head = ui.h("div", { class: "panel-head", style: { justifyContent: "space-between", gap: "4px 14px", marginBottom: "6px" } },
+    ui.spaceBadge("input", "input space · one simplex per block"));
+  ui.synapseToggle({ parent: head, label: "show synapses", onChange: on => { synOn = on; if (cur) drawPanels(cur); } });
   const grid = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px 18px" } });
-  L.view.append(grid);
+  const nvHead = ui.panelHead("The whole network: all four blocks", null);
+  const nvSub = ui.h("div", { class: "u-help", style: { margin: "-2px 0 6px" }, html: "The same neurons and colours at random positions, each labelled with its block; inputs (squares) at random too. Lines: live lateral synapses, width ∝ $w_{ij}$. Hover a neuron here or in a triangle to ring it in both; hover an input to ring the neurons attached to it." });
+  const nvHost = ui.h("div");
+  L.view.append(head, grid, ui.h("div", { style: { marginTop: "14px" } }, nvHead, nvSub, nvHost));
+  ui.renderMath(nvSub);
   const panels = [0, 1, 2, 3].map(k => {
     const cv = ui.h("canvas", { style: { display: "block", width: "100%", cursor: "crosshair" } });
     const head = ui.h("div", { class: "chart-title", style: { marginBottom: "2px" } });
@@ -49,7 +59,7 @@ export function baseFigure(ctx, slot) {
     grid.append(box);
     const pn = { k, cv, head, capt, box, pts: [], W: 0 };
     cv.addEventListener("pointermove", ev => hoverPanel(pn, ev));
-    cv.addEventListener("pointerleave", () => ui.hideTip());
+    cv.addEventListener("pointerleave", () => { ui.hideTip(); setHi(null); });
     return pn;
   });
   new ResizeObserver(() => { if (cur) drawPanels(cur); }).observe(grid);
@@ -81,13 +91,41 @@ export function baseFigure(ctx, slot) {
     { label: "neuron; colour: its component in the block (largest first)", color: catColor(0), shape: "dot" },
     { label: "singleton (no live edge)", color: P.other, shape: "dot" },
     { label: "input $g_b$ (clamped)", color: P.boundary, shape: "square" },
-    { label: "live edge, opacity $w_{ij}/\\max w$", color: P.edge || P.fg, shape: "line" },
+    { label: "live synapse ($w_{ij}$; triangles: with show synapses on)", color: P.edge || P.fg, shape: "line" },
     { label: "edge range $\\sqrt{2b}$, same scale", color: P.accent, shape: "line" },
   ] });
 
   // ---------------------------------------------------------------- simulation
+  function setHi(list, from) {
+    const key = list == null ? "" : [].concat(list).join(","), old = hi == null ? "" : hi.join(",");
+    if (key === old) return;
+    hi = list == null ? null : [].concat(list);
+    if (nv && from !== "nv") nv.setHighlight(hi);
+    if (cur) drawPanels(cur);
+  }
+  const attachedTo = b => { const A = base.sim.net.A, out = []; for (let i = 0; i < base.N; i++) if (A[i * M.B + b] > 0) out.push(i); return out; };
+  function ensureNet() {
+    if (nv && nvN === base.N) return;
+    nv?.destroy(); nvN = base.N;
+    nv = netview(nvHost, { N: base.N, B: M.B, seed: 5, aspect: 2.2, maxHeight: 380, minHeight: 300, radius: nvHost.clientWidth < 600 ? 7 : 10, edgeWidth: 2.8,
+      labels: Array.from({ length: base.N }, (_, i) => String(base.home[i] + 1)),
+      tooltip: (i, kind) => (kind === "neuron" ? tipNeuron(i) : ui.tipRows(`input g${sub(i + 1)}, block ${M.blockOf(i) + 1}`, [{ name: "neurons attached", value: String(attachedTo(i).length) }], "ringed in both views")),
+      onHover: (i, kind) => {
+        const list = i == null ? null : kind === "neuron" ? [i] : attachedTo(i);
+        nv.setHighlight(list); setHi(list, "nv");
+      } });
+  }
+  function drawNet(f) {
+    ensureNet();
+    const cols = new Array(f.N).fill(P.interior);
+    for (let k = 0; k < 4; k++) compColour(f, k).forEach((v, i) => { cols[i] = v.col; });
+    const pr = [], ww = [];
+    for (let i = 0; i < f.N; i++) for (let j = i + 1; j < f.N; j++) { const w = f.W[i * f.N + j]; if (w > 1e-9) { pr.push(i, j); ww.push(w); } }
+    nv.setColors(cols); nv.setEdges(pr, ww);
+    nv.setCorner(`${f.N} neurons · ${M.B} inputs · ${pr.length / 2} live synapses`);
+  }
   function restart() {
-    base = M.makeBase(p); acc = 0;
+    base = M.makeBase(p); acc = 0; hi = null;
     const f = frameOf(); cur = f; show(f); return f;
   }
   function frameOf() {
@@ -108,7 +146,7 @@ export function baseFigure(ctx, slot) {
   }
 
   // ---------------------------------------------------------------- drawing
-  function show(f) { drawPanels(f); showStats(f); }
+  function show(f) { drawPanels(f); drawNet(f); showStats(f); }
   function compColour(f, k) {
     // per neuron in block k: colour by component rank (multi-member only), singletons grey
     const map = new Map(); let r = 0;
@@ -136,8 +174,8 @@ export function baseFigure(ctx, slot) {
         for (let a = 0; a < M.PER; a++) { const h = H[i * B + k * M.PER + a]; x += h * V[a][0]; y += h * V[a][1]; tot += h; }
         pos.set(i, [x / tot, y / tot]);
       }
-      // live edges
-      for (const i of blk.members) for (const j of blk.members) {
+      // live edges (only with "show synapses" on: this panel is input space)
+      if (synOn) for (const i of blk.members) for (const j of blk.members) {
         if (j <= i) continue; const w = f.W[i * f.N + j]; if (!(w > 1e-9)) continue;
         const a1 = pos.get(i), a2 = pos.get(j);
         g.strokeStyle = `rgba(40,40,44,${Math.max(0.08, 0.7 * w / (f.wmax || 1)).toFixed(3)})`; g.lineWidth = 1;
@@ -150,6 +188,7 @@ export function baseFigure(ctx, slot) {
         g.lineWidth = 1; g.strokeStyle = P.surface; g.stroke();
         pn.pts.push({ i, x, y, c: c && c.c });
       }
+      if (hi) for (const q of pn.pts) if (hi.includes(q.i)) { g.beginPath(); g.arc(q.x, q.y, 7.5, 0, 2 * Math.PI); g.lineWidth = 2.2; g.strokeStyle = P.accent; g.stroke(); }
       // inputs: squares at the corners, labelled g_b (global index), pushed outward
       g.font = "600 11.5px Inter, system-ui, sans-serif";
       V.forEach(([x, y], a) => {
@@ -175,15 +214,19 @@ export function baseFigure(ctx, slot) {
     const r = pn.cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
     let best = null, bd = 100;
     for (const q of pn.pts) { const d = (q.x - x) ** 2 + (q.y - y) ** 2; if (d < bd) { bd = d; best = q; } }
-    if (!best) { ui.hideTip(); return; }
-    const H = cur.a.H, i = best.i, k = pn.k, c = best.c;
+    if (!best) { ui.hideTip(); setHi(null); return; }
+    setHi(best.i);
+    ui.showTip(ev.clientX, ev.clientY, tipNeuron(best.i));
+  }
+  function tipNeuron(i) {
+    const H = cur.a.H, k = base.home[i], blk = cur.a.blocks[k], c = (blk.comps.find(q => q.members.includes(i)) || null);
     const rows = [0, 1, 2].map(a => ({ name: `share of g${sub(k * M.PER + a + 1)}, hᵢ`, value: ui.fmtFixed(H[i * M.B + k * M.PER + a], 3), color: P.boundary, shape: "square" }));
     if (c) {
       rows.push({ name: "component size", value: String(c.size) });
       rows.push({ name: "component diameter (max D to prototype)", value: ui.fmt(c.diamMax, 3) });
       rows.push({ name: "component span (max pairwise D)", value: `${ui.fmt(c.span, 3)} = ${ui.fmt(c.span / Math.sqrt(2 * cur.b), 2)} √(2b)` });
     }
-    ui.showTip(ev.clientX, ev.clientY, ui.tipRows(`neuron ${i}, block ${k + 1}`, rows));
+    return ui.tipRows(`neuron ${i}, block ${k + 1}`, rows);
   }
   function showStats(f) {
     const b1 = f.a.blocks[0], sizes = b1.comps.map(c => c.size);

@@ -5,6 +5,7 @@ import { lineChart, hidpi } from "./charts.js";
 import { P, catColor } from "./palette.js";
 import * as O from "./onsite_engine.js";
 import * as M from "./ch_allocation_model.js";
+import { netview } from "./netview.js";
 
 export const DEF_B = { alphaA: 1, lateral: false, b: 0.1, rect: false, seed: 0 };
 const KEYS_B = { alphaA: "ba", lateral: "bl", b: "bb", rect: "bp", seed: "bs" };
@@ -44,12 +45,20 @@ export function plasticFigure(ctx, slot) {
   const colsCv = ui.h("canvas", { style: { display: "block", width: "100%" } });
   const shareHead = ttl("(b) Mean share of each block", "mean over neurons of $\\sum_{b \\in k} a_{ib}$");
   const shareBox = ui.h("div");
-  L.view.append(ui.h("div", { style: { marginTop: "12px" } }, colsHead, colsCv), ui.h("div", { style: { marginTop: "14px" } }, shareHead, shareBox));
+  // the same attachments as a network (neuron space): neurons and inputs at random positions, width ∝ a_ib
+  const netHead = ttl("The attachments as a network", "neurons (circles, coloured by the block holding most of the row) and inputs (squares, coloured by block) at random positions; lines: $a_{ib}$, width ∝ $a_{ib}$ / its current maximum. Hover a neuron or a column to ring it in both.");
+  const netHost = ui.h("div");
+  L.view.append(ui.h("div", { style: { marginTop: "12px" } }, colsHead, colsCv), ui.h("div", { style: { marginTop: "14px" } }, netHead, netHost), ui.h("div", { style: { marginTop: "14px" } }, shareHead, shareBox));
+  let colHi = null;
+  const nv = netview(netHost, { N: 40, B: M.B, seed: 3, aspect: 2.4, maxHeight: 330, minHeight: 260, radius: 6, edgeWidth: 2.6,
+    inputColors: Array.from({ length: M.B }, (_, b) => BLOCK_COL[M.blockOf(b)]),
+    tooltip: (i, kind) => (kind === "neuron" ? tipRow(i) : tipInput(i)),
+    onHover: (i, kind) => { const q = kind === "neuron" ? i : null; nv.setHighlight(q); if (q !== colHi) { colHi = q; if (cur) drawCols(cur); } } });
   ui.renderMath(L.view);
   const shareChart = lineChart(shareBox, { series: [0, 1, 2, 3].map(k => ({ name: `block ${k + 1} (variance ${vlab(M.VARS_B[k])})`, x: [0], y: [0.25], color: BLOCK_COL[k] })), yrange: [0, 1], xlabel: "time t", ylabel: "mean share", xname: "t", height: 190 });
   new ResizeObserver(() => { if (cur) drawCols(cur); }).observe(colsCv.parentElement);
   colsCv.addEventListener("pointermove", ev => hoverCols(ev));
-  colsCv.addEventListener("pointerleave", () => ui.hideTip());
+  colsCv.addEventListener("pointerleave", () => { ui.hideTip(); hiCol(null); });
 
   // ---------------------------------------------------------------- side
   const tours = ui.chips({ parent: L.side, label: "Tours", items: TOURS_B, active: tour ? tour.id : null, onPick: t => applyTour(t) });
@@ -89,6 +98,14 @@ export function plasticFigure(ctx, slot) {
     st.res = NaN;
     const f = frameOf(); cur = f; show(f, true); drawMech(); return f;
   }
+  function drawNet(f) {
+    const N = st.N, B = M.B, pr = [], w = [];
+    for (let i = 0; i < N; i++) for (let b = 0; b < B; b++) { const a = f.A[i * B + b]; if (a > 1e-6) { pr.push(i, N + b); w.push(a); } }
+    nv.setColors(Array.from({ length: N }, (_, i) => BLOCK_COL[f.sm.home[i]]));
+    nv.setEdges(pr, w);
+    nv.setCorner(`${w.length} attachments with $a_{ib} &gt; 10^{-6}$${p.lateral ? "; lateral synapses not drawn" : ""}`);
+    ui.renderMath(nv.el.querySelector(".nv-corner"));
+  }
   function frameOf() {
     const sm = M.plasticSummary(st);
     const conv = st.res < 1e-8, out = st.steps >= 6000;
@@ -104,7 +121,7 @@ export function plasticFigure(ctx, slot) {
     return f;
   }
   function show(f, heavy) {
-    drawCols(f); showStats(f);
+    drawCols(f); showStats(f); if (heavy || tickN % 2 === 0) drawNet(f);
     if (heavy) { shareChart.update({ series: [0, 1, 2, 3].map(k => ({ name: `block ${k + 1} (variance ${vlab(M.VARS_B[k])})`, x: hist.t, y: hist.s[k], color: BLOCK_COL[k] })), xrange: [0, Math.max(1, hist.t[hist.t.length - 1])] }); }
     shareChart.setCursor(f.t);
   }
@@ -126,6 +143,7 @@ export function plasticFigure(ctx, slot) {
         y -= hgt;
         if (hgt > 2) { g.fillStyle = "rgba(255,255,255,0.9)"; g.fillRect(ml + c * cw + 0.5, y, Math.max(1, cw - 1), 1); }
       }
+      if (i === colHi) { g.strokeStyle = P.accent; g.lineWidth = 2; g.strokeRect(ml + c * cw - 0.5, mt - 1, cw + 1, ph + 2); }
     });
     g.fillStyle = P.ink2; g.font = "560 11.5px Inter, system-ui, sans-serif"; g.textAlign = "center";
     g.fillText("neurons (sorted by the block holding most of the row)", (ml + W) / 2, Hh - 3);
@@ -135,13 +153,24 @@ export function plasticFigure(ctx, slot) {
   function hoverCols(ev) {
     if (!colGeom) return;
     const r = colsCv.getBoundingClientRect(), c = Math.floor((ev.clientX - r.left - colGeom.ml) / colGeom.cw);
-    if (c < 0 || c >= colGeom.order.length) { ui.hideTip(); return; }
-    const i = colGeom.order[c], f = colGeom.f, m = f.sm.mass[i];
+    if (c < 0 || c >= colGeom.order.length) { ui.hideTip(); hiCol(null); return; }
+    const i = colGeom.order[c];
+    hiCol(i);
+    ui.showTip(ev.clientX, ev.clientY, tipRow(i));
+  }
+  function hiCol(i) { if (i === colHi) return; colHi = i; nv.setHighlight(i); if (cur) drawCols(cur); }
+  function tipInput(b) {
+    if (!cur) return null;
+    let s = 0, n = 0; for (let i = 0; i < st.N; i++) { const a = cur.A[i * M.B + b]; s += a; if (a > 1e-6) n++; }
+    return ui.tipRows(`input g${subs(b + 1)}, block ${M.blockOf(b) + 1} (variance ${vlab(M.VARS_B[M.blockOf(b)])})`, [{ name: "neurons attached (a_ib > 10⁻⁶)", value: String(n) }, { name: "total attachment Σᵢ a_ib", value: ui.fmtFixed(s, 2) }]);
+  }
+  function tipRow(i) {
+    const f = colGeom ? colGeom.f : cur, m = f.sm.mass[i];
     const rows = m.map((x, k) => ({ name: `block ${k + 1} (variance ${vlab(M.VARS_B[k])}) share`, value: ui.fmtFixed(x, 3), color: BLOCK_COL[k], shape: "square" }));
     let sup = 0; for (let b = 0; b < M.B; b++) if (f.A[i * M.B + b] > 1e-6) sup++;
     rows.push({ name: "inputs with a_ib > 10⁻⁶", value: String(sup) });
     rows.push({ name: "its objective Jᵢ at W = 0 (Σ_g)", value: ui.fmt(M.rowObjective(f.A.subarray(i * M.B, (i + 1) * M.B), st.Sigma, p.alphaA), 3) });
-    ui.showTip(ev.clientX, ev.clientY, ui.tipRows(`neuron ${i}`, rows, p.lateral || p.rect ? "Jᵢ here ignores the lateral edges and the potential." : null));
+    return ui.tipRows(`neuron ${i}`, rows, p.lateral || p.rect ? "Jᵢ here ignores the lateral edges and the potential." : null);
   }
   function showStats(f) {
     stats.set("maj", f.sm.maj.join(" · "), `of ${st.N} neurons, more than half the row on that block`);

@@ -4,7 +4,7 @@
 // auto-rotate. Draws only when something changed or while rotating, and only while on screen.
 // API and examples: DESIGN.md "view3d.js".
 import { P } from "./palette.js";
-import { h, animate, showTip, hideTip, tipRows, reducedMotion } from "./ui.js";
+import { h, animate, showTip, hideTip, tipRows, reducedMotion, spaceBadge } from "./ui.js";
 import { hidpi } from "./charts.js";
 
 // ---- simplex helpers
@@ -35,7 +35,8 @@ const ICON = {
 
 // view3d(el, {height?: 460, yaw?: -0.5, pitch?: 0.95, zoom?: 1, autoRotate?: false, rotateSpeed?: 0.18 (rad/s),
 //             center?: [x,y,z], radius?: r, hull?: true, pointSize?: 4, edgeWidth?: 1, edgeAlpha?: 0.6,
-//             edgeColor?: P.edge, trailColor?: P.fg, depthFade?: 0.35, hint?: true, tooltip?(i, kind) -> html|Node})
+//             edgeColor?: P.edge, trailColor?: P.fg, depthFade?: 0.35, hint?: true, tooltip?(i, kind) -> html|Node,
+//             badge?: "input" | "function" | {kind, text}  (a space badge, top left; the corner note moves below it)})
 export function view3d(el, o = {}) {
   const opt = { height: 460, yaw: -0.5, pitch: 0.95, zoom: 1, autoRotate: false, rotateSpeed: 0.18, hull: true, pointSize: 4,
     edgeWidth: 1, edgeAlpha: 0.6, edgeColor: P.edge, trailColor: P.fg, depthFade: 0.35, hint: true, ...o };
@@ -43,7 +44,9 @@ export function view3d(el, o = {}) {
   const rotBtn = h("button", { type: "button", title: "Auto-rotate", "aria-label": "Auto-rotate", "aria-pressed": String(!!opt.autoRotate && !reducedMotion()), html: ICON.rotate });
   const homeBtn = h("button", { type: "button", title: "Reset the view", "aria-label": "Reset the view", html: ICON.home });
   const corner = h("div", { class: "v3-corner" });
-  const box = h("div", { class: "v3", style: { height: opt.height + "px" } }, cv, corner, h("div", { class: "v3-btns" }, rotBtn, homeBtn),
+  const badge = opt.badge ? (typeof opt.badge === "string" ? spaceBadge(opt.badge) : spaceBadge(opt.badge.kind, opt.badge.text)) : null;
+  if (badge) badge.classList.add("v3-badge");
+  const box = h("div", { class: "v3" + (badge ? " has-badge" : ""), style: { height: opt.height + "px" } }, cv, badge, corner, h("div", { class: "v3-btns" }, rotBtn, homeBtn),
     opt.hint ? h("div", { class: "v3-hint" }, h("span", { class: "mouse" }, "drag to orbit · scroll to zoom"), h("span", { class: "touch" }, "drag sideways to orbit · pinch to zoom")) : null);
   el.replaceChildren(box);
 

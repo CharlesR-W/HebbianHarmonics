@@ -102,7 +102,11 @@ function buildLine(ctx, slot, R) {
   let p = { ...M.LINE_DEFAULTS }, tour = null, path = null;
   readURL();
   const L = ui.simLayout({ parent: slot });
+  // input space: positions along mode a of the attachments (top) and of the embedding h_i (bottom); arcs opt-in
+  const head = ui.h("div", { class: "panel-head", style: { justifyContent: "space-between", gap: "4px 14px" } }, ui.spaceBadge("input", "input space · along mode a"));
+  L.view.append(head);
   const view = rulers(L.view, { tooltip: i => tip(i) });
+  ui.synapseToggle({ parent: head, label: "show synapses (live edges as arcs)", onChange: on => view.setArcs(on) });
   const tp = ui.transport({
     parent: L.view, watch: fig, speeds: [{ value: 1, label: "×1" }, { value: 10, label: "×10" }, { value: 400, label: "max" }], speed: 400,
     autoplay: false, maxHistory: 200, timeFmt: t => `t = ${ui.fmt(t, 3)}`,
@@ -127,7 +131,7 @@ function buildLine(ctx, slot, R) {
     { label: "neuron, at $x_i$ and at $y_i$", color: P.interior, shape: "dot" },
     { label: "within $\\delta_{on}$ at $W = 0$", color: P.other, shape: "band" },
     { label: "component (bottom)", color: catColor(0), shape: "dot" },
-    { label: "live edge", color: P.edge, shape: "line" },
+    { label: "live edge (arc, with show synapses on)", color: P.edge, shape: "line" },
   ] });
   const popTitle = ui.h("div", { class: "chart-title" }), popBox = ui.h("div"), popNote = ui.h("div", { class: "u-help", style: { marginTop: "4px" } });
   const popWrap = ui.h("div", { style: { minWidth: "0", maxWidth: "760px", marginTop: "18px" } }, popTitle, popBox, popNote);
@@ -239,7 +243,7 @@ function buildLine(ctx, slot, R) {
 function rulers(el, { tooltip }) {
   const cv = ui.h("canvas", { style: { display: "block", width: "100%", touchAction: "pan-y" } });
   el.append(ui.h("div", { class: "chart" }, cv));
-  let st = null, Wd = 0, X = null, hit = [];
+  let st = null, Wd = 0, X = null, hit = [], arcs = false;
   const H = 282, yTop = 64, yBot = 196;
   function draw(s) {
     if (s) st = s;
@@ -271,7 +275,7 @@ function rulers(el, { tooltip }) {
     st.comps.forEach((c, k) => { if (c.size < 2) return; g.fillStyle = ranks[k] < 8 ? catColor(ranks[k]) : P.other; g.globalAlpha = 0.25; g.fillRect(X(c.ylo) - 3, yBot - 4, X(c.yhi) - X(c.ylo) + 6, 8); g.globalAlpha = 1; });
     // live edges as arcs below the bottom axis
     let wmax = 0; for (let k = 0; k < N * N; k++) wmax = Math.max(wmax, st.W[k]);
-    if (wmax > 0) for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+    if (arcs && wmax > 0) for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
       const w = st.W[i * N + j]; if (w <= 1e-9) continue;
       const x1 = X(st.y[i]), x2 = X(st.y[j]), r = Math.max(Math.abs(x2 - x1) / 2, 0.5);
       g.strokeStyle = P.edge || "#3f3e3b"; g.globalAlpha = Math.max(0.04, 0.6 * w / wmax); g.lineWidth = 1;
@@ -299,5 +303,5 @@ function rulers(el, { tooltip }) {
     const c = tooltip(best); if (c) ui.showTip(ev.clientX, ev.clientY, c);
   });
   cv.addEventListener("pointerleave", () => ui.hideTip());
-  return { draw };
+  return { draw, setArcs(on) { arcs = !!on; draw(); } };
 }
