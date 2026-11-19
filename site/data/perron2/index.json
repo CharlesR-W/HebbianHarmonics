@@ -1,0 +1,54 @@
+[
+ {
+  "title": "Theta ramp down from a cold start at 0.821899 to 0.03, hier16, gamma = 0.1 (N = 300)",
+  "family": "ramp",
+  "rule": "cov",
+  "nonlin": "linear",
+  "B": 16,
+  "N": 300,
+  "gamma": 0.1,
+  "direction": "down2",
+  "id": "ramp_hier16_g0.1_down2",
+  "file": "ramp_hier16_g0.1_down2.json",
+  "bytes": 526524
+ },
+ {
+  "title": "Theta ramp up from a cold start at 0.03 to 0.95, hier16, gamma = 0.1 (N = 300)",
+  "family": "ramp",
+  "rule": "cov",
+  "nonlin": "linear",
+  "B": 16,
+  "N": 300,
+  "gamma": 0.1,
+  "direction": "up",
+  "id": "ramp_hier16_g0.1_up",
+  "file": "ramp_hier16_g0.1_up.json",
+  "bytes": 607362
+ },
+ {
+  "title": "Theta ramp down from a cold start at 0.821899 to 0.03, hier16, gamma = 1.0 (N = 300)",
+  "family": "ramp",
+  "rule": "cov",
+  "nonlin": "linear",
+  "B": 16,
+  "N": 300,
+  "gamma": 1.0,
+  "direction": "down2",
+  "id": "ramp_hier16_g1.0_down2",
+  "file": "ramp_hier16_g1.0_down2.json",
+  "bytes": 578175
+ },
+ {
+  "title": "Theta ramp up from a cold start at 0.03 to 0.95, hier16, gamma = 1.0 (N = 300)",
+  "family": "ramp",
+  "rule": "cov",
+  "nonlin": "linear",
+  "B": 16,
+  "N": 300,
+  "gamma": 1.0,
+  "direction": "up",
+  "id": "ramp_hier16_g1.0_up",
+  "file": "ramp_hier16_g1.0_up.json",
+  "bytes": 662474
+ }
+]

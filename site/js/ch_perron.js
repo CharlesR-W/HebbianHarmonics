@@ -8,6 +8,8 @@ import { heatmap, hidpi, scale, niceTicks } from "./charts.js";
 import { view3d, simplexVertices } from "./view3d.js";
 import { netview } from "./netview.js";
 import { initBig } from "./ch_perron_big.js";
+import { mountTeach } from "./ch_perron_teach.js";
+import { initPerron2 } from "./ch_perron2.js";
 import { P, boundaryColor, mixBary, colorOf } from "./palette.js";
 import * as M from "./ch_perron_model.js";
 
@@ -354,8 +356,12 @@ export async function init(panel, ctx) {
   }
 
   // ------------------------------------------------------------ go
-  // precomputed big runs (data/big/): films, parts figure and Perron table, loaded only when this chapter opens
+  // teaching figures (slots fig-a, fig-parts3, fig-hier), exact enumeration of the parts, computed live
+  mountTeach(ctx);
+  // precomputed big runs (data/big/): parts figure and Perron table, loaded when their <details> is first opened
   initBig(ctx).catch(e => { const el = ctx.slot("parts"); if (el) el.textContent = `Could not load the big runs: ${e.message}`; });
+  // precomputed second pass (data/perron2/): fresh starts (fig-cold) and θ ramps with films (fig-ramp)
+  initPerron2(ctx);
 
   renderSigma(); geometry(); renderKappa(); renderOmega();
   tp.record(restart());

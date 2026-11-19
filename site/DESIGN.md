@@ -373,7 +373,7 @@ filmstrip(ctx.slot("film"), { frames: sims, rows: 64, cols: 64, map: "div", rang
 ylog?, xrange?, yrange?, xlabel?, ylabel?, height? = 220, xfmt?, yfmt?, refs?: [{x|y, label?}], cursor?, legend?, xname?})`**
 SVG. Shared `x` or per-series `x`. Colours default to the categorical order. `band` shades a series' interval.
 `points: true` draws a series as dots only (a scatter over a curve); `dots: true` adds dots to a line. `refs` are
-dashed reference lines. Hover: crosshair and every series' value at the nearest x. Legend (with hover-to-isolate)
+dashed reference lines (optional `color` per ref). `tooltip(x)` (optional) replaces the default hover box. Hover: crosshair and every series' value at the nearest x. Legend (with hover-to-isolate)
 when there is more than one series. `c.setCursor(x)` moves an accent "now" line without a redraw (link it to the
 transport time); `c.update({series})` for new data (throttle to every few ticks in a live sim).
 ```js
@@ -550,7 +550,10 @@ $t$, residual, live edges and components.
 **`filmPlayer(el, {base = "data/big/", id?, filter?(indexEntry) → bool, picker = true, fps = 6, inputEdges = 600,
 height = 420, onFrame?(f, film), colors?(film, clusterColors) → css[], countLabels = false})`** → `{load(id) → Promise, go(f), play(), pause(), frame, film, destroy()}`.
 `colors` overrides the per-neuron colours (the perron chapter uses the barycentric mix for $B = 3$); `countLabels` labels
-neurons that coincide on screen (a collapsed cluster) with their number. Linear runs (`nonlin = "linear"`) are badged
+neurons that coincide on screen (a collapsed cluster) with their number. Opt-in for films with per-frame labels (e.g. `data/perron2/` ramps):
+`frameLabels: true` colours each frame by its own `labels` array (0 = largest); `frameLabel(frame, f, film)` and
+`readout(frame, f, film)` replace the transport label and the readout line; `spacing` replaces "Frames are spaced in
+log time.". Linear runs (`nonlin = "linear"`) are badged
 "input space" also when drawn on principal axes; nonlinear runs "response-function space". Without `id` it shows the first film of the index that passes `filter`; the picker (a select) offers the rest.
 Also exported: `loadIndex(base)`, `loadFilm(id, base)` → film with `coord(f)`, `H(f)`, `edges(f)`, `inW(f)`
 decoders, for chapter-specific figures over the same files.

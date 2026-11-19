@@ -54,6 +54,7 @@ export function decodeFilm(meta, buf) {
   const E = A.edges ? view(buf, A.edges) : null, Ew = A.edge_w ? view(buf, A.edge_w) : null, Emax = A.edges ? A.edges.shape[1] : 0;
   const count = A.edges ? (A.edges.count || Array(F).fill(Emax)) : null;
   const Iw = A.in_w ? view(buf, A.in_w) : null;
+  const Lb = A.labels ? view(buf, A.labels) : null;      // optional per-frame cluster labels (int16 [F, N])
   const wq = (v, wmax) => wmax * (v / 255) * (v / 255);
   return {
     ...meta, F, D,
@@ -65,6 +66,7 @@ export function decodeFilm(meta, buf) {
       for (let e = 0; e < n; e++) { pairs[2 * e] = E[2 * (f * Emax + e)]; pairs[2 * e + 1] = E[2 * (f * Emax + e) + 1]; w[e] = Ew ? wq(Ew[f * Emax + e], A.edge_w.wmax) : 1; }
       return { pairs, w };
     },
+    labels(f) { return Lb ? Lb.subarray(f * N, (f + 1) * N) : null; },
     inW(f) { if (!Iw) return null; const out = new Float32Array(N * B), o = f * N * B; for (let k = 0; k < N * B; k++) out[k] = wq(Iw[o + k], A.in_w.wmax); return out; },
   };
 }
@@ -112,10 +114,16 @@ function planePanel(el, o) {
         const bk = new Map();
         for (let i = 0; i < n; i++) { const x = sx(pts[2 * i]), y = sy(pts[2 * i + 1]), k = Math.round(x / 3) + "," + Math.round(y / 3); const e = bk.get(k); if (e) e.n++; else bk.set(k, { x, y, n: 1 }); }
         c.font = "600 11.5px Inter, system-ui, sans-serif"; c.fillStyle = P.fg; c.textBaseline = "middle";
-        for (const e of bk.values()) {
+        const placed = [];                               // label boxes already drawn: step down past any overlap
+        for (const e of [...bk.values()].sort((p, q) => q.n - p.n)) {
           if (e.n < Math.max(5, 0.04 * n)) continue;
-          const dx = W / 2 - e.x, dy = Hh / 2 - e.y, dl = Math.hypot(dx, dy) || 1, ox = e.x + (dx / dl) * (r + 14), oy = e.y + (dy / dl) * (r + 14);
-          c.textAlign = dx >= 0 ? "left" : "right"; c.fillText(`${e.n} neurons`, ox + (dx >= 0 ? -4 : 4), oy);
+          const dx = W / 2 - e.x, dy = Hh / 2 - e.y, dl = Math.hypot(dx, dy) || 1, ox = e.x + (dx / dl) * (r + 14);
+          let oy = e.y + (dy / dl) * (r + 14);
+          const text = `${e.n} neurons`, tw = c.measureText(text).width, x0 = dx >= 0 ? ox - 4 : ox + 4 - tw;
+          const hit = y => placed.some(b => x0 < b.x1 && x0 + tw > b.x0 && Math.abs(y - b.y) < 13);
+          for (let k = 0; k < 4 && hit(oy); k++) oy += dy >= 0 ? -13 : 13;
+          placed.push({ x0, x1: x0 + tw, y: oy });
+          c.textAlign = dx >= 0 ? "left" : "right"; c.fillText(text, ox + (dx >= 0 ? -4 : 4), oy);
         }
       }
       if (hi != null && hi < n) { c.beginPath(); c.arc(sx(pts[2 * hi]), sy(pts[2 * hi + 1]), r + 4, 0, 2 * Math.PI); c.lineWidth = 2.2; c.strokeStyle = P.accent; c.stroke(); }
@@ -158,7 +166,11 @@ function planePanel(el, o) {
  *        fps = 6 (frames per second while playing), inputEdges = 600 (strongest input synapses drawn in neuron
  *        space, 0 for none), height = 420 (max panel height, px), onFrame(f, film),
  *        colors(film, clusterColors) -> css[] | null (override the per-neuron colours, e.g. barycentric for B = 3),
- *        countLabels = false (label neurons that coincide on screen, a cluster of clones, with their number). */
+ *        countLabels = false (label neurons that coincide on screen, a cluster of clones, with their number),
+ *        frameLabels = false (colour by each frame's own cluster labels when the film has a `labels` array,
+ *          0 = largest; else by final.labels), frameLabel(frame, f, film) -> string (the transport label; default
+ *          "t = …"), readout(frame, f, film) -> html (the line under the transport), spacing (sentence on how the
+ *          frames are spaced; default "Frames are spaced in log time."). */
 export function filmPlayer(el, o = {}) {
   const base = o.base || "data/big/", fps = o.fps || 6;
   const root = ui.h("div", { class: "filmplayer" });
@@ -205,13 +217,25 @@ export function filmPlayer(el, o = {}) {
     labels = lab; colors = Array.from({ length: fl.N }, (_, i) => (lab[i] >= 0 ? catColor(sizeRank.get(lab[i])) : P.other));
     if (o.colors) { const c = o.colors(fl, colors); if (c) colors = c; }       // chapter override, e.g. barycentric colour
   }
-  function clusterOf(i) { const l = labels?.[i]; if (l == null || l < 0) return null; return { rank: sizeRank.get(l), info: film.final?.clusters?.[l] }; }
+  // per-frame colours (opts.frameLabels): label l at frame f is already ranked by size (0 = largest)
+  let perFrame = false;
+  function frameColours(fl, k) {
+    const lab = fl.labels?.(k); if (!lab) return false;
+    labels = lab; sizeRank = null;
+    colors = Array.from(lab, l => (l >= 0 ? catColor(l) : P.other));
+    return true;
+  }
+  function clusterOf(i) {
+    const l = labels?.[i]; if (l == null || l < 0) return null;
+    if (perFrame) { const fr = film.frames[f]; return { rank: l, info: { size: fr.sizes?.[l], support: fr.supports?.[l] } }; }
+    return { rank: sizeRank.get(l), info: film.final?.clusters?.[l] };
+  }
   function tip(i, kind) {
     if (!film) return null;
     if (kind === "input") return ui.tipRows(`input g${sub(i + 1)}`, [], "Clamped to the stimulus.");
     const c = clusterOf(i), rows = [];
     if (c) {
-      rows.push({ name: "cluster (at the end)", value: `c${c.rank + 1}${c.info?.size ? `, ${c.info.size} neurons` : ""}`, color: colors[i] });
+      rows.push({ name: perFrame ? "cluster (this frame)" : "cluster (at the end)", value: `c${c.rank + 1}${c.info?.size ? `, ${c.info.size} neurons` : ""}`, color: colors[i] });
       if (c.info?.support) rows.push({ name: "support (inputs)", value: c.info.support.map(b => `g${sub(b + 1)}`).join(" ") });
       if (c.info?.perron_cos != null) rows.push({ name: "cos(centroid, Perron vector)", value: ui.fmt(c.info.perron_cos, 4) });
       if (c.info?.best_eig_cos != null) rows.push({ name: "best eigenvector cos", value: ui.fmt(c.info.best_eig_cos, 3) });
@@ -246,7 +270,8 @@ export function filmPlayer(el, o = {}) {
       pl = planePanel(left, { kind, badgeText, countLabels: o.countLabels, aspect: 1.1, maxHeight: o.height || 420, tooltip: i => tip(i, "neuron"), onHover: link, axisLabels: [`PC1${pct(0)}`, `PC2${pct(1)}`] });
       const lo = fl.arrays.coords.lo, hi = fl.arrays.coords.hi;
       pl.setRange([lo[0], hi[0]], [lo[1], hi[1]]);
-      pl.setNote(kind === "input" ? "principal axes of $\\Sigma^{1/2} h_i$ (distances approximate RMS response distances; exact before projection), fixed by the final frame" : "principal axes of the responses, fixed by the final frame");
+      const fixedBy = /pooled/.test(fl.pca?.features || "") ? "fixed by all frames pooled" : "fixed by the final frame";
+      pl.setNote(kind === "input" ? `principal axes of $\\Sigma^{1/2} h_i$ (distances approximate RMS response distances; exact before projection), ${fixedBy}` : `principal axes of the responses, ${fixedBy}`);
       pl._toXY = cd => { const D = fl.D, out = new Float32Array(2 * N); for (let i = 0; i < N; i++) { out[2 * i] = cd[D * i]; out[2 * i + 1] = cd[D * i + 1]; } return out; };
       // optional third axis, when it carries variance
       if (fl.D >= 3 && ev && tot && ev[2] / tot > 0.01) {
@@ -272,6 +297,7 @@ export function filmPlayer(el, o = {}) {
     if (!film) return;
     f = Math.max(0, Math.min(film.F - 1, k | 0)); range.value = f;
     const fr = film.frames[f], cd = film.coord(f);
+    if (perFrame) { frameColours(film, f); nv.setColors(colors); }
     pl.setPoints(pl._toXY(cd), colors);
     if (v3) {
       const N = film.N, D = film.D, lo = film.arrays.coords.lo, hi = film.arrays.coords.hi, xyz = new Float32Array(3 * N);
@@ -293,8 +319,8 @@ export function filmPlayer(el, o = {}) {
       idx.forEach((q, e) => { P2[pairs.length + 2 * e] = Math.floor(q / B); P2[pairs.length + 2 * e + 1] = N + (q % B); W2[w.length + e] = wl * iw[q] / m; });
       nv.setEdges(P2, W2);
     } else nv.setEdges(pairs, w);
-    tLab.textContent = `t = ${ui.fmt(fr.t, 3)}`;
-    readout.innerHTML = `frame ${f + 1} of ${film.F} · t = ${ui.fmt(fr.t, 3)} · residual ${ui.fmt(fr.residual, 2)} · live edges ${ui.fmtInt(fr.n_live)} · components ${ui.fmtInt(fr.n_components)}`;
+    tLab.textContent = o.frameLabel ? o.frameLabel(fr, f, film) : `t = ${ui.fmt(fr.t, 3)}`;
+    readout.innerHTML = o.readout ? o.readout(fr, f, film) : `frame ${f + 1} of ${film.F} · t = ${ui.fmt(fr.t, 3)} · residual ${ui.fmt(fr.residual, 2)} · live edges ${ui.fmtInt(fr.n_live)} · components ${ui.fmtInt(fr.n_components)}`;
     o.onFrame?.(f, film);
   }
 
@@ -304,11 +330,13 @@ export function filmPlayer(el, o = {}) {
     let fl;
     try { fl = await loadFilm(id, base); } catch (e) { if (my === token) readout.textContent = `Could not load ${id}: ${e.message}`; return; }
     if (my !== token) return;
-    film = fl; clusterColours(fl); buildViews(fl);
+    film = fl; clusterColours(fl);
+    perFrame = !!o.frameLabels && frameColours(fl, fl.F - 1);
+    buildViews(fl);
     range.max = String(fl.F - 1);
     const cl = fl.final?.clusters || [];
     note.innerHTML = `${fl.title || fl.id}. Panels: ${spaceText}${fl.space === "pca" ? " (principal axes)" : fl.space === "simplex" ? " (harmonic embedding)" : ""}, and neuron space (layout seed ${fl.network_layout_seed}). ` +
-      `Frames are spaced in log time. ${o.colors ? "Colour: see the caption" : `Colour: cluster at the end of the run (${cl.length} cluster${cl.length === 1 ? "" : "s"}, largest first)`}. ` +
+      `${o.spacing ?? "Frames are spaced in log time."} ${o.colors ? "Colour: see the caption" : perFrame ? "Colour: cluster at the frame shown (largest first)" : `Colour: cluster at the end of the run (${cl.length} cluster${cl.length === 1 ? "" : "s"}, largest first)`}. ` +
       `<span class="mute">Run ${fl.id}, B = ${fl.B}, N = ${fl.N}, seed ${fl.seed}; ${fl.script || ""}.</span>`;
     if (picker && picker.get() !== id) picker.set(id);
     go(fl.F - 1);

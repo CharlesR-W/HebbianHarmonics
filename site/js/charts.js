@@ -185,9 +185,10 @@ export function heatmap(el, o) {
 
 // ---------------------------------------------------------------- line chart (SVG)
 // lineChart(el, {x?, series: [{name, y, x?, color?, dash?, width?, band?: [lo[], hi[]], dots?, points?, r?}], xlog?, ylog?,
-//                xrange?, yrange?, xlabel?, ylabel?, height?: 220, xfmt?, yfmt?, refs?: [{x|y, label?}],
-//                cursor?: x, legend?: auto, xname?})
+//                xrange?, yrange?, xlabel?, ylabel?, height?: 220, xfmt?, yfmt?, refs?: [{x|y, label?, color?}],
+//                cursor?: x, legend?: auto, xname?, tooltip?(x) -> element | null})
 // `points: true` draws a series as dots only (a scatter over a curve); `dots: true` adds dots to a line.
+// `tooltip(x)` (opt-in) replaces the default hover box (every series at the nearest x) with your own content.
 // Series colours default to the categorical order. update({...}) merges and redraws; setCursor(x) moves the
 // vertical "now" marker (for linking to a transport) without a full redraw.
 export function lineChart(el, o) {
@@ -219,7 +220,7 @@ export function lineChart(el, o) {
     if (st.ylabel) txt(svg, 0, 0, st.ylabel, { "text-anchor": "middle", class: "ttl", transform: `translate(12,${(m.t + Hh - m.b) / 2}) rotate(-90)` });
     for (const r of st.refs || []) {
       if (r.y != null) { svgEl("line", { x1: m.l, x2: W - m.r, y1: Y(r.y), y2: Y(r.y), stroke: P.mute2, "stroke-dasharray": "3 3" }, svg); if (r.label) txt(svg, W - m.r - 2, Y(r.y) - 4, r.label, { "text-anchor": "end" }); }
-      if (r.x != null) { svgEl("line", { x1: X(r.x), x2: X(r.x), y1: m.t, y2: Hh - m.b, stroke: P.mute2, "stroke-dasharray": "3 3" }, svg); if (r.label) txt(svg, X(r.x) + 4, m.t + 10, r.label); }
+      if (r.x != null) { svgEl("line", { x1: X(r.x), x2: X(r.x), y1: m.t, y2: Hh - m.b, stroke: r.color || P.mute2, "stroke-width": r.color ? 1.4 : 1, "stroke-dasharray": "3 3" }, svg); if (r.label) txt(svg, X(r.x) + 4, m.t + 10, r.label); }
     }
     const ok = (xv, yv) => Number.isFinite(xv) && Number.isFinite(yv) && (!st.xlog || xv > 0) && (!st.ylog || yv > 0);
     const clip = svgEl("clipPath", { id: (st._cid = st._cid || "c" + Math.random().toString(36).slice(2)) }, svgEl("defs", {}, svg));
@@ -255,7 +256,9 @@ export function lineChart(el, o) {
         dots[si].setAttribute("cx", X(xs[bi])); dots[si].setAttribute("cy", Y(s.y[bi])); dots[si].setAttribute("opacity", 1);
         return { name: s.name || "", value: yfmt(s.y[bi]), color: s.color, x: xs[bi] };
       }).filter(Boolean);
-      if (rows.length) showTip(ev.clientX, ev.clientY, tipRows(`${st.xname || st.xlabel || "x"} = ${xfmt(rows[0].x)}`, rows));
+      const custom = st.tooltip ? st.tooltip(xv) : null;
+      if (custom) showTip(ev.clientX, ev.clientY, custom);
+      else if (rows.length) showTip(ev.clientX, ev.clientY, tipRows(`${st.xname || st.xlabel || "x"} = ${xfmt(rows[0].x)}`, rows));
     });
     hit.addEventListener("pointerleave", () => { cross.setAttribute("opacity", 0); dots.forEach(d => d.setAttribute("opacity", 0)); hideTip(); });
     const showLegend = st.legend ?? series.length > 1;

@@ -9,8 +9,10 @@ const TABS = tabsMeta.map(t => t.id);
 // Anchors that moved or were removed: old deep links (#old/old-sim?tour=…, #talk/talk-hierarchy) go to the surviving
 // place, always chapter-qualified so a cold load can lazy-load the chapter. [tab, anchor | null (chapter top)].
 const anchorMoves = {
-  old: { "old-watch": ["perron", "perron-sim"], "old-sim": ["perron", "perron-sim"], "old-collapse": ["perron", "perron-collapse"],
+  old: { "old-watch": ["perron", "perron-sim"], "old-sim": ["perron", "perron-sim"], "old-collapse": ["perron", "perron-dynamics"],
     "old-parts": ["perron", "perron-parts"], "old-eq-part": ["perron", "perron-eq-part"] },
+  perron: { "perron-cases": ["perron", "perron-parts"], "perron-collapse": ["perron", "perron-dynamics"], "perron-big": ["perron", "perron-which"],
+    "perron-film3": ["perron", "perron-parts"], "perron-many": ["perron", "perron-which"], "perron-filmB": ["perron", "perron-which"] },
   talk: { "talk-hierarchy": ["primer", "primer-perron"], "talk-expansion": ["primer", "primer-nonlinear"],
     "talk-allocation": ["allocation", null] },
 };
