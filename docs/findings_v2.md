@@ -501,3 +501,32 @@ Precomputed for the explorer (`site/data/big/`, format and every field in `site/
 - Distance-rule films have 20–46 frames, not 60–120: from W = 0 the flow converges in 20–80 Euler steps and every step is already a frame.
 - Rectifier runs used Modal CPU containers (2 cores each, 118 units, ~66 container-minutes, under $0.50), not GPUs: the workspace's GPU slots were occupied by another project's jobs, and a unit took 20–240 s on CPU.
 - No family B covariance readout for the rectifier (by design, R1), no hierarchy for the distance rule, one seed for family B covariance runs, two for family B distance runs.
+
+## Spontaneous activity of covariance-rule networks, 2026-11-20 (`spontaneous.py` → `spontaneous.json`; chapter `#spont`)
+
+Question: after training to the fixed point, is spontaneous activity a replay of the input statistics, and are the members of a cluster identical only in their mixtures h_i or wired so that they fire together? Decisions by the author: private noise in every interior neuron with the inputs held at zero; covariance rule only (`hebb/core.py`); equal-time covariance only.
+
+**Derivation** (linear network, K = diag(deg) − W_II, deg_i = Σ_j w_ij + Σ_b w_ib, H = K⁻¹W_IB):
+
+- S1 (identity). τ du = −Ku dt + √(2Tτ) dW has stationary covariance **C_sp = T K⁻¹** (Lyapunov KC + CK = 2TI; the Gibbs measure of the network energy at g = 0). Noise on the inputs instead gives H H^T, which cannot tell equal mixtures from wiring.
+- S2 (identity, any weights). C_ev = HΣ_gH^T = K⁻¹W_IBΣ_gW_IB^TK⁻¹, so **W_IB Σ_g W_IB^T = T² C_sp⁻¹ C_ev C_sp⁻¹**.
+- S3 (identity at the fixed point). W_II,ij = max(w_min, (η/λ)(γC_ev,ij − θ)), so the **off-diagonal precision** of spontaneous activity is the thresholded evoked covariance: T(C_sp⁻¹)_ij = −max(w_min, (η/λ)(γC_ev,ij − θ)), i ≠ j. The diagonal also holds the input conductances.
+- S4 (identity for an isolated cluster of n clones with input conductance a > 0 and equal lateral weight w; floor links to the rest of the network neglected). K_c = (a + nw)I − w11^T, C_sp,c = T/(a + nw)·[I + (w/a)11^T]; **pair correlation r = w/(a + w)**, independent of n; member variance T(a + w)/(a(a + nw)); cluster-mean variance T/(na).
+- S5 (identity, floor neglected). With q = (Σ_gh − θ)₊, h = q/1^Tq, i.e. (Σ_SS − θ11^T)h = μh with μ = 1^Tq = aλ/η (a positive eigenvector of the piece; the Perron pair of B1 when the piece has no negative entry. A fixed point need not sit on the top eigenvector: Σ = [[1, .1], [.1, 1]], θ = 0.3 has the fixed point h = (½, ½), μ = 0.5, while the top eigenvalue of Σ − θ11^T is 0.9); v = h^TΣ_gh = μ/m + θ with m = 1/|h|²; w/a = (γμ/m + (γ − 1)θ)/μ. **For γ = 1: r = 1/(1 + m) ≤ 1/2.**
+
+**Measured** (347 trained networks: 5 stored showcases at w_min = 1e-3; 135 at w_min = 1e-4 and the same 135 at 1e-3 over 9 covariances × θ ∈ {0.1, 0.2, 0.3, 0.45, 0.6} × 3 starts, N = 36, γ = 1; 72 over γ ∈ {0.6 … 10} at θ = 0.3; all residuals ≤ 1e-10; the nine covariances are distinct: an earlier version used a two-level hierarchy that equalled the `blocks` preset, replaced by a three-level one (2 × 2 × 3 inputs, correlations 0.1 / 0.35 / 0.7)):
+
+- S3 (with the floor) holds to 3e-11 in every network.
+- A noise-driven Euler simulation (2000 replicas × 60 samples, dt = 0.002) reproduces K⁻¹ to 1.1–1.7% (Frobenius) in the five stored networks.
+- **Members of a cluster are clones and wired all-to-all with one weight** in every run: max L1 spread of mixtures 1.2e-15, max − min lateral weight within a cluster 0 to stored precision, evoked correlation 1.
+- **They do not fire together.** γ = 1, w_min = 1e-4, 411 clusters: |r − 1/(1 + m)| median 0.0007, below 0.02 for 98%, max 0.084; the largest measured r is 0.498. At w_min = 1e-3 the median gap is 0.0065 (below 0.02 for 71%) and the max 0.147, r always below the line: the floor adds conductance of order N·w_min, which matters for weakly driven clusters (a ≈ 0.1–0.3). r = w/(a + w) with the measured a, w holds to 0.009 (1e-4) / 0.036 (1e-3).
+- **γ controls it.** Three equal blocks, θ = 0.3: r = 0.054, 0.132, 0.199, 0.329, 0.422, 0.548, 0.685, 0.821 at γ = 0.6, 0.8, 1, 1.5, 2, 3, 5, 10 (formula S5 agrees to 0.002 over all 113 γ-sweep clusters; uneven blocks reach 0.858 and the hierarchy 0.768 at γ = 10); the three clusters merge into one from γ = 1.5 because the lateral threshold is θ/γ; a is unchanged by γ only while the clusters stay the same.
+- **Between clusters:** stored `blocks` network, evoked correlation 0.18, spontaneous 0.002 (floor only); over the w_min = 1e-4 sweep the largest spontaneous correlation between neurons of different clusters is 0.026.
+- **Equal mixtures without wiring exist:** in the stored `blocks_high` network (three equal blocks, θ = 0.6) three neurons have every synapse at the floor (their reachable variance is below θ); they share one mixture (evoked correlation 1.000) and their spontaneous correlation is 0.024.
+- **Amplitudes are not replayed.** Cluster-mean variance at rest is T/(na) (within 3.7% at w_min = 1e-4). Spearman between a cluster's evoked variance and a member's variance at rest: 0.10 over all 411 clusters; among the clusters of one network it is negative in 58 of 65 networks with ≥ 3 clusters (median −0.80). Member variance at rest vs a: −0.91.
+
+**Wording the data support:** spontaneous activity (private noise) keeps the partition into clusters and nothing else of Σ_g directly: correlations between unwired neurons shrink to what the floor carries (≤ 0.026 at w_min = 1e-4), within-cluster correlation is 1/(1 + m) rather than 1, and variances follow 1/(na) rather than the evoked variance. Σ_g enters only through the Perron pairs (μ_c, h_c) of the thresholded pieces; cluster sizes n_c are not set by the fixed point (see `#old`).
+
+**Independent review** (GPT, 2026-11-20): reran the sweep and reproduced the JSON; its six findings (floor missing from the printed identity, duplicated covariance preset, isolated-cluster assumption unstated, "Perron" over-claimed, coarse Euler step in the browser traces, tooltip x-values) are all addressed above and in the chapter.
+
+**Not done:** time-lagged covariances (relaxation rates are a for the cluster-common mode and a + nw for within-cluster differences); sparse lateral masks (p < 1), where a cluster is not a complete graph and S4 does not apply as written; the distance rule; noise on the inputs.

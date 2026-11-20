@@ -13,7 +13,7 @@ const FAMILY_GROUPS = [
   { name: "power-law spectrum", test: f => f.startsWith("power") },
   { name: "Wishart", test: f => f.startsWith("wishart") },
 ];
-const GAMMA_FAMILIES = [["blocks", "three equal blocks"], ["blocks_uneven", "uneven blocks"], ["hier", "hierarchy"]];
+const GAMMA_FAMILIES = [["blocks", "three equal blocks"], ["blocks_uneven", "uneven blocks"], ["hier", "three-level hierarchy"]];
 
 export async function init(panel, ctx) {
   const r = await fetch(URL_DATA, { cache: "no-cache" });
@@ -38,6 +38,7 @@ export async function init(panel, ctx) {
   gammaFigure(ctx.slot("gamma"), data);
   loudFigure(ctx.slot("loud"), data);
   fillSweep(panel, data);
+  fillTwins(panel, shows.find(s => s.id === "blocks_high"));
   ctx.renderMath(panel);
 }
 
@@ -76,10 +77,15 @@ function simulate(show, seed) {
   for (let b = 0; b < B; b++) z[b] = gauss(rnd);
   for (let i = 0; i < N; i++) u[i] = gauss(rnd) * Math.sqrt(show.Csp[i][i]);       // start near stationarity
   const s = Math.sqrt(2 * DT);
+  // Euler substeps for the network: h * (largest eigenvalue of K) <= 0.04 (Gershgorin: eig <= 2 max K_ii), so the
+  // discretisation inflates no variance by more than ~2%
+  const kmax = 2 * Math.max(...show.K.map((row, i) => row[i])), sub = Math.max(1, Math.ceil(DT * kmax / 0.04)), hs = DT / sub, ss = Math.sqrt(2 * hs);
   for (let t = 0; t < STEPS + 400; t++) {
     for (let b = 0; b < B; b++) z[b] += -z[b] * DT + s * gauss(rnd);                // unit OU, white across inputs
-    for (let i = 0; i < N; i++) { let k = 0; const Ki = show.K[i]; for (let j = 0; j < N; j++) k += Ki[j] * u[j]; du[i] = -k * DT + s * gauss(rnd); }
-    for (let i = 0; i < N; i++) u[i] += du[i];
+    for (let q = 0; q < sub; q++) {
+      for (let i = 0; i < N; i++) { let k = 0; const Ki = show.K[i]; for (let j = 0; j < N; j++) k += Ki[j] * u[j]; du[i] = -k * hs + ss * gauss(rnd); }
+      for (let i = 0; i < N; i++) u[i] += du[i];
+    }
     const tt = t - 400;
     if (tt >= 0 && tt % EVERY === 0) {
       for (let b = 0; b < B; b++) { let v = 0; for (let c = 0; c <= b; c++) v += L[b][c] * z[c]; g[b] = v; }
@@ -111,10 +117,9 @@ function tracesFigure(el, picker) {
       const W = Math.floor(pn.box.clientWidth); if (!W) continue;
       const rowH = 64, Hh = groups.length * rowH + 26, g = hidpi(pn.cv, W, Hh);
       g.clearRect(0, 0, W, Hh);
-      const sd = Math.sqrt(mean(groups.flatMap(gr => Array.from({ length: gr.end - gr.start + 1 }, (_, q) => C[gr.start + q][gr.start + q]))));
       const x0 = 6, x1 = W - 6, X = q => x0 + (x1 - x0) * q / (sim.n - 1), amp = rowH / 6.5;      // ±3.25 s.d. per row
       groups.forEach((gr, r) => {
-        const y0 = r * rowH + rowH / 2 + 4;
+        const y0 = r * rowH + rowH / 2 + 4, sd = Math.sqrt(C[gr.start][gr.start]);      // each cluster in units of its own s.d.
         g.strokeStyle = P.line; g.lineWidth = 1; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y0); g.stroke();
         for (let q = 0; q < Math.min(PER, gr.end - gr.start + 1); q++) {
           const y = tr[gr.start + q];
@@ -159,7 +164,18 @@ function mFigure(el, data) {
     ...FAMILY_GROUPS.map((f, i) => { const c = cl.filter(c => f.test(c.family)); return { name: f.name, x: c.map(c => c.m_eff), y: c.map(c => c.r_sp), color: catColor(i), points: true, r: 3.2 }; })];
   el.replaceChildren();
   lineChart(el, { series, xrange: [1, Math.ceil(mmax)], yrange: [0, 0.55], height: 300, xlabel: "effective number of inputs the cluster listens to (m = 1/|h|²)",
-    ylabel: "correlation between members at rest (r)", yfmt: v => ui.fmtFixed(v, 2) });
+    ylabel: "correlation between members at rest (r)", yfmt: v => ui.fmtFixed(v, 2),
+    tooltip: nearestTip(cl, c => c.m_eff, c => c.r_sp, m => 1 / (1 + m), false, "inputs listened to (m)", "correlation at rest", "1/(1 + m)") });
+}
+
+// tooltip for a scatter of clusters over a curve: the observation nearest in x, with the curve at that observation's x
+function nearestTip(cl, xOf, yOf, curve, log, xname, yname, cname) {
+  const famName = f => FAMILY_GROUPS.find(g => g.test(f))?.name ?? f, d = (p, q) => Math.abs(log ? Math.log(p / q) : p - q);
+  return xv => {
+    const c = cl.reduce((best, k) => (d(xOf(k), xv) < d(xOf(best), xv) ? k : best), cl[0]);
+    return ui.tipRows(`${famName(c.family)}, θ = ${c.theta}, ${c.n} neurons`, [{ name: xname, value: ui.fmt(xOf(c), 3) },
+      { name: yname, value: ui.fmt(yOf(c), 3) }, { name: cname, value: ui.fmt(curve(xOf(c)), 3) }]);
+  };
 }
 
 // ---------------------------------------------------------------- figure 4: r against gamma
@@ -185,12 +201,17 @@ function loudFigure(el, data) {
     ...FAMILY_GROUPS.map((f, i) => { const c = cl.filter(c => f.test(c.family)); return { name: f.name, x: c.map(c => c.n * c.a), y: c.map(c => c.sp_mean_var), color: catColor(i), points: true, r: 3.2 }; })];
   el.replaceChildren();
   lineChart(el, { series, xlog: true, ylog: true, height: 300, xlabel: "cluster size × input conductance per member (n·a)",
-    ylabel: "variance of the cluster mean at rest (units of T)" });
+    ylabel: "variance of the cluster mean at rest (units of T)",
+    tooltip: nearestTip(cl, c => c.n * c.a, c => c.sp_mean_var, x => 1 / x, true, "size × input conductance (n·a)", "variance of the mean at rest", "T/(n a)") });
 }
 
 // ---------------------------------------------------------------- numbers in the prose
 function spearman(x, y) {
-  const rank = v => { const o = v.map((_, i) => i).sort((p, q) => v[p] - v[q]), r = new Array(v.length); o.forEach((i, k) => { r[i] = k; }); return r; };
+  const rank = v => {                                   // average ranks for ties
+    const o = v.map((_, i) => i).sort((p, q) => v[p] - v[q]), r = new Array(v.length);
+    for (let k = 0; k < o.length;) { let e = k; while (e + 1 < o.length && Math.abs(v[o[e + 1]] - v[o[k]]) < 1e-9) e++; for (let q = k; q <= e; q++) r[o[q]] = (k + e) / 2; k = e + 1; }
+    return r;
+  };
   const a = rank(x), b = rank(y), ma = mean(a), mb = mean(b);
   let sab = 0, saa = 0, sbb = 0; a.forEach((_, i) => { sab += (a[i] - ma) * (b[i] - mb); saa += (a[i] - ma) ** 2; sbb += (b[i] - mb) ** 2; });
   return sab / Math.sqrt(saa * sbb);
@@ -204,12 +225,34 @@ function fillShow(panel, s) {
   fill(panel, "s-sp-btw", s.summary.r_sp_between == null ? "n/a" : ui.fmtFixed(s.summary.r_sp_between, 3));
 }
 function fillSweep(panel, data) {
-  const runs = [...data.sweep, ...data.gamma, ...data.showcases.map(s => s.summary)], cl = clustersOf(data.sweep);
+  const runs = [...data.sweep, ...data.sweep_floor, ...data.gamma, ...data.showcases.map(s => s.summary)], cl = clustersOf(data.sweep);
+  const gaps = c => c.map(c => Math.abs(c.r_sp - 1 / (1 + c.m_eff))).sort((p, q) => p - q), median = v => (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2);
+  const g = gaps(cl), gf = gaps(clustersOf(data.sweep_floor));
   fill(panel, "s-runs", ui.fmtInt(runs.length));
   fill(panel, "s-ident", `within ${ui.fmt(Math.max(...runs.map(r => r.identity_err)), 1)}`);
   fill(panel, "s-ncl", ui.fmtInt(cl.length));
   fill(panel, "s-nsweep", ui.fmtInt(data.sweep.length));
-  fill(panel, "s-mgap", ui.fmtFixed(Math.max(...cl.map(c => Math.abs(c.r_sp - 1 / (1 + c.m_eff)))), 3));
+  fill(panel, "s-mgap-med", ui.fmtFixed(median(g), 4));
+  fill(panel, "s-mfrac", ui.fmtPct(g.filter(x => x < 0.02).length / g.length));
+  fill(panel, "s-mgap", ui.fmtFixed(g[g.length - 1], 3));
+  fill(panel, "s-fgap-med", ui.fmtFixed(median(gf), 3));
+  fill(panel, "s-fgap-max", ui.fmtFixed(gf[gf.length - 1], 3));
   fill(panel, "s-spread", ui.fmt(Math.max(...cl.map(c => c.spread)), 1));
   fill(panel, "s-rank", ui.fmtFixed(spearman(cl.map(c => c.ev_var), cl.map(c => c.sp_var)), 2));
+  const within = data.sweep.filter(r => r.clusters.length >= 3).map(r => spearman(r.clusters.map(c => c.ev_var), r.clusters.map(c => c.sp_var)))
+    .filter(Number.isFinite).sort((p, q) => p - q);
+  fill(panel, "s-rank-n", ui.fmtInt(within.length));
+  fill(panel, "s-rank-neg", ui.fmtInt(within.filter(x => x < 0).length));
+  fill(panel, "s-rank-med", ui.fmtFixed(median(within), 2));
+}
+// neurons in different clusters with the same mixture (evoked correlation > 0.999): the unwired copies
+function fillTwins(panel, s) {
+  const Re = corrOf(s.Cev), Rs = corrOf(s.Csp), N = s.labels.length, who = new Set();
+  let ev = 1, sp = 0;
+  for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) if (s.labels[i] !== s.labels[j] && Re[i][j] > 0.999) {
+    who.add(i); who.add(j); ev = Math.min(ev, Re[i][j]); sp = Math.max(sp, Rs[i][j]);
+  }
+  fill(panel, "s-twin-n", ["no", "one", "two", "three", "four", "five", "six"][who.size] ?? String(who.size));
+  fill(panel, "s-twin-ev", ui.fmtFixed(ev, 3));
+  fill(panel, "s-twin-sp", ui.fmtFixed(sp, 3));
 }

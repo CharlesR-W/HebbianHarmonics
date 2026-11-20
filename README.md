@@ -7,7 +7,7 @@ The current redesign focuses on linear neurons. All data are synthetic. See `doc
 
 Top tabs, in order: `#talk` (The talk, home), `#basics` (The basics), `#perron` (Perron clusters),
 `#readout` (Reading the weights), and `#experiments` (Experiments). The Experiments landing page links to
-`#fusion` (Fusion), `#many` (Many inputs), `#allocation` (Who gets the neurons?), and `#old` (More on the covariance rule).
+`#fusion` (Fusion), `#many` (Many inputs), `#allocation` (Who gets the neurons?), `#old` (More on the covariance rule), and `#spont` (Spontaneous activity).
 
 Nonlinear-neuron chapters (nonlinear, diversity) and 'Choices & caveats' were removed on 2026-11-20; the last commit containing them is 40cb3ff.
 
