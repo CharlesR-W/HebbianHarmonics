@@ -5,22 +5,21 @@
 import { gradientCss } from "./palette.js";
 
 // The tab shown for an empty hash (it carries the masthead).
-export const HOME_TAB = "primer";
-export const tabAliases = { talk: "primer" };
-// Main path first, then the appendix (group "appendix": drawn after a divider in the tab bar). Old ids that moved
-// are in `tabAliases` (main.js rewrites them); `anchorMoves` sends deep links to anchors that moved or were removed.
+export const HOME_TAB = "talk";
+export const tabAliases = { primer: "talk", idea: "basics" };
+export const retiredTabs = { nonlinear: "experiments", diversity: "experiments", method: "experiments" };
+// Top navigation first; sub-pages follow with the parent nav item to highlight.
 export const tabsMeta = [
-  { id: "primer", label: "Primer", group: "main" },
-  { id: "idea", label: "The idea", group: "main" },
-  { id: "perron", label: "Perron parts", group: "main" },
-  { id: "readout", label: "Reading the weights", group: "main" },
-  { id: "nonlinear", label: "Nonlinear neurons", group: "main" },
-  { id: "fusion", label: "Fusion", group: "appendix" },
-  { id: "many", label: "Many inputs", group: "appendix" },
-  { id: "diversity", label: "Diversity", group: "appendix" },
-  { id: "allocation", label: "Allocation", group: "appendix" },
-  { id: "old", label: "More on the covariance rule", group: "appendix" },
-  { id: "method", label: "Choices & caveats", group: "appendix" },
+  { id: "talk", label: "The talk" },
+  { id: "basics", label: "The basics" },
+  { id: "perron", label: "Perron clusters" },
+  { id: "readout", label: "Reading the weights" },
+  { id: "experiments", label: "Experiments" },
+  { id: "fusion", label: "Fusion", parent: "experiments" },
+  { id: "many", label: "Many inputs", parent: "experiments" },
+  { id: "allocation", label: "Who gets the neurons?", parent: "experiments" },
+  { id: "old", label: "More on the covariance rule", parent: "experiments" },
+  { id: "spont", label: "Spontaneous activity", parent: "experiments" },
 ].map(t => ({ ...t, title: t.id === HOME_TAB ? "Hebbian Learning on a Resistor Network" : `${t.label} · Hebbian Learning on a Resistor Network` }));
 
 // ---------------------------------------------------------------- basics

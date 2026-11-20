@@ -1,0 +1,42 @@
+/* The talk tab: slide-like sections. Shared vocabulary for talk_a/b/c. */
+#tab-talk article.prose { max-width: 1180px; width: auto; margin: 0 auto; padding: 0 28px; }
+.talk { counter-reset: slide; }
+.slide { min-height: calc(100vh - 56px); scroll-margin-top: 52px; padding: 36px 0 44px; border-bottom: 1px solid var(--line);
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); grid-template-rows: auto auto auto 1fr; column-gap: 44px; row-gap: 14px; align-content: start; position: relative; }
+.slide > .slide-num { grid-column: 1 / -1; font: 600 12px/1 var(--font-mono, ui-monospace, monospace); letter-spacing: .12em; color: var(--mute-2); }
+.slide > h2 { grid-column: 1 / -1; font-size: clamp(30px, 3.6vw, 46px); line-height: 1.08; margin: 0; letter-spacing: -.015em; max-width: 22ch; }
+.slide > h2 .anchor { display: none; }
+.slide > .claim { grid-column: 1 / -1; font-size: clamp(18px, 1.7vw, 23px); line-height: 1.35; color: var(--ink-2); margin: 0 0 8px; max-width: 46ch; }
+.slide > .slide-num { grid-row: 1; } .slide > h2 { grid-row: 2; } .slide > .claim { grid-row: 3; }
+.slide > .side { grid-column: 1; grid-row: 4; display: flex; flex-direction: column; gap: 18px; align-self: start; }
+.slide > .fig { grid-column: 2; grid-row: 4; align-self: start; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-height: 340px; position: relative; }
+.slide.wide > .fig { grid-column: 1 / -1; grid-row: 5; min-height: 0; }
+.slide.wide > .side { grid-column: 1 / -1; grid-row: 4; flex-direction: row; flex-wrap: wrap; gap: 28px; }
+.slide .fig svg, .slide .fig canvas { display: block; width: 100%; height: auto; }
+.slide .fig-cap { font: 13px/1.4 var(--font-sans, Inter, sans-serif); color: var(--mute); margin: 10px 2px 0; }
+.slide .fig-ctl { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 10px; font: 13px/1.3 var(--font-sans, Inter, sans-serif); color: var(--ink-2); }
+.slide .fig-ctl button { font: inherit; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--wash); color: var(--fg); cursor: pointer; }
+.slide .fig-ctl button:hover { border-color: var(--mute-2); }
+.slide .fig-ctl button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.slide .fig-ctl input[type="range"] { width: 180px; accent-color: var(--focus); }
+.slide .eq { font-size: clamp(19px, 1.9vw, 25px); padding: 14px 18px; background: var(--wash); border-radius: 8px; overflow-x: auto; margin: 0; }
+.slide .eq .katex-display { margin: 0; }
+.slide .eq-note { font: 13px/1.4 var(--font-sans, Inter, sans-serif); color: var(--mute); margin: -10px 2px 0; }
+.slide ul.points { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.slide ul.points li { font-size: clamp(17px, 1.45vw, 20px); line-height: 1.35; padding-left: 20px; position: relative; margin: 0; }
+.slide ul.points li::before { content: ""; position: absolute; left: 0; top: .55em; width: 8px; height: 8px; border-radius: 50%; background: var(--c-cat-0); }
+.slide .see { font: 14px/1.3 var(--font-sans, Inter, sans-serif); }
+.slide.title-slide { grid-template-columns: minmax(0, 1fr); align-content: center; text-align: left; }
+.slide.title-slide > h2 { font-size: clamp(40px, 6vw, 76px); max-width: 16ch; }
+.talk-hud { position: fixed; right: 18px; bottom: 14px; display: flex; gap: 12px; font: 12px/1 var(--font-mono, ui-monospace, monospace); color: var(--mute-2); background: color-mix(in srgb, var(--bg) 85%, transparent); padding: 6px 10px; border-radius: 999px; pointer-events: none; z-index: 5; }
+body:not([data-tab="talk"]) .talk-hud { display: none; }
+@media (max-width: 860px) {
+  .slide { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  #tab-talk article.prose { padding: 0 16px; }
+  .slide > *, .slide .side > * { min-width: 0; }
+  .slide > .fig, .slide > .side, .slide > h2, .slide > .claim, .slide > .slide-num { grid-column: 1; grid-row: auto; }
+}
+.slide .talk-foot { font: 13px/1.5 var(--font-sans, Inter, sans-serif); color: var(--mute); max-width: 78ch; margin: 18px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.slide .talk-foot a { color: var(--ink-2); }
+.slide .eq .katex-display { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+.slide .side > .see { align-self: flex-start; }

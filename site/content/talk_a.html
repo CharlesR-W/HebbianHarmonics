@@ -1,0 +1,65 @@
+<section class="slide title-slide" id="talk-title">
+  <h2>Neurons that fire together wire together</h2>
+  <p class="claim">Hebbian learning is purely local: no teacher, no global loss handed down. Yet it works. So what is it computing?</p>
+  <div class="side">
+    <ul class="points">
+      <li>It clusters neurons by how they listen to the inputs.</li>
+      <li>You can read the input statistics back out of the weights.</li>
+    </ul>
+    <p class="fig-cap">Charles R-W</p>
+    <p class="talk-foot"><b>Why this model?</b> Linear rate neurons with local, correlation-driven weight updates are the standard setting for theories of <a href="https://en.wikipedia.org/wiki/Hebbian_theory" target="_blank" rel="noopener">Hebbian learning</a>. Pehlevan &amp; Chklovskii showed that Hebbian/anti-Hebbian networks of this kind follow from similarity-matching objectives (<a href="https://arxiv.org/abs/1503.00669" target="_blank" rel="noopener">2015</a>, <a href="https://arxiv.org/abs/1703.07914" target="_blank" rel="noopener">2018</a>), and resistor networks with local learning rules are studied, and built, as physical learning machines (<a href="https://arxiv.org/abs/2006.01981" target="_blank" rel="noopener">Kendall et al. 2020</a>, <a href="https://arxiv.org/abs/2011.03861" target="_blank" rel="noopener">Stern et al. 2021</a>). The <a href="https://en.wikipedia.org/wiki/BCM_theory" target="_blank" rel="noopener">BCM model</a> is a different rule, but its sliding threshold plays the role our regulariser does: it keeps Hebbian growth from running away.</p>
+  </div>
+</section>
+
+<section class="slide" id="talk-model">
+  <h2>The brain as a resistor network</h2>
+  <p class="claim">Neurons are nodes with a voltage, synapses are conductances, and a few input neurons are driven by the rest of the brain.</p>
+  <div class="side">
+    <p class="eq">\[ \begin{gathered} \text{neuron } i:\ u_i \qquad \text{synapse}:\ w_{ij} \\ \text{input } b:\ g_b \end{gathered} \]</p>
+    <ul class="points">
+      <li>Symmetric, linear network: the cleanest case.</li>
+      <li>Directed networks: plausibly swap in a directed Laplacian (conjecture).</li>
+    </ul>
+  </div>
+  <div class="fig">
+    <svg id="talk-a-model-svg" viewBox="0 0 640 400" role="img" aria-label="Resistor network with three clamped input neurons and ten interior neurons"></svg>
+    <p class="fig-cap">Squares: input neurons, clamped to voltages that change over time. Circles: interior neurons, settling to the voltage the network sets (warm positive, cool negative). Line width: conductance.</p>
+    <div class="fig-ctl"><button type="button" id="talk-a-model-play" aria-pressed="true">Playing</button></div>
+  </div>
+</section>
+
+<section class="slide" id="talk-embed">
+  <h2>Each neuron is a mixture of the inputs</h2>
+  <p class="claim">In the linear network, every neuron's voltage is a fixed blend of the input voltages, set by the weights alone. These blends are the natural variables for interpretability.</p>
+  <div class="side">
+    <p class="eq">\[ u_i = \sum_b H_{ib}\, g_b \]</p>
+    <ul class="points">
+      <li>Row \(h_i\) of \(H\) is a probability distribution over the inputs.</li>
+      <li>It is the neuron's harmonic embedding: where it sits between the inputs.</li>
+    </ul>
+    <a class="see explore-link" href="#basics/basics-embed">See it live</a>
+  </div>
+  <div class="fig">
+    <svg id="talk-a-embed-svg" viewBox="0 0 640 400" role="img" aria-label="Network with each interior neuron drawn as a pie of the three input colours"></svg>
+    <p class="fig-cap">Each pie is one neuron's row of \(H\), computed exactly for this network by solving its Laplacian equations. Click a neuron to see its mixture.</p>
+  </div>
+</section>
+
+<section class="slide" id="talk-rule">
+  <h2>Similar listeners wire together</h2>
+  <p class="claim">In these variables, Hebb's rule only asks one thing of a pair of neurons: how alike do they listen to the inputs?</p>
+  <div class="side">
+    <p class="eq">\[ \dot w_{ij} = b - \alpha\, w_{ij} - \tfrac12 D_{ij}^2 \]</p>
+    <p class="eq-note">\(D_{ij}\): RMS difference between the two neurons' responses. For linear neurons \(D_{ij}^2 = \|h_i - h_j\|^2_{\Sigma_g}\).</p>
+    <ul class="points">
+      <li>The covariance rule, \(\dot w_{ij} = \text{reg} + \eta\,\langle h_i, h_j\rangle_{\Sigma_g}\), is its close cousin; the distance version also penalises each neuron's response power.</li>
+      <li>At a fixed point, live synapses satisfy \(\alpha w = b - D^2/2\); pairs with \(D^2 \ge 2b\) disconnect.</li>
+    </ul>
+    <a class="see explore-link" href="#basics/basics-result">See it live</a>
+  </div>
+  <div class="fig">
+    <svg id="talk-a-rule-svg" viewBox="0 0 640 380" role="img" aria-label="Two neurons with mixture bars and the synapse between them"></svg>
+    <p class="fig-cap">Two neurons with their mixtures over three inputs (independent, unit variance). The synapse is drawn at its fixed point \(w = (b - D^2/2)_+/\alpha\), with \(b = 0.15\), \(\alpha = 1\).</p>
+    <div class="fig-ctl"><label>How alike they listen <input type="range" id="talk-a-rule-slider" min="0" max="100" value="80"></label></div>
+  </div>
+</section>

@@ -1,7 +1,7 @@
 // Chapter "many": model side (no DOM), so the live figures and their tours can be checked headless in node.
 // Two live systems, both simulated with onsite_engine.js:
 //   * the population sim: N neurons, s random attachments each, B up to 24 inputs (planted blocks, hierarchy,
-//     power law), linear or leaky-rectifying potentials; swept in b by hand or along a path (continuation);
+//     power law), linear neurons; swept in b by hand or along a path (continuation);
 //   * the line sim (Q-resolution 3b): 30 linear neurons whose attachments differ along ONE contrast mode of an
 //     8-input covariance with a Hadamard eigenbasis, exactly as hebb/sweeps2/resolution.py builds them.
 import * as O from "./onsite_engine.js";
@@ -25,17 +25,12 @@ export const SIGMAS = [
 ];
 export const sigmaById = id => SIGMAS.find(s => s.id === id) || SIGMAS[0];
 
-export const POTS = {
-  linear: { klo: 0, khi: 0, sigmaT: 0, label: "linear" },
-  rect: { klo: 3, khi: 0, sigmaT: 0.7, label: "leaky rectifier" },
-};
+export const LIVE_DEFAULTS = { sig: "blocks12", b: 0.1, a: 1, n: 40, s: 3, seed: 1 };
 
-export const LIVE_DEFAULTS = { sig: "blocks12", b: 0.1, a: 1, pot: "linear", n: 40, s: 3, seed: 1 };
-
-// The population sim. Streams: network (attachments, thresholds), training bank, evaluation bank.
+// The population sim (linear neurons). Streams: network (attachments), training bank, evaluation bank.
 export function buildLive(p) {
-  const sg = sigmaById(p.sig), B = sg.B, Sigma = sg.make(), pot = POTS[p.pot] || POTS.linear;
-  const net = O.makeNet({ N: p.n, B, rng: O.makeRng(1000 + p.seed), s: Math.min(p.s, B), klo: pot.klo, khi: pot.khi, sigmaT: pot.sigmaT });
+  const sg = sigmaById(p.sig), B = sg.B, Sigma = sg.make();
+  const net = O.makeNet({ N: p.n, B, rng: O.makeRng(1000 + p.seed), s: Math.min(p.s, B), klo: 0, khi: 0, sigmaT: 0 });
   const G = O.sampleInputs(Sigma, B, S_TRAIN, O.makeRng(2000 + p.seed));
   const Ge = O.sampleInputs(Sigma, B, S_EVAL, O.makeRng(3000 + p.seed));
   const sim = O.createSim({ net, G, S: S_TRAIN, b: p.b, alpha: p.a, dt: dtFor(p.a) });
@@ -84,23 +79,12 @@ export function componentsOn(U, S, N, cs) {
 // ------------------------------------------------------------------ tours of the population sim
 // path: continuation (b values visited in order, each run to the fixed point, W carried over); otherwise a cold
 // start (W = 0) at b.
-const geo = (lo, hi, n) => Array.from({ length: n }, (_, k) => +(lo * Math.pow(hi / lo, k / (n - 1))).toPrecision(3));
-const LOOP_UP = geo(0.005, 0.3, 10);
 export const LIVE_TOURS = [
-  { id: "singletons", label: "Singletons", p: { sig: "blocks12", pot: "linear", a: 1, b: 0.005 },
-    note: "$b = 0.005$ from $W = 0$: almost no pair is within an edge's range $D^2 < 2b$, so almost every neuron is its own component." },
-  { id: "chains", label: "Chains at percolation", p: { sig: "blocks12", pot: "linear", a: 1, b: 0.1 },
-    note: "$b = 0.1$, $\\alpha = 1$ from $W = 0$: one large component beside small ones and singletons. Read the widest span$/\\sqrt{2b}$ tile and the red cells inside the large block of the matrix: members further apart than one edge's range." },
-  { id: "blob", label: "One blob", p: { sig: "blocks12", pot: "linear", a: 1, b: 0.3 },
-    note: "$b = 0.3$ from $W = 0$: one component holds all but at most a neuron or two, and it is tight: compare its span with the chains view." },
-  { id: "down", label: "Down from a blob (α = 0.1)", p: { sig: "blocks12", pot: "linear", a: 0.1 },
+  { id: "chains", label: "Chains at percolation", p: { sig: "blocks12", a: 1, b: 0.1 },
+    note: "$b = 0.1$, $\\alpha = 1$ from $W = 0$: one large component beside small ones and lone neurons. Read the widest span$/\\sqrt{2b}$ tile and the red cells inside the large block of the matrix: members further apart than one edge's range." },
+  { id: "down", label: "Down from a blob (α = 0.1)", p: { sig: "blocks12", a: 0.1 },
     path: [0.3, 0.2, 0.13, 0.1, 0.065, 0.042, 0.03],
-    note: "$\\alpha = 0.1$: start fused at $b = 0.3$, then lower $b$ step by step to $0.03$, carrying $W$ (continuation). The network stays in a few components. Then press reset ($W = 0$) at the same $b$, or take the next tour." },
-  { id: "cold03", label: "Same b from W = 0", p: { sig: "blocks12", pot: "linear", a: 0.1, b: 0.03 },
-    note: "$\\alpha = 0.1$, $b = 0.03$ from $W = 0$: dozens of components where the continuation from a blob kept a few. Same parameters, different history. Compare the $J$ tile with the one the previous tour ended on: at this $b$, near the low end of the hysteresis window, the fragmented state has the lower objective, so the fused state the continuation kept is a local minimum and not the better one. Higher in the window the order is usually reversed (panel g above)." },
-  { id: "loop", label: "Loop up and down, B = 24", p: { sig: "blocks24", pot: "linear", a: 0.1 },
-    path: [...LOOP_UP, ...LOOP_UP.slice(0, -1).reverse()],
-    note: "Planted blocks on 24 inputs, $\\alpha = 0.1$: $b$ goes up from $0.005$ to $0.3$ and back, each step run to its fixed point. The dots in panel (b) trace the two branches." },
+    note: "$\\alpha = 0.1$: start fused at $b = 0.3$, then lower $b$ step by step to $0.03$, carrying $W$ (continuation). The network stays in a few components. Then press ↺ and play for a cold start ($W = 0$) at the same $b$." },
 ];
 export const liveTourById = id => LIVE_TOURS.find(t => t.id === id) || null;
 
@@ -171,45 +155,9 @@ export function lineAnalysis(L) {
 
 export const LINE_TOURS = [
   { id: "condense", label: "Condensation", p: { m: 1, a: 0.01, b: 0.012 },
-    note: "Mode 1, $\\alpha = 0.01$, $b = 0.012$ from $W = 0$: the uncoupled chain is nearly or fully connected (statement 2 predicts one or two components), and the fixed point breaks the line into a few tight clusters." },
-  { id: "weak", label: "Stiff weights (α = 0.1)", p: { m: 1, a: 0.1, b: 0.002 },
-    note: "Mode 1, $\\alpha = 0.1$, small $b$: the edges stay weak, the responses barely move, and the count is close to statement (2)." },
+    note: "Direction 1, $\\alpha = 0.01$, $b = 0.012$ from $W = 0$: the uncoupled line is nearly or fully connected (the prediction is one or two components), and the fixed point breaks it into a few tight clusters." },
   { id: "down1", label: "Down-continuation", p: { m: 1, a: 0.01 }, path: [0.05, 0.015, 0.006],
-    note: "Mode 1, $\\alpha = 0.01$: start fused at $b = 0.05$ and lower $b$ to $0.006$, carrying $W$. Fewer components than (2) predicts; the bridged-gap tile shows a component holding neighbours further apart than $\\delta_{on}$." },
-  { id: "cold1", label: "Same b from W = 0", p: { m: 1, a: 0.01, b: 0.006 },
-    note: "Mode 1, $\\alpha = 0.01$, $b = 0.006$ from $W = 0$: more components than (2) predicts, at the $b$ where the continuation from a fused line ended with fewer." },
+    note: "Direction 1, $\\alpha = 0.01$: start fused at $b = 0.05$ and lower $b$ to $0.006$, carrying $W$. Fewer components than predicted; the bridged-gap tile shows a component holding neighbours further apart than $\\delta_{on}$. Press ↺ and play for a cold start at the same $b$, and compare." },
 ];
 export const lineTourById = id => LINE_TOURS.find(t => t.id === id) || null;
 
-// ------------------------------------------------------------------ resolution statement (1), frozen law
-// Random frozen linear network on the 8-input Hadamard covariance (or a power law): compare D^2 on the training
-// bank with sum_a lam_a (dh . v_a)^2 using the bank's own eigenpairs (identity) and Sigma_g's (sampling error).
-export function frozenLaw({ sig = "contrast8", wrand = false, S = 256, seed = 0 }) {
-  const B = LB, N = 30;
-  const Sigma = sig === "power8" ? O.covPowerLaw({ B, alpha: 1, seed: 5 }) : SIGMA8;
-  const net = O.makeNet({ N, B, rng: O.makeRng(7000 + seed), s: 3 });
-  if (wrand) {
-    const r = O.makeRng(7500 + seed);
-    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) { const w = r.uniform() * 0.5, keep = r.uniform() < 0.2; if (keep) { net.W[i * N + j] = w; net.W[j * N + i] = w; } }
-  }
-  const H = O.harmonic(net);
-  const G = O.sampleInputs(Sigma, B, S, O.makeRng(8000 + seed)), Ge = O.sampleInputs(Sigma, B, 4096, O.makeRng(9000 + seed));
-  const resp = (Gx, Sx) => { const U = new Float64Array(Sx * N); for (let s = 0; s < Sx; s++) for (let i = 0; i < N; i++) { let v = 0; for (let c = 0; c < B; c++) v += H[i * B + c] * Gx[s * B + c]; U[s * N + i] = v; } return U; };
-  const D2t = O.dist2(resp(G, S), S, N), D2e = O.dist2(resp(Ge, 4096), 4096, N);
-  const eS = O.eigh(Float64Array.from(Sigma), B), eC = O.eigh(secondMoment(G, S, B), B);
-  const law = (e, dh) => { let r = 0; for (let k = 0; k < B; k++) { let p = 0; for (let c = 0; c < B; c++) p += dh[c] * e.vectors[c * B + k]; r += e.values[k] * p * p; } return r; };
-  const pts = { meas: [], chat: [], sig: [], eval: [] };
-  let mx = 0, mxE = 0, eC1 = 0, eS1 = 0, eE1 = 0, sumdh = 0;
-  const dh = new Float64Array(B);
-  for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
-    let s1 = 0; for (let c = 0; c < B; c++) { dh[c] = H[i * B + c] - H[j * B + c]; s1 += dh[c]; }
-    sumdh = Math.max(sumdh, Math.abs(s1));
-    const m = D2t[i * N + j], lc = law(eC, dh), ls = law(eS, dh);
-    pts.meas.push(m); pts.chat.push(lc); pts.sig.push(ls); pts.eval.push(D2e[i * N + j]);
-    mx = Math.max(mx, m); mxE = Math.max(mxE, D2e[i * N + j]);
-  }
-  for (let k = 0; k < pts.meas.length; k++) {
-    eC1 = Math.max(eC1, Math.abs(pts.meas[k] - pts.chat[k])); eS1 = Math.max(eS1, Math.abs(pts.meas[k] - pts.sig[k])); eE1 = Math.max(eE1, Math.abs(pts.eval[k] - pts.sig[k]));
-  }
-  return { pts, errChat: eC1 / mx, errSig: eS1 / mx, errEval: eE1 / mxE, sumdh, S };
-}

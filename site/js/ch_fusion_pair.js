@@ -9,10 +9,6 @@ export const PAIR_DEFAULTS = { b: 0.4, alpha: 0.2, D02: 2 };
 export const PAIR_TOURS = [
   { id: "bistable", label: "Bistable", params: { D02: 2, b: 0.4, alpha: 0.2 },
     note: "$D_0^2 = 2$ (two independent unit-variance inputs), $b = 0.4$, $\\alpha = 0.2$: inside the window, so $w = 0$ and the fused state both attract." },
-  { id: "spec-unit", label: "SPEC example, unit variance", params: { D02: 2, b: 0.2, alpha: 0.1 },
-    note: "$D_0^2 = 2$, $b = 0.2$, $\\alpha = 0.1$: $b$ lies just below $b_{sn}$, so only $w = 0$ is a fixed point." },
-  { id: "spec-half", label: "SPEC example, $D_0^2 = 1$", params: { D02: 1, b: 0.2, alpha: 0.1 },
-    note: "$D_0^2 = 1$, $b = 0.2$, $\\alpha = 0.1$: the same fixed points as the bistable preset (all three parameters halved)." },
   { id: "stiff", label: "Stiff, no window", params: { D02: 2, b: 1.5, alpha: 5 },
     note: "$\\alpha = 5 &gt; 2D_0^2$: no saddle-node; above $b = D_0^2/2$ the edge grows continuously from $w = 0$ and there is one fixed point for every $b$." },
 ];
@@ -35,7 +31,7 @@ export function initPair(slot, ctx, { loop } = {}) {
   const row = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "14px 28px", marginTop: "8px" } });
   slot.append(row);
   const panel = (title) => { const b = ui.h("div"); row.append(ui.h("div", { style: { minWidth: "0" } }, ui.h("div", { class: "chart-title", html: title }), b)); return b; };
-  const boxA = panel("(a) Drift $dw/dt$ against $w$"), boxB = panel("(b) Fixed points $w^\\ast$ against $b$");
+  const boxA = panel("Drift $dw/dt$ against $w$"), boxB = panel("Fixed points $w^\\ast$ against $b$");
   ui.renderMath(row);
   const legB = ui.legend({ parent: row, items: [] });
   legB.el.style.gridColumn = "1 / -1";

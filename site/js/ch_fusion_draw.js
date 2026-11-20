@@ -1,11 +1,10 @@
 // Chapter "fusion": small purpose-built charts the shared charts.js does not provide.
 //   graphView   points (response functions) with live edges, input squares, an edge-range scale bar (canvas)
-//   matrixView  D^2 matrix with the 2b contour and live-edge dots (canvas)
 //   wdScatter   w_ij against D^2_ij with the fixed-point line (canvas)
 //   svgPlot     axes + a render callback, for the two-neuron drift and bifurcation panels (SVG)
 // They follow the look of charts.js (fonts, grid, axis colours) and redraw on resize.
 import { svgEl, scale, niceTicks, logTicks, hidpi } from "./charts.js";
-import { P, cmap, rgbToCss } from "./palette.js";
+import { P, rgbToCss } from "./palette.js";
 import * as ui from "./ui.js";
 
 const FONT = "11px Inter, system-ui, sans-serif", FONT_B = "560 11.5px Inter, system-ui, sans-serif";
@@ -119,61 +118,6 @@ export function graphView(el, { height = 460, tooltip, onHover } = {}) {
   };
 }
 
-// ---------------------------------------------------------------- D^2 matrix with the 2b contour
-export function matrixView(el, { size = 300, tooltip, onHover } = {}) {
-  el.classList.add("chart");
-  const cv = ui.h("canvas", { style: { touchAction: "pan-y" } });
-  el.replaceChildren(cv);
-  let st = null, geo = null, hov = null;
-  const seq = cmap("seq");
-  function draw() {
-    const W = Math.floor(el.clientWidth); if (!W || !st) return;
-    const N = st.N, m = { l: 34, t: 8, r: 8, b: 30 };
-    const side = Math.max(120, Math.min(size, W - m.l - m.r));
-    const c = side / N, Wd = m.l + side + m.r, H = m.t + side + m.b;
-    const g = hidpi(cv, Math.min(W, Wd), H);
-    g.clearRect(0, 0, Wd, H);
-    const ord = st.order, two = 2 * st.b, top = 2 * two;
-    for (let a = 0; a < N; a++) for (let q = 0; q < N; q++) {
-      const v = st.D2[ord[a] * N + ord[q]];
-      g.fillStyle = rgbToCss(seq(Math.min(1, v / top)));
-      g.fillRect(m.l + q * c, m.t + a * c, Math.ceil(c), Math.ceil(c));
-    }
-    // live edges: ink dots, opacity w / max w
-    if (st.wmax > 0) for (let a = 0; a < N; a++) for (let q = 0; q < N; q++) {
-      const w = st.W[ord[a] * N + ord[q]]; if (!(w > 1e-9)) continue;
-      g.fillStyle = rgbToCss([22, 22, 26], 0.25 + 0.75 * w / st.wmax);
-      g.beginPath(); g.arc(m.l + (q + 0.5) * c, m.t + (a + 0.5) * c, Math.max(1.1, c * 0.2), 0, 2 * Math.PI); g.fill();
-    }
-    // contour D^2 = 2b along cell boundaries
-    const inside = (a, q) => st.D2[ord[a] * N + ord[q]] < two;
-    g.strokeStyle = P.accent; g.lineWidth = 1.6; g.beginPath();
-    for (let a = 0; a < N; a++) for (let q = 0; q < N; q++) {
-      const v = inside(a, q);
-      if (q + 1 < N && v !== inside(a, q + 1)) { const x = m.l + (q + 1) * c; g.moveTo(x, m.t + a * c); g.lineTo(x, m.t + (a + 1) * c); }
-      if (a + 1 < N && v !== inside(a + 1, q)) { const y = m.t + (a + 1) * c; g.moveTo(m.l + q * c, y); g.lineTo(m.l + (q + 1) * c, y); }
-    }
-    g.stroke();
-    // component bands (left)
-    for (const gr of st.groups) { g.fillStyle = gr.color; g.fillRect(m.l - 7, m.t + gr.start * c, 4, (gr.end - gr.start) * c - (gr.end - gr.start > 1 ? 0.5 : 0)); }
-    g.strokeStyle = "#c9c8c1"; g.lineWidth = 1; g.strokeRect(m.l + 0.5, m.t + 0.5, side - 1, side - 1);
-    g.font = FONT_B; g.fillStyle = P.ink2; g.textAlign = "center";
-    g.fillText("neuron j (sorted by component)", m.l + side / 2, H - 8);
-    g.save(); g.translate(12, m.t + side / 2); g.rotate(-Math.PI / 2); g.fillText("neuron i", 0, 0); g.restore();
-    geo = { m, c, N };
-  }
-  cv.addEventListener("pointermove", ev => {
-    if (!geo || !st) return;
-    const r = cv.getBoundingClientRect(), q = Math.floor((ev.clientX - r.left - geo.m.l) / geo.c), a = Math.floor((ev.clientY - r.top - geo.m.t) / geo.c);
-    if (a < 0 || q < 0 || a >= geo.N || q >= geo.N) { ui.hideTip(); if (hov) { hov = null; onHover?.(null); } return; }
-    const i = st.order[a], j = st.order[q];
-    if (tooltip) ui.showTip(ev.clientX, ev.clientY, tooltip(i, j));
-    if (!hov || hov[0] !== i || hov[1] !== j) { hov = [i, j]; onHover?.(hov); }
-  });
-  cv.addEventListener("pointerleave", () => { ui.hideTip(); if (hov) { hov = null; onHover?.(null); } });
-  onWidth(el, () => draw());
-  return { el, set(s) { st = s; draw(); } };
-}
 
 // ---------------------------------------------------------------- w against D^2 with the fixed-point line
 export function wdScatter(el, { height = 250, tooltip, onHover } = {}) {

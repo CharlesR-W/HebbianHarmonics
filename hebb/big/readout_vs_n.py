@@ -52,6 +52,7 @@ def unit(args):
             k = f"{m}_vs_{t}"
             if k in a:
                 out[f"{m}_cos_{t}"] = a[k]["cos"]
+                out[f"{m}_relerr_{t}"] = a[k]["rel_err"]
     out["noise1e-4_cos"] = a.get("noise0.0001_ridge_psd_vs_Chat_cos")
     out["noise1e-2_cos"] = a.get("noise0.01_ridge_psd_vs_Chat_cos")
     print(f"N={N} seed={seed} b={b}: live={a['n_live']} rank={a['rank_1e8']}/{a['dim']} "
@@ -70,6 +71,9 @@ def main():
             f = lambda k: [float(np.mean([r[k] for r in g])), float(np.std([r[k] for r in g]))]  # noqa: E731
             summary.append(dict(b=b, N=N, n_live=f("n_live"), rank=f("rank_1e8"), rank_1e4=f("rank_1e4"),
                                 cos_Chat=f("ridge_psd_cos_Chat"), cos_Sigma=f("ridge_psd_cos_Sigma"),
+                                relerr_Chat=f("ridge_psd_relerr_Chat"),
+                                relerr_Chat_max=float(max(r["ridge_psd_relerr_Chat"] for r in g)),
+                                relerr_Chat_min=float(min(r["ridge_psd_relerr_Chat"] for r in g)),
                                 log10_condition=[float(np.mean([np.log10(r["condition"]) for r in g if r["condition"]] or [np.nan])),
                                                  float(np.std([np.log10(r["condition"]) for r in g if r["condition"]] or [np.nan]))],
                                 err_fixed_point_max=float(max(r["err_fixed_point"] for r in g)),
@@ -85,6 +89,8 @@ def main():
                   fields={"rank": "rank of the live-edge operator at relative singular-value tolerance 1e-8 (of 66)",
                           "rank_1e4": "rank at tolerance 1e-4",
                           "condition": "sv_max / smallest singular value above 1e-8 sv_max",
+                          "relerr_Chat": "||X - P C_hat P||_F / ||P C_hat P||_F for the PSD-projected ridge recovery X "
+                                         "(mean, sd over seeds; _min/_max over seeds)",
                           "cos_Chat / cos_Sigma": "Frobenius cosine of the PSD-projected min-norm ridge recovery with "
                                                   "P C_hat P (training bank, the exact target) / P Sigma P",
                           "err_fixed_point": "max over live edges |2(b - alpha w) - d^T C_hat d| (D^2 units)",

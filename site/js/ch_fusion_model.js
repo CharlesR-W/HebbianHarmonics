@@ -1,8 +1,8 @@
 // Chapter "fusion", model side (no DOM, so it runs headless under node for checking the tours):
 // the two-neuron calibration (analytic drift, fixed points, bistable window, an engine run), and the live
-// B = 3 network wrapped around onsite_engine.createSim with the analysis each frame needs (components sorted by
-// size, diameters and spans on the training and the evaluation bank, positions in the simplex or by MDS, the
-// envelope check).
+// B = 3 network of linear neurons wrapped around onsite_engine.createSim with the analysis each frame needs
+// (components sorted by size, diameters and spans on the training and the evaluation bank, positions in the
+// simplex, the envelope check).
 import * as O from "./onsite_engine.js";
 
 export const B = 3, S_TRAIN = 256, S_EVAL = 1024;
@@ -13,19 +13,16 @@ export const dtOf = alpha => Math.min(0.5, 1 / alpha);   // as hebb/sweeps2/fusi
 // ---------------------------------------------------------------- input statistics (synthetic)
 export const SIGMAS = [
   { id: "iid", label: "independent, unit variances", make: () => O.covDiag([1, 1, 1]) },
-  { id: "unequal", label: "independent, variances 2, 1, 0.5", make: () => O.covDiag([2, 1, 0.5]) },
-  { id: "pair", label: "g₁, g₂ correlated (ρ = 0.8)", make: () => O.cov3({ variances: [1, 1, 1], corr: [0.8, 0, 0] }) },
 ];
 export const sigmaById = id => SIGMAS.find(s => s.id === id) || SIGMAS[0];
 
 // ---------------------------------------------------------------- parameters, tours
-export const DEFAULTS = { b: 0.015, alpha: 1, klo: 0, st: 0.7, sig: "iid", s: 3, n: 30, seed: 0 };
-export const KEYS = Object.keys(DEFAULTS);
-export const LIMITS = { b: [0.001, 1], alpha: [0.03, 10], klo: [0, 10], st: [0, 1.5] };
+export const DEFAULTS = { b: 0.015, alpha: 1, sig: "iid", s: 3, n: 30, seed: 0 };
+export const LIMITS = { b: [0.001, 1], alpha: [0.03, 10] };
 
 export function clampParams(p) {
   const q = { ...DEFAULTS, ...p };
-  for (const k of ["b", "alpha", "klo", "st"]) { const x = Number(q[k]); q[k] = Math.min(LIMITS[k][1], Math.max(LIMITS[k][0], Number.isFinite(x) ? x : DEFAULTS[k])); }
+  for (const k of ["b", "alpha"]) { const x = Number(q[k]); q[k] = Math.min(LIMITS[k][1], Math.max(LIMITS[k][0], Number.isFinite(x) ? x : DEFAULTS[k])); }
   q.s = [1, 2, 3].includes(+q.s) ? +q.s : 3;
   q.n = [20, 30, 40].includes(+q.n) ? +q.n : 30;
   q.seed = Math.max(0, Math.min(9, Math.round(+q.seed || 0)));
@@ -36,20 +33,10 @@ export function clampParams(p) {
 // A tour is an exact state. `script` (optional) is a list of b values visited by continuation: the run goes to
 // its fixed point at each one before moving on, carrying W.
 export const TOURS = [
-  { id: "singletons", label: "Singletons", params: { b: 0.002 },
-    note: "$b = 0.002$, $\\alpha = 1$, from $W = 0$: the edge range $\\sqrt{2b}$ is shorter than almost every distance $D_{ij}$, so nearly every neuron stays alone." },
   { id: "chains", label: "Chains at percolation", params: { b: 0.015 },
-    note: "$b = 0.015$, $\\alpha = 1$, from $W = 0$: the live graph is about to percolate. Compare the span of the largest component with the edge range $\\sqrt{2b}$ (tiles, and the table below the figure)." },
-  { id: "blob", label: "One blob", params: { b: 0.3 },
-    note: "$b = 0.3$, $\\alpha = 1$, from $W = 0$: every pair is within range, one component, contracted to a small diameter." },
-  { id: "tight", label: "Strong fusion, $\\alpha = 0.1$", params: { b: 0.05, alpha: 0.1 },
-    note: "$b = 0.05$ and $\\alpha = 0.1$, from $W = 0$: the same random attachments, but each live edge can grow ten times stronger, so components pull in until they are narrower than one edge range." },
+    note: "$b = 0.015$, $\\alpha = 1$, from $W = 0$: the live graph is about to percolate. Compare the span of the largest component with the edge range $\\sqrt{2b}$ (tiles)." },
   { id: "hysteresis", label: "Hysteresis", params: { b: 0.3, alpha: 0.1 }, script: [0.3, 0.2, 0.15, 0.1, 0.07, 0.05, 0.04, 0.03],
-    note: "$\\alpha = 0.1$: from $W = 0$ at $b = 0.3$ (one blob), then $b$ is lowered step by step to $0.03$, each time to the fixed point, carrying $W$ (continuation). Then press ↺ to restart from $W = 0$ at the same $b$, or pick the next tour." },
-  { id: "cold003", label: "… same $b$, from $W = 0$", params: { b: 0.03, alpha: 0.1 },
-    note: "$b = 0.03$, $\\alpha = 0.1$ from $W = 0$: the end point of the hysteresis tour, reached without the history." },
-  { id: "rect", label: "Rectifying neurons", params: { b: 0.02, klo: 3, st: 0.7 },
-    note: "The default leaky rectifier ($k_{lo} = 3$, $k_{hi} = 0$, thresholds $t_i$ with spread $\\sigma_t = 0.7$), $b = 0.02$, $\\alpha = 1$, from $W = 0$. The responses are no longer linear in $g$, so the points are drawn by classical MDS of $D$." },
+    note: "$\\alpha = 0.1$: from $W = 0$ at $b = 0.3$ (one blob), then $b$ is lowered step by step to $0.03$, each time to the fixed point, carrying $W$. Then press ↺ and play to restart from $W = 0$ at the same $b$." },
 ];
 export const tourById = id => TOURS.find(t => t.id === id) || null;
 export const tourParams = t => clampParams({ ...DEFAULTS, ...t.params });
@@ -136,7 +123,7 @@ export function advancePair(sim, budgetMs, tol = 1e-10, maxSteps = 400000) {
 // evaluation bank from rng(3000 + seed). Changing Sigma keeps the underlying standard-normal draws (G = Z Sigma^1/2).
 export function createFusion(p0) {
   const F = { p: clampParams(p0) };
-  let z = null, Sigma = null;
+  let Sigma = null;
 
   function banks() {
     Sigma = sigmaById(F.p.sig).make();
@@ -146,14 +133,14 @@ export function createFusion(p0) {
   }
   F.build = (p = F.p) => {
     F.p = clampParams(p);
-    const { n, s, seed, klo, st } = F.p;
+    const { n, s, seed } = F.p;
+    // linear neurons (klo = khi = 0). sigmaT: 1 only keeps the random stream, hence the attachments, as before;
+    // thresholds have no effect without an on-site potential.
     const net = O.makeNet({ N: n, B, rng: O.makeRng(1000 + seed), s, klo: 0, khi: 0, sigmaT: 1 });
-    z = Float64Array.from(net.t);
-    for (let i = 0; i < n; i++) { net.t[i] = st * z[i]; net.klo[i] = klo; }
     banks();
     F.net = net; F.N = n;
     F.sim = O.createSim({ net, G: F.G, S: S_TRAIN, b: F.p.b, alpha: F.p.alpha, dt: dtOf(F.p.alpha) });
-    F.t = 0; F.mdsPrev = null; F.envelope = null;
+    F.t = 0; F.envelope = null;
     return F;
   };
   F.reset = () => {                       // cold start: W = 0, same network and banks
@@ -163,10 +150,6 @@ export function createFusion(p0) {
   // parameter changes that keep W (continuation)
   F.setB = b => { F.p.b = b; F.sim.setParams({ b }); F.envelope = null; };
   F.setAlpha = a => { F.p.alpha = a; F.sim.setParams({ alpha: a, dt: dtOf(a) }); F.envelope = null; };
-  F.setKlo = k => { F.p.klo = k; F.net.klo.fill(k); F.sim.refresh(); F.Ueval = null; F.envelope = null; };
-  F.setSt = st => { F.p.st = st; for (let i = 0; i < F.N; i++) F.net.t[i] = st * z[i]; F.sim.refresh(); F.Ueval = null; F.envelope = null; };
-  F.setSigma = id => { F.p.sig = sigmaById(id).id; banks(); F.sim.setInputs(F.G, S_TRAIN); F.envelope = null; };
-  F.linear = () => F.p.klo === 0;
   F.done = () => F.sim.residual < STOP_TOL;
 
   // steps until budgetMs is used (at most maxSteps); returns the number of steps
@@ -222,35 +205,17 @@ export function createFusion(p0) {
       comps: multi, labels: Int32Array.from(labels), rank, nLive, wmax,
       W: Float64Array.from(W), D2: Float64Array.from(D2),
       r: sim.residual, eq: sim.eqResidual, evalResidual: withEval ? F.evalResidual : NaN, withEval,
-      xyMds: F.layoutMds(), xySimplex: F.linear() ? F.layoutSimplex() : null, linear: F.linear(),
+      xySimplex: F.layoutSimplex(),
     };
   };
 
-  // positions: the B = 3 simplex (linear case, rows of H) ...
+  // positions: the B = 3 simplex (rows of H)
   F.layoutSimplex = () => {
     const H = O.harmonic(F.net), N = F.N, xy = new Float64Array(2 * N);
     const V = [[0, 1], [-Math.sqrt(3) / 2, -0.5], [Math.sqrt(3) / 2, -0.5]];
     for (let i = 0; i < N; i++) for (let b = 0; b < B; b++) { xy[2 * i] += H[i * B + b] * V[b][0]; xy[2 * i + 1] += H[i * B + b] * V[b][1]; }
     return { xy, H, anchors: V.map(v => v.slice()) };
   };
-  // ... or classical MDS of the training-bank D^2 among the N responses and the B inputs (the inputs are
-  // functions on the bank too), Procrustes-aligned to the previous frame
-  F.layoutMds = () => {
-    const N = F.N, n = N + B, sim = F.sim, D = new Float64Array(n * n);
-    const X = O.dist2(sim.U, S_TRAIN, N, F.G, B);              // N x B: E(u_i - g_b)^2
-    const GG = O.dist2(F.G, S_TRAIN, B);
-    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) D[i * n + j] = sim.D2[i * N + j];
-    for (let i = 0; i < N; i++) for (let b = 0; b < B; b++) { D[i * n + N + b] = X[i * B + b]; D[(N + b) * n + i] = X[i * B + b]; }
-    for (let a = 0; a < B; a++) for (let b = 0; b < B; b++) D[(N + a) * n + N + b] = GG[a * B + b];
-    const prev = F.mdsPrev && F.mdsPrev.length === 2 * n ? F.mdsPrev : null;
-    const m = O.mds(D, n, 2, prev);
-    if (!prev) orientMds(m.X, N);
-    F.mdsPrev = m.X;
-    const xy = m.X.slice(0, 2 * N), anchors = [];
-    for (let b = 0; b < B; b++) anchors.push([m.X[2 * (N + b)], m.X[2 * (N + b) + 1]]);
-    return { xy, anchors, explained: m.explained };
-  };
-
   // the envelope theorem, numerically: a central difference of the mean equilibrium energy E*(W) in w_ij,
   // against D_ij^2/2, for the strongest live edge and the closest dead pair
   F.envelopeCheck = (h = 1e-4) => {
@@ -275,14 +240,6 @@ export function createFusion(p0) {
   };
 
   return F.build(F.p);
-}
-
-// first MDS frame: rotate so that input g1 points up and g2 sits to the lower left (matches the simplex drawing)
-function orientMds(X, N) {
-  const ax = X[2 * N], ay = X[2 * N + 1], ang = Math.atan2(ax, ay);
-  const c = Math.cos(ang), s = Math.sin(ang), n = X.length / 2;
-  for (let i = 0; i < n; i++) { const x = X[2 * i], y = X[2 * i + 1]; X[2 * i] = c * x - s * y; X[2 * i + 1] = s * x + c * y; }
-  if (X[2 * (N + 1)] > X[2 * (N + 2)]) for (let i = 0; i < n; i++) X[2 * i] = -X[2 * i];
 }
 
 // ---------------------------------------------------------------- scan in b (cold starts and continuation)

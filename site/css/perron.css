@@ -1,0 +1,60 @@
+/* page-local styles for #perron (owned by that page's author) */
+#tab-perron .candidate-alt { border-left: 3px solid var(--line); padding-left: 14px; margin: 1.5em 0; }
+#tab-perron .candidate-alt > .alt-note { font: 600 11.5px/1.4 var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--mute); margin: 0 0 4px; }
+
+/* controls row */
+#tab-perron .pt-ctl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px 28px; align-items: end; margin: 4px 0 12px; }
+#tab-perron .pt-ctl .seg { flex-wrap: wrap; }
+#tab-perron .pc-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 4px 10px; font: 12.5px/1.4 var(--sans); color: var(--ink-2); cursor: pointer; }
+#tab-perron .pc-btn:hover { border-color: var(--mute-2); color: var(--fg); }
+#tab-perron .pc-read { font: 12.5px/1.5 var(--sans); color: var(--ink-2); margin-top: 8px; }
+#tab-perron .pc-read b { color: var(--fg); font-weight: 600; }
+#tab-perron .pc-panel-title { font: 600 12.5px/1.35 var(--sans); color: var(--fg); margin: 0 0 4px; }
+#tab-perron .pc-panel-sub { font: 12px/1.4 var(--sans); color: var(--mute); margin: 0 0 4px; }
+
+/* figure 1: grid of triangles */
+#tab-perron .pg-grid { display: grid; grid-template-columns: 150px repeat(4, minmax(0, 1fr)); gap: 2px 6px; align-items: center; }
+#tab-perron .pg-row { font: 12.5px/1.4 var(--sans); color: var(--ink-2); padding-right: 6px; }
+#tab-perron .pg-row b { display: block; color: var(--fg); font-weight: 600; }
+#tab-perron .pg-col { font: 600 12.5px/1.3 var(--sans); color: var(--fg); text-align: center; }
+#tab-perron .pg-grid svg { width: 100%; height: auto; display: block; }
+#tab-perron .pg-cellth { display: none; }
+@media (max-width: 700px) {
+  #tab-perron .pg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 8px; }
+  #tab-perron .pg-row { grid-column: 1 / -1; padding: 10px 0 0; }
+  #tab-perron .pg-corner, #tab-perron .pg-col { display: none; }
+  #tab-perron .pg-cellth { display: inline; }
+}
+#tab-perron .pl-wrap { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(220px, 1fr); gap: 10px 28px; align-items: start; }
+#tab-perron .pl-wrap svg { width: 100%; height: auto; display: block; }
+@media (max-width: 700px) { #tab-perron .pl-wrap { grid-template-columns: minmax(0, 1fr); } }
+
+/* small multiples of canvases (landscape, normalisation) */
+#tab-perron .pc-row { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); gap: 10px 14px; }
+#tab-perron .pc-row canvas { display: block; width: 100%; }
+@media (max-width: 700px) { #tab-perron .pc-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+#tab-perron .pc-foot { display: flex; flex-wrap: wrap; gap: 8px 26px; align-items: center; margin-top: 10px; }
+
+/* figure: threshold + dendrogram */
+#tab-perron .pt-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px 28px; align-items: start; }
+#tab-perron .pt-panels > * { min-width: 0; }
+#tab-perron .pt-panels svg { width: 100%; height: auto; display: block; }
+
+/* figure: groups vs eigenvectors */
+#tab-perron .pb-wrap { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(240px, 1fr); gap: 16px 32px; align-items: start; }
+@media (max-width: 760px) { #tab-perron .pb-wrap { grid-template-columns: minmax(0, 1fr); } }
+#tab-perron .pb-rows svg { display: block; width: 100%; }
+#tab-perron .pt-ctl .seg button, #tab-perron .pt-ctl select { font-family: var(--sans); }
+#tab-perron .eq { overflow-x: auto; overflow-y: hidden; }
+#tab-perron .u-legend .u-key { white-space: normal; }
+#tab-perron .pt-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 2px 0 14px; }
+#tab-perron .pt-frame { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 4px 4px 0; cursor: pointer; text-align: center; }
+#tab-perron .pt-frame:hover { border-color: var(--mute-2); }
+#tab-perron .pt-frame.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+#tab-perron .pt-frame-head { font: 600 11.5px/1.3 var(--sans); color: var(--fg); }
+#tab-perron .pt-frame svg { width: 100%; height: auto; display: block; }
+@media (max-width: 560px) { #tab-perron .pt-frame-head { font-size: 10px; } }
+#tab-perron .ph-wrap { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(190px, 0.75fr); gap: 10px 22px; align-items: start; }
+#tab-perron .ph-wrap > svg { width: 100%; height: auto; display: block; margin-top: 30px; }
+@media (max-width: 900px) { #tab-perron .ph-wrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } #tab-perron .ph-map { grid-column: 1 / -1; } }
+@media (max-width: 560px) { #tab-perron .ph-wrap { grid-template-columns: minmax(0, 1fr); } }

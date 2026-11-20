@@ -3,14 +3,13 @@
 An interactive explorer of Hebbian learning on a resistor network (the author's note is in
 `docs/note.md`). Published as `HebbianHarmonics/explorer`.
 
-Version 2 (in progress) rebuilds the explorer around a story that goes linear first, then
-nonlinear. All data are synthetic. Curation plan and rationale: `docs/PLAN_curation.md`.
+The current redesign focuses on linear neurons. All data are synthetic. See `docs/PLAN_redesign.md`.
 
-Tabs, main path: `#primer` (slides), `#idea` (harmonic embedding, both rules), `#perron`
-(covariance rule: clusters are Perron vectors of principal submatrices of Sigma - theta 11^T),
-`#readout` (distance rule: exact recovery of P C P from the weights), `#nonlinear` (on-site
-potentials, response functions, what carries over). Appendix: `#fusion`, `#many`, `#diversity`,
-`#allocation`, `#old` ("More on the covariance rule"), `#method` ("Choices & caveats").
+Top tabs, in order: `#talk` (The talk, home), `#basics` (The basics), `#perron` (Perron clusters),
+`#readout` (Reading the weights), and `#experiments` (Experiments). The Experiments landing page links to
+`#fusion` (Fusion), `#many` (Many inputs), `#allocation` (Who gets the neurons?), and `#old` (More on the covariance rule).
+
+Nonlinear-neuron chapters (nonlinear, diversity) and 'Choices & caveats' were removed on 2026-11-20; the last commit containing them is 40cb3ff.
 
 - Page: `site/` (static, no build step). Preview: `python3 -m http.server 8000 --bind 127.0.0.1 -d site`.
 - Spec: `SPEC.md` (v2). Design contract for chapter authors: `site/DESIGN.md`.

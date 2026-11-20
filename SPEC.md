@@ -128,30 +128,9 @@ Conventions for every experiment (from the plan review, 2026-11-17):
 
 ## 4. Chapters (tabs)
 
-Structure changed on 2026-11-19 (curated story, linear first then nonlinear): see
-`docs/PLAN_curation.md`. The earlier list (idea, fusion, many, diversity, allocation,
-readout, old rule, method) is superseded by this one.
-
-Main path:
-
-1. **primer** (`#primer`, formerly "The talk") — slide-style overview of the main ideas.
-2. **idea** — harmonic embedding on a linear resistor network; both rules (covariance rule,
-   and the distance rule as an energy gradient via the envelope theorem).
-3. **perron** — covariance rule: clusters are Perron vectors of principal submatrices of
-   `A = Sigma - theta 11^T`; worked cases, many inputs, big precomputed runs.
-4. **readout** — distance rule: exact recovery of `P C P` from the weights.
-5. **nonlinear** — on-site potentials, response functions as the clustered objects, what
-   carries over, what was and was not obtained; linear vs rectifier big runs.
-
-Appendix:
-
-6. **fusion** — fusion under the distance rule, bistability, percolation regimes.
-7. **many** — many inputs: hysteresis, the resolution law.
-8. **diversity** — within-cluster diversity (Q-diversity, Q-eigen).
-9. **allocation** — Q-allocation: no allocation law found.
-10. **old** ("More on the covariance rule") — clones, allocation from the transient, rectified
-    output, synthetic data only.
-11. **method** ("Choices & caveats") — engineering choices, what was not done.
+The tab structure is defined in `docs/PLAN_redesign.md` ("Site structure").
+Only linear networks are presented.
+Nonlinear-neuron chapters were removed on 2026-11-20 (last commit containing them: `40cb3ff`).
 
 ## 5. Form and code
 

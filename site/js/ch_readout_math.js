@@ -320,31 +320,3 @@ export function nnls(E, m, k, y) {
   }
   return x;
 }
-
-// ---------------------------------------------------------------- nonlinear: partial distance geometry
-/** From the weights alone: exact D on live edges, shortest-path upper bounds inside components, the lower bound
- *  sqrt(2b) everywhere off the edge set. Returns {Dw (N x N weight-implied D on edges, 0 elsewhere), Dsp (all-pairs
- *  shortest paths, Infinity across components), status (Int8Array: 0 edge, 1 same component, 2 different), labels, K}. */
-export function distanceGeometry(W, N, b, alpha, eps = 1e-9) {
-  const Dsp = new Float64Array(N * N).fill(Infinity), Dw = new Float64Array(N * N), status = new Int8Array(N * N);
-  for (let i = 0; i < N; i++) Dsp[i * N + i] = 0;
-  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (i !== j && W[i * N + j] > eps) {
-    const d = Math.sqrt(Math.max(2 * (b - alpha * W[i * N + j]), 0)); Dw[i * N + j] = d; Dsp[i * N + j] = d;
-  }
-  for (let k = 0; k < N; k++) for (let i = 0; i < N; i++) { const dik = Dsp[i * N + k]; if (dik === Infinity) continue; for (let j = 0; j < N; j++) { const v = dik + Dsp[k * N + j]; if (v < Dsp[i * N + j]) Dsp[i * N + j] = v; } }
-  const { labels, K } = O.components(W, N, eps);
-  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) status[i * N + j] = i === j ? 0 : W[i * N + j] > eps ? 0 : labels[i] === labels[j] ? 1 : 2;
-  return { Dsp, Dw, status, labels, K };
-}
-
-/** scipy.spatial.procrustes disparity between two n x dim configurations (centred, unit Frobenius norm, optimal
- *  rotation/reflection; no scaling of the second beyond the normalisation): 1 - (sum of singular values of X^T Y)^2. */
-export function procrustesDisparity(X, Y, n, dim) {
-  const c = A => { const out = Float64Array.from(A); for (let k = 0; k < dim; k++) { let m = 0; for (let i = 0; i < n; i++) m += out[i * dim + k]; m /= n; for (let i = 0; i < n; i++) out[i * dim + k] -= m; } const f = frob(out) || 1; for (let i = 0; i < out.length; i++) out[i] /= f; return out; };
-  const A = c(X), Bm = c(Y), M = new Float64Array(dim * dim);
-  for (let i = 0; i < n; i++) for (let a = 0; a < dim; a++) for (let b = 0; b < dim; b++) M[a * dim + b] += A[i * dim + a] * Bm[i * dim + b];
-  const MtM = new Float64Array(dim * dim);
-  for (let a = 0; a < dim; a++) for (let b = 0; b < dim; b++) { let v = 0; for (let k = 0; k < dim; k++) v += M[k * dim + a] * M[k * dim + b]; MtM[a * dim + b] = v; }
-  let ssum = 0; for (const v of O.eigh(MtM, dim).values) ssum += Math.sqrt(Math.max(v, 0));
-  return Math.max(0, 1 - ssum * ssum);
-}

@@ -1,0 +1,92 @@
+<p class="lede">Train a network to its fixed point with the covariance rule of <a href="#perron">Perron clusters</a>, then silence the inputs and let every neuron jitter on its own. Does this spontaneous activity repeat the statistics of the inputs? And do the members of a cluster, which respond identically to every input, also fire together when nothing drives them?</p>
+
+<p>The short answer: the members of a cluster are fully wired to one another, but the wiring is weak next to their input synapses. At rest they are correlated only loosely, with a correlation fixed by how many inputs the cluster listens to. All inputs here are synthetic.</p>
+
+<figure class="fig wide card" id="spont-fig-traces">
+  <div class="fig-title">Driven by the inputs, the members of a cluster move as one; left to themselves, they only loosely follow each other</div>
+  <div data-slot="traces"><p class="mute">loading…</p></div>
+  <figcaption>Each line is one neuron's activity over time, three members from each cluster, coloured by cluster. Left: the inputs are on. Right: the inputs are held at zero and each neuron gets its own noise.</figcaption>
+  <details class="fig-details"><summary>Details</summary>Trained network from <code>data/sweeps2/spontaneous.json</code> ($\lambda = \eta = \gamma = 1$, $w_{\min} = 10^{-3}$, every neuron wired to every other; residual below $10^{-10}$). Driven: $u = Hg$ with $g(t)$ an Ornstein–Uhlenbeck process of covariance $\Sigma_g$ and unit time constant. Spontaneous: $\tau\,\dot u = -Ku + \sqrt{2T\tau}\,\xi$ with $g = 0$, simulated in the page by Euler steps of $0.01\tau$. Each panel is drawn in units of its own mean standard deviation, since the noise strength $T$ is arbitrary. Traces are offset vertically by cluster.</details>
+</figure>
+
+<h2 id="spont-model">What "spontaneous" means here</h2>
+
+<p>A neuron's activity relaxes towards the weighted average of its neighbours. With the inputs on, the network settles at $u = Hg$, and the <em>evoked</em> covariance between neurons is $H\Sigma_g H^\top$. For the spontaneous state we hold the inputs at zero and give every neuron an independent noise current of strength $T$. The activity then fluctuates around zero with covariance</p>
+
+<div class="eq" id="spont-eq-cov" data-num="1">$$C^{\mathrm{sp}} = T\,K^{-1}, \qquad K_{ii} = \sum_j w_{ij} + \sum_b w_{ib}, \quad K_{ij} = -w_{ij}.$$</div>
+
+<p>$K$ is the network's Laplacian: the lateral synapses $w_{ij}$ off the diagonal, each neuron's total conductance on it. Noise on the inputs instead would give $HH^\top$, which only depends on the mixtures $h_i$: two neurons with the same mixture would look perfectly correlated whether or not a synapse joins them. Noise inside the neurons tests the wiring itself.</p>
+
+<p>At the fixed point of the rule, a lateral synapse is the evoked covariance of its two ends above the threshold, $w_{ij} = \tfrac{\eta}{\lambda}\big(\gamma\,h_i^\top\Sigma_g h_j - \theta\big)_+$. Put into <a href="#spont/spont-eq-cov">(1)</a>:</p>
+
+<div class="eq" id="spont-eq-prec" data-num="2">$$T\,\big(C^{\mathrm{sp}}\big)^{-1}_{ij} = -\frac{\eta}{\lambda}\Big(\gamma\,C^{\mathrm{ev}}_{ij} - \theta\Big)_+ \quad (i \ne j), \qquad C^{\mathrm{ev}} = H\Sigma_g H^\top .$$</div>
+
+<p>So the thresholded evoked covariance is not the spontaneous covariance but its <em>inverse</em>. In the <span data-fill="s-runs">…</span> trained networks behind this page, the two sides of <a href="#spont/spont-eq-prec">(2)</a> agree to <span data-fill="s-ident">…</span>.</p>
+
+<h2 id="spont-blocks">What survives: who belongs together</h2>
+
+<figure class="fig wide card" id="spont-fig-corr">
+  <div class="fig-title">Spontaneous correlations keep the clusters, faintly, and lose the correlations between clusters</div>
+  <div data-slot="corr"><p class="mute">loading…</p></div>
+  <figcaption>Correlation between every pair of neurons, sorted by cluster: with the inputs on (left) and at rest (right). The blocks are in the same places, but at rest they are pale, and the correlations between different clusters are gone.</figcaption>
+  <details class="fig-details"><summary>Details</summary>Left: correlations of $H\Sigma_g H^\top$. Right: correlations of $K^{-1}$. Clusters are the connected components of the lateral synapses above the floor. A noise-driven simulation of the same network (<span data-fill="s-lang-n">…</span> samples, Euler step <span data-fill="s-lang-dt">…</span>$\tau$) reproduces $K^{-1}$ to a relative error of <span data-fill="s-lang-err">…</span> (Frobenius). The small positive values between clusters at rest come from the floor $w_{\min}$.</details>
+</figure>
+
+<p>Noise spreads only along synapses, and no synapse above the floor joins two clusters. So the spontaneous covariance falls into one block per cluster. Whatever the inputs shared below the threshold $\theta$, the evoked activity still shows it (correlation <span data-fill="s-ev-btw">…</span> between clusters in the network above) and the spontaneous activity does not (<span data-fill="s-sp-btw">…</span>).</p>
+
+<h2 id="spont-tight">How tightly a cluster fires together</h2>
+
+<p>In every trained network here, the members of a cluster are exact copies and each pair of them is joined by a synapse of the same weight $w$. Call $a$ a member's total input conductance. For such a cluster of $n$ neurons, <a href="#spont/spont-eq-cov">(1)</a> can be inverted by hand:</p>
+
+<div class="eq" id="spont-eq-cluster" data-num="3">$$C^{\mathrm{sp}}_{\text{cluster}} = \frac{T}{a + nw}\Big(I + \frac{w}{a}\,\mathbf 1\mathbf 1^\top\Big), \qquad \text{correlation } r = \frac{w}{a + w}.$$</div>
+
+<p>The correlation does not depend on the size of the cluster, only on how a lateral synapse compares with the input drive. The fixed point sets that ratio. The cluster's mixture $h$ is the Perron vector of its piece of $\Sigma_g - \theta\mathbf 1\mathbf 1^\top$, with eigenvalue $\mu$; then $a = \tfrac{\eta}{\lambda}\mu$, and with equal learning rates ($\gamma = 1$) $w = a\,|h|^2$. Writing $m = 1/|h|^2$ for the effective number of inputs the cluster listens to,</p>
+
+<div class="eq" id="spont-eq-r" data-num="4">$$r = \frac{1}{1 + m} \qquad (\gamma = 1).$$</div>
+
+<figure class="fig card" id="spont-fig-m">
+  <div class="fig-title">The more inputs a cluster listens to, the less its members fire together at rest</div>
+  <div data-slot="m"><p class="mute">loading…</p></div>
+  <figcaption>Each dot is one cluster of a trained network: the measured correlation between its members at rest, against the effective number of inputs in its mixture. The line is $1/(1+m)$; a cluster that listens to a single input reaches one half, and none goes above.</figcaption>
+  <details class="fig-details"><summary>Details</summary><span data-fill="s-ncl">…</span> clusters with at least two members, from <span data-fill="s-nsweep">…</span> networks ($N = 36$, $\gamma = 1$): nine input covariances (blocks, a two-level hierarchy, power-law spectra, Wishart), $\theta \in \{0.1, 0.2, 0.3, 0.45, 0.6\}$, three random starts each. $m = 1/|h|^2$ of the cluster's mean mixture. Largest gap between a dot and the line: <span data-fill="s-mgap">…</span>; it comes from the floor $w_{\min}$, which adds a little input conductance. Largest $L_1$ distance of a member's mixture from its cluster's mean: <span data-fill="s-spread">…</span>. Script <code>hebb/sweeps2/spontaneous.py</code>.</details>
+</figure>
+
+<p>So training does not make a cluster into one unit. Each member keeps its own noise; a pair shares only the fraction $r$ of its variance. Raising the lateral learning rate $\gamma$ strengthens $w$ without changing $a$, and only then do the members lock together.</p>
+
+<figure class="fig card" id="spont-fig-gamma">
+  <div class="fig-title">Clusters fire together at rest only when lateral synapses learn much faster than input synapses</div>
+  <div data-slot="gamma"><p class="mute">loading…</p></div>
+  <figcaption>Mean correlation between cluster members at rest against the ratio $\gamma$ of the lateral to the input learning rate, for three input covariances. Dots are measured; lines are $w/(a+w)$ written with the cluster's $\mu$, $m$, $\theta$ and $\gamma$.</figcaption>
+  <details class="fig-details"><summary>Details</summary>$\theta = 0.3$, $N = 36$, three random starts per point, averaged over clusters and starts. Line: $r = \dfrac{\gamma\mu/m + (\gamma - 1)\theta}{\gamma\mu/m + (\gamma - 1)\theta + \mu}$, evaluated for each cluster and averaged the same way. A larger $\gamma$ also lowers the lateral threshold to $\theta/\gamma$, so clusters merge as $\gamma$ grows; the formula follows each network's own clusters.</details>
+</figure>
+
+<h2 id="spont-loud">What is turned upside down: how loud</h2>
+
+<figure class="fig card" id="spont-fig-loud">
+  <div class="fig-title">The bigger and the better driven a cluster, the quieter it is at rest</div>
+  <div data-slot="loud"><p class="mute">loading…</p></div>
+  <figcaption>Each dot is one cluster: the variance of its mean activity at rest, against its size times its members' input conductance. The line is $T/(na)$.</figcaption>
+  <details class="fig-details"><summary>Details</summary>The same clusters as the figure above, in units $T = 1$; both axes logarithmic. Input conductance $a = \tfrac{\eta}{\lambda}\mu = \tfrac{\eta}{\lambda}\,m\,(v - \theta)$, with $v = h^\top\Sigma_g h$ the cluster's evoked variance. Rank correlation between a cluster's evoked variance and its members' variance at rest, over all clusters: <span data-fill="s-rank">…</span>.</details>
+</figure>
+
+<p>The input synapses that make a cluster respond strongly are the same conductances that hold it down when the inputs are silent. A cluster's mean activity at rest has variance $T/(na)$, and $a$ grows with the evoked variance above threshold. So amplitudes are not replayed: the patterns that are loudest when driven are the quietest at rest.</p>
+
+<aside class="callout found"><p class="callout-title">What we found</p>
+<ul>
+  <li><span class="verdict holds">holds</span> Members of a cluster are identical in their mixtures $h_i$ <em>and</em> wired all-to-all with one weight; no synapse above the floor joins different clusters.</li>
+  <li><span class="verdict fails">fails</span> They do not all fire together at rest. Their correlation is $w/(a+w)$, equal to $1/(1+m)$ for $\gamma = 1$: at most one half.</li>
+  <li><span class="verdict amended">amended</span> Spontaneous activity repeats the input statistics only in part. It keeps which neurons belong together, drops every correlation below the threshold, and reverses the order of amplitudes. The thresholded evoked covariance is its inverse, not its covariance.</li>
+</ul></aside>
+
+<details class="more"><summary>The maths: from $\Sigma_g$ to the spontaneous covariance</summary>
+<p><strong>Noise-driven covariance.</strong> With $g = 0$ the energy is $\tfrac12 u^\top K u$ and the dynamics are $\tau\,du = -Ku\,dt + \sqrt{2T\tau}\,dW$. The stationary covariance solves $KC + CK = 2T I$, so $C^{\mathrm{sp}} = TK^{-1}$: the Gibbs distribution $e^{-E/T}$ of the network's own energy.</p>
+<p><strong>Relation to the evoked covariance.</strong> $H = K^{-1}W_{IB}$, so $C^{\mathrm{ev}} = K^{-1}W_{IB}\Sigma_g W_{IB}^\top K^{-1}$ and</p>
+$$W_{IB}\,\Sigma_g\,W_{IB}^\top = T^2\,\big(C^{\mathrm{sp}}\big)^{-1} C^{\mathrm{ev}} \big(C^{\mathrm{sp}}\big)^{-1}.$$
+<p>This holds for any weights. At the fixed point, $W_{IB} = \tfrac{\eta}{\lambda}(H\Sigma_g - \theta)_+$ and $W_{II} = \tfrac{\eta}{\lambda}(\gamma C^{\mathrm{ev}} - \theta)_+$ off the diagonal (both with the floor $w_{\min}$), which gives (2).</p>
+<p><strong>A cluster of copies.</strong> Let $n$ neurons share the mixture $h$ and write $q = (\Sigma_g h - \theta)_+$, so each has input weights $\tfrac{\eta}{\lambda}q$ and $a = \tfrac{\eta}{\lambda}\mathbf 1^\top q$. Since $K\mathbf 1 = a\mathbf 1$ inside the cluster, $h = q/\mathbf 1^\top q$. On the support $S$ of $q$ this reads $(\Sigma_{SS} - \theta\mathbf 1\mathbf 1^\top)h = \mu h$ with $\mu = \mathbf 1^\top q$: the Perron pair of the thresholded piece. Then $v = h^\top\Sigma_g h = \mu|h|^2 + \theta = \mu/m + \theta$ and $w = \tfrac{\eta}{\lambda}(\gamma v - \theta)$, so</p>
+$$\frac{w}{a} = \frac{\gamma\mu/m + (\gamma - 1)\theta}{\mu}, \qquad r = \frac{w}{a + w}.$$
+<p>$K = (a + nw)I - w\mathbf 1\mathbf 1^\top$ on the cluster; inverting gives (3). A member's variance is $T(a + w)/\big(a(a + nw)\big)$, the covariance of two members $Tw/\big(a(a + nw)\big)$, and the variance of the cluster mean $T/(na)$.</p>
+<p><strong>All together</strong> ($\gamma = 1$, floor neglected): the spontaneous covariance is one block per cluster $c$,</p>
+$$C^{\mathrm{sp}}_c = \frac{T\lambda}{\eta}\,\frac{1}{\mu_c\,(1 + n_c/m_c)}\Big(I + \frac{1}{m_c}\mathbf 1\mathbf 1^\top\Big),$$
+<p>where $(\mu_c, h_c)$ is the Perron pair of the piece of $\Sigma_g - \theta\mathbf 1\mathbf 1^\top$ the cluster sits on, $m_c = 1/|h_c|^2$, and $n_c$ is its number of neurons, which the fixed point does not determine (see <a href="#old/old-allocation">More on the covariance rule</a>).</p>
+</details>

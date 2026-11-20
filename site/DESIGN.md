@@ -1,30 +1,26 @@
 # HebbianHarmonics site: design contract for chapter authors
 
-Read this file and `SPEC.md`; nothing else is needed. Section 0 says what changed for v2; the rest is the
-contract every chapter follows. Code examples below were written for v1 and use its names (`engine.js`, `theta`);
+Read this file and `SPEC.md` for implementation; follow `docs/PLAN_redesign.md` for page writing and figures.
+Section 0 describes the current shell. Code examples below were written for v1 and use its names (`engine.js`, `theta`);
 the APIs they show are unchanged. The `#perron` chapter (`content/perron.html`, `js/ch_perron.js`,
 `js/ch_perron_model.js`; the v1 live figure, formerly in `#old`) is a complete chapter that uses most components (sim layout, transport, tours, controls,
 stat tiles, legend, linked heatmap, side notes, callouts, a disclosure) and is the nearest working example.
 
-## 0. What changed in v2 (2026-11-17)
+## 0. Current site structure (2026-11-20)
 
-- **Model.** The page is rebuilt around SPEC.md v2: on-site potentials, response functions $F_i$, the distance
-  rule $dw_{ij}/dt = b - \alpha w_{ij} - \tfrac12 D_{ij}^2$. New chapters simulate with **`js/onsite_engine.js`**
-  (pure ES module; reference `hebb/onsite.py`; parity tests `tests/onsite_*`) and load precomputed sweeps from
-  `data/sweeps2/*.json` (each file carries its config). Use SPEC §1 notation in new chapters ($F_i$, $D_{ij}$,
-  $b$, $\alpha$, $V_i$, $t_i$, $k_{lo}$, $k_{hi}$, $\sigma_t$, $s$, attachments $a_{ib}$); the v1 notation paragraph
-  in section 4 applies to the old-rule chapter only.
-- **Tabs** (2026-11-19 curation; see `docs/PLAN_curation.md`). Main path, in order (id: label): `primer` Primer
-  (slides; marked with three squares) · `idea` The idea · `perron` Perron parts · `readout` Reading the weights ·
-  `nonlinear` Nonlinear neurons. Then the **appendix**, drawn after a divider with a small "Appendix" label (class
-  `tab-group`; appendix tabs carry class `tab-app`): `fusion` Fusion · `many` Many inputs · `diversity` Diversity ·
-  `allocation` Allocation · `old` More on the covariance rule · `method` Choices & caveats. Kickers: "Part 2" …
-  "Part 4" on the main path, "Appendix A" … "Appendix F" in the appendix. The empty hash shows `idea` (it carries
-  the masthead, whose call to action points to the primer). Labels and groups are in `ui.js` `tabsMeta`; kickers,
-  titles and the tab bar in `index.html` (`main.js` routes from `tabsMeta`, so adding a tab means editing those two
-  places only). **Old addresses keep working:** `#talk…` redirects to `#primer…` (`tabAliases` in `ui.js`; ids
-  `talk-*` became `primer-*`), and anchors that moved chapter are rewritten by `anchorMoves` in `main.js`
-  (`#old/old-sim?tour=…` → `#perron/perron-sim?tour=…`; `#old?k=v` → `#perron?k=v`).
+- **Model.** The site now focuses on linear neurons. The distance-rule chapters still use the pure ES module
+  `js/onsite_engine.js` (reference `hebb/onsite.py`; parity tests `tests/onsite_*`) and precomputed sweeps from
+  `data/sweeps2/*.json`; see `SPEC.md` §1 for notation.
+- **Top tabs**, in order: `talk` (The talk), `basics` (The basics), `perron` (Perron clusters),
+  `readout` (Reading the weights), `experiments` (Experiments). The empty hash shows `talk`, with the masthead.
+- **Experiment sub-pages:** `fusion` (Fusion), `many` (Many inputs), `allocation` (Who gets the neurons?),
+  `old` (More on the covariance rule), `spont` (Spontaneous activity). They have their own routes and sections, but highlight Experiments in the
+  top bar and link back to the landing page. Routes and parent relationships are in `js/ui.js` (`tabsMeta`);
+  headers and the top navigation are in `index.html`.
+- **Old addresses.** `#primer…` and `#idea…` redirect to `#talk…` and `#basics…`, including renamed anchors.
+  The retired `#nonlinear`, `#diversity` and `#method` addresses go to `#experiments`. `anchorMoves` in
+  `js/main.js` handles anchors that moved, e.g. `#old/old-sim?tour=…` → `#perron/perron-sim?tour=…`;
+  `#old?k=v` still goes to `#perron?k=v`.
 - **v1 survives in `#perron` (and the text of `#old`).** `js/engine.js` (with `ENGINE.md`, `hebb/core.py` and
   `tests/test_engine_parity.py`) is kept for the covariance-rule live figure; no other chapter should import it.
   **All data are synthetic** (MNIST was dropped). The other v1 chapters, their data and the v1
@@ -33,7 +29,7 @@ stat tiles, legend, linked heatmap, side notes, callouts, a disclosure) and is t
   "In preparation" note) and an empty `js/ch_<tab>.js`. Each author owns one disjoint pair of files, plus
   optional helper modules named `js/ch_<tab>_*.js` imported by `ch_<tab>.js` (as `ch_old_model.js`).
 - **Ids are page-global.** Every chapter is loaded into the same document, so prefix element ids with the tab
-  (`id="fusion-bistable"`, `id="readout-eq-rank"`); `#old` uses `old-`, `#perron` `perron-`, `#primer` `primer-`.
+  (`id="fusion-bistable"`, `id="readout-eq-rank"`); `#old` uses `old-`, `#perron` `perron-`, `#talk` `talk-`.
 
 ## 1. Files and who owns what
 
@@ -57,15 +53,15 @@ site/
   js/ch_<tab>.js        chapter module                                                       (chapter author)
   data/sweeps2/         precomputed v2 sweeps (hebb/sweeps2/*.py)                            (data owner)
   data/big/             precomputed big-N films (hebb/big/*.py; format in data/big/README.md) (data owner)
-  content/primer*.html, js/ch_primer.js, js/primer_[abc].js, css/primer.css   the Primer slides
+  content/talk*.html, js/ch_talk.js, js/talk_[abc].js, css/talk.css   The talk slides
 ```
 
 A chapter author edits only `content/<tab>.html`, `js/ch_<tab>.js` and their own data files. If you need a new
 component or a style change, ask for it to be added here rather than writing one-off CSS; small chapter-local
 layout (a grid inside one figure) is fine as inline `style` or a `<style>`-free class built from existing ones.
 
-Tabs: see section 0.
-The chapter title and kicker ("Chapter 2 · live simulation") are in `index.html`; do not repeat them in the fragment.
+The five top tabs and four experiment sub-pages are listed in section 0.
+Chapter titles and kickers (e.g. “Experiments · fusion”) are in `index.html`; do not repeat them in the fragment.
 
 ### Running it
 
@@ -127,26 +123,19 @@ shell restores the chapter's last URL state for you. Hash grammar handled by the
 `#tab`, `#tab/anchor-id` (scroll to an element inside that chapter), `#tab?k=v&…` (state), `#anchor-id` (finds a
 loaded chapter holding it). A link to the hash you are already on still re-applies its state.
 
-## 3. Tone and captions
+## 3. Page writing and figures
 
-- **First person, exploratory.** "I expected one cluster per eigenvector; I got thresholded parts." Say what was
-  tried, what happened, and what is still open. Where the note's conjectures fail or need amending, say so plainly
-  and show the evidence (SPEC.md asks for honesty above all).
-- **Captions are definitional and do not interpret.** A caption has a **Plotted:** part that defines every axis,
-  mark, colour and line as a quantity with its symbol (and the sort order, projection, colour range), and an
-  optional **Values:** part listing only the parameters needed to reproduce the figure ($B$, $N$, $\theta$, seed,
-  ...). No "clearly", "as expected", "shows that"; interpretation belongs in the prose around the figure.
-- **Synthetic data are labelled** in the figure title or caption: `<span class="synthetic-tag">synthetic Σ</span>`.
-  Precomputed figures say where the numbers come from (`data/sweeps2/...`, `data/big/<id>`, run id).
-- **Every live simulation states its mode** (mean-field with exact $\Sigma_g$, or minibatch with batch size).
-- Numbers in prose that come from data are formatted like the UI (`ui.fmt`: 3 significant figures, true minus).
-- Spelling: British ("colour", "normalise"), as in the rest of the page.
+The [Rules for every page](../docs/PLAN_redesign.md#rules-for-every-page) in `docs/PLAN_redesign.md` are
+authoritative. In particular, rule 2 says that a figure's title is a plain sentence stating what the figure shows,
+not a label. Label axes in words, with a symbol if useful. The caption is at most two sentences: how to read
+it and what to notice. Put everything else (parameters, seeds, solver details) in a collapsed disclosure:
+`<details class="fig-details"><summary>Details</summary>…</details>`.
 
 ## 4. Page patterns (HTML in fragments)
 
 ```html
 <p class="lede">The opening paragraph, slightly larger: what I wanted to know.</p>
-<h2 id="pruning">Pruning is necessary</h2>          <!-- every h2/h3 gets an id; link as #three/pruning -->
+<h2 id="pruning">Pruning is necessary</h2>          <!-- every h2/h3 gets an id; link as #<tab>/pruning -->
 <h3 id="pruning-why">Why</h3>
 ```
 
@@ -156,10 +145,11 @@ loaded chapter holding it). A link to the hash you are already on still re-appli
 
 ```html
 <figure class="fig wide card" id="fig-readout">
-  <div class="fig-title">Readout $\hat C$ against $\Sigma_g$ <span class="synthetic-tag">synthetic Σ</span></div>
+  <div class="fig-title">The learned weights recover the contrasts between inputs.</div>
   <div class="fig-sub">One short line on how to use it, e.g. "Hover a cell; the slider steps through training."</div>
   <div data-slot="readout"></div>
-  <figcaption><b>Plotted:</b> … <b>Values:</b> …</figcaption>
+  <figcaption>Compare the same cell in both heatmaps. The colours match when recovery is exact.</figcaption>
+  <details class="fig-details"><summary>Details</summary>…</details>
 </figure>
 ```
 
@@ -184,7 +174,7 @@ tours, controls, stat tiles and legend on the right (320 px), linked views under
 ```
 
 **Maths.** KaTeX auto-render: inline `$…$` or `\(…\)`, display `$$…$$` or `\[…\]`. A literal dollar is `\$`.
-Numbered equation: `<div class="eq" id="eq-rule" data-num="1">$$…$$</div>`, cited as `<a href="#idea/eq-rule">(1)</a>`.
+Numbered equation: `<div class="eq" id="basics-eq-rule" data-num="1">$$…$$</div>`, cited as `<a href="#basics/basics-eq-rule">(1)</a>`.
 Notation (keep it uniform across chapters): $B$ boundary and $N$ interior neurons, boundary voltages $g$
 (labels `g₁ g₂ …` in UI text), interior voltages $u = Hg$, $h_i$ the harmonic embedding (row $i$ of $H$),
 $\Sigma_g$ the lifted input covariance, $\theta = -w_0/\eta$, $w_{\min}$, $\gamma$, $p$, $\hat C$ the readout.
@@ -538,8 +528,7 @@ function draw(f) { nv.setColors(colors); nv.setEdges(pairs, weights); }        /
 
 ## 9c. `js/filmplayer.js`
 
-Replays a precomputed film from `data/big/` (format: `docs/PLAN_curation.md` "Film data format" and
-`data/big/README.md`): lazy-loads `<id>.json` + `<id>.bin`, play / pause / scrub on the frame axis (frames are
+Replays a precomputed film from `data/big/` (format: `site/data/big/README.md`): lazy-loads `<id>.json` + `<id>.bin`, play / pause / scrub on the frame axis (frames are
 spaced in log time; the label shows $t$), and draws the state twice with linked highlighting: input space (space
 `"simplex"`: rows of $H$ in the triangle) or response-function space (`"pca"`: first two principal axes, fixed by
 the final frame, with a "3-D (third axis)" toggle when the third axis carries ≥ 1% of the variance), and neuron
@@ -582,4 +571,4 @@ filmPlayer(ctx.slot("film"), { filter: e => e.family === "A" && e.rule === "cov"
    `playwright-cli -s=<name> console`.
 3. Screenshots at 1440 × 900 and 390 × 844 (`resize`, then `screenshot --filename=/tmp/<tab>-d.png --full-page`);
    look at them for overlaps, clipped labels, raw TeX, and spacing. Close your session.
-4. Every figure has a definitional caption; every synthetic figure says so; every live sim states its mode.
+4. Check each figure and caption against the rules in section 3; say once per page that the inputs are synthetic.

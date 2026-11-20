@@ -1,0 +1,110 @@
+<p class="lede">Hebbian learning, "neurons that fire together wire together", changes each synapse using only the activity of the two neurons it joins. Nothing computes a loss and hands it down. So what does the network end up doing? In the simple model on this page you can watch the answer: every neuron is a fixed <b>mixture</b> of a few inputs, a point in a triangle, and Hebb's rule moves those points until they gather into groups.</p>
+
+<h2 id="basics-model">The model: a resistor network</h2>
+
+<p>Think of the neurons as nodes of an electrical circuit. Neuron $i$ has a voltage $u_i$; a synapse is a resistor whose conductance $w_{ij} \ge 0$ is the synaptic weight. A few nodes are <b>inputs</b>, with voltages $g_1, g_2, g_3$ set from outside. Every other neuron settles where the currents into it balance, at the weighted average of its neighbours' voltages (inputs included):</p>
+
+<div class="eq" id="basics-eq-avg" data-num="1">$$u_i = \frac{\sum_j w_{ij}\,u_j}{\sum_j w_{ij}} .$$</div>
+
+<figure class="fig wide card" id="basics-fig-net">
+  <div class="fig-title">The inputs are set from outside; every other neuron settles to a voltage in between</div>
+  <div class="fig-sub">Every few seconds the three inputs jump to new random voltages. Hover or tap a neuron to follow its voltage.</div>
+  <div data-slot="net"></div>
+  <figcaption>Left, the wiring diagram (neuron space): squares are inputs, circles neurons, coloured by voltage; thicker lines are stronger synapses, and where a node is drawn means nothing. Right: after each jump the chosen neuron (black) moves towards a new resting level between the lowest and highest input.</figcaption>
+  <details class="fig-details"><summary>Details</summary><p>Ten neurons and three inputs. Input voltages are independent standard normal draws (clipped to ±2.4), held for 2.5 s. Between jumps the voltages follow $\tau\,du_i/dt = \sum_j w_{ij}(u_j - u_i)$, with $\tau$ set so that the slowest mode decays in about 0.3 s; they come to rest at (<a href="#basics/basics-eq-avg">1</a>). During the relaxation a neuron can briefly lie outside the range of the new inputs.</p></details>
+</figure>
+
+<p>Everything here is <b>linear</b> (no thresholds, no saturation) and the synapses are symmetric. We assume every neuron is joined to some input by a chain of synapses, so the resting state is unique. The inputs are synthetic random numbers with a chosen covariance.</p>
+
+<h2 id="basics-embed">Each neuron is a mixture of the inputs</h2>
+
+<p>Averaging is linear, so at rest every neuron's voltage is a fixed weighted sum of the inputs:</p>
+
+<div class="eq" id="basics-eq-h" data-num="2">$$u_i = H_{i1}\,g_1 + H_{i2}\,g_2 + H_{i3}\,g_3, \qquad u = H g .$$</div>
+
+<p>The row $h_i = (H_{i1}, H_{i2}, H_{i3})$ depends only on the wiring. Its entries are never negative and add up to one (if every input sat at the same voltage, so would every neuron). So $h_i$ is a <b>mixture</b>, "50% $g_1$, 20% $g_2$, 30% $g_3$": the neuron's <b>harmonic embedding</b>, named after harmonic functions, which equal the average of their neighbours. ($H$ is known as the discrete Poisson kernel.)</p>
+
+<p>A mixture of three things is a point in a triangle with the inputs at the corners. A neuron's share of $g_1$ is its distance from the side opposite the $g_1$ corner, as a fraction of the triangle's height: on the corner it is all $g_1$, on the opposite side none, in the middle a third of each.</p>
+
+<figure class="fig wide card" id="basics-fig">
+  <div class="fig-title">The same ten neurons twice: as nodes of the network, and as mixtures of the inputs in a triangle</div>
+  <div class="fig-sub">Hover or tap a neuron in either picture to find it in the other.</div>
+  <div data-slot="embed"></div>
+  <figcaption>Each pie is one neuron's mixture $h_i$, computed exactly for this network. Neurons wired close to an input sit near its corner, but the layout of the network says nothing about function; the triangle says everything.</figcaption>
+</figure>
+
+<p>The rest of the site keeps these two pictures apart. In <span class="space-badge" data-space="neuron">neuron space</span> a neuron is a node drawn at a random place. In <span class="space-badge" data-space="input">input space</span> it is the point $h_i$, which is all there is to know about what it computes: two neurons at the same point settle to the same voltage for every input. One way to read a mixture: start a random walk at neuron $i$ that crosses each synapse with probability proportional to its conductance; $H_{ib}$ is the probability that it reaches input $b$ before any other input.</p>
+
+<h2 id="basics-pull">Wiring pulls a neuron towards its neighbours</h2>
+
+<p>The averaging rule (<a href="#basics/basics-eq-avg">1</a>) holds for mixtures too: each neuron's point is the conductance-weighted average of its neighbours' points, an input counting as a neighbour on its own corner. So a synapse acts like a spring in the triangle.</p>
+
+<div class="eq" id="basics-eq-pull" data-num="3">$$h_i = \frac{\sum_j w_{ij}\,h_j}{\sum_j w_{ij}} .$$</div>
+
+<figure class="fig wide card" id="basics-fig-pull">
+  <div class="fig-title">Wiring two neurons together pulls their mixtures towards each other</div>
+  <div class="fig-sub">Drag the slider to set the synapse between the two ringed neurons. Click any other neuron to swap it into the pair.</div>
+  <div data-slot="pull"></div>
+  <figcaption>As their synapse grows, the two ringed neurons slide towards each other along the dashed line and would meet at the cross if it became infinitely strong; at zero the synapse is cut. Every other neuron moves along a parallel line, in either direction, or not at all.</figcaption>
+  <details class="fig-details"><summary>Details</summary><p>This is exact: changing one conductance $w_{ij}$ moves every neuron parallel to $h_i - h_j$, and the gap between the pair shrinks as $h_i - h_j \propto 1/(1 + w_{ij} R_{ij})$, where $R_{ij}$ is the effective resistance between $i$ and $j$ with that synapse removed and the inputs grounded (a rank-one update of the Laplacian), so the paths are straight lines. Checked numerically for several pairs to $10^{-8}$.</p></details>
+</figure>
+
+<h2 id="basics-cov">Firing together is overlap of mixtures</h2>
+
+<p>Let the inputs fluctuate with covariance matrix $\Sigma_g$ (entry $bc$ is $\mathrm{Cov}(g_b, g_c)$). Since $u_i = h_i \cdot g$, how much two neurons fire together is fixed by their mixtures:</p>
+
+<div class="eq" id="basics-eq-cov" data-num="4">$$\mathrm{Cov}(u_i, u_j) = h_i^\top\, \Sigma_g\, h_j .$$</div>
+
+<p>This is a covariance-weighted overlap of the two mixtures. For independent inputs of unit variance it is the plain overlap $\sum_b H_{ib} H_{jb}$; correlated inputs make neurons on different corners fire together too.</p>
+
+<figure class="fig wide card" id="basics-fig-cov">
+  <div class="fig-title">Two neurons fire together exactly as much as their mixtures overlap, weighted by the input covariance</div>
+  <div class="fig-sub">Drag either neuron around the triangle. The menu changes how the inputs are correlated.</div>
+  <div data-slot="cov"></div>
+  <figcaption>Left, the two mixtures (input space); right, the two voltages for 2,000 random inputs (correlations in the menu are ±0.8). Matching mixtures put every dot on the diagonal; the measured covariance tracks $h_i^\top\Sigma_g h_j$ up to sampling noise.</figcaption>
+</figure>
+
+<h2 id="basics-learn">Hebb's rule, watched in the triangle</h2>
+
+<p>Hebb's rule strengthens a synapse whose two neurons fire together and weakens the others. Here it runs on 60 neurons and three inputs; the rule itself is written out below the figure.</p>
+
+<figure class="fig full card" id="basics-fig-learn">
+  <div class="fig-title">Run Hebb's rule and the neurons gather into a few groups, each wired up among itself</div>
+  <div class="fig-sub">The film strip shows the run at six moments; press play or drag the time slider to watch the triangle and the weights change together. The threshold and the input correlations change how many groups form and where.</div>
+  <div data-slot="learn"></div>
+  <figcaption>Left, each dot is a neuron at its mixture (input space). Right, the weight of every synapse between two neurons, darker is stronger: as the points collapse onto a few spots, strong synapses remain only inside the dark blocks, between neurons of the same group.</figcaption>
+  <details class="fig-details"><summary>Details</summary><div data-slot="learn-details"></div></details>
+</figure>
+
+<p>Hebb's rule grows a synapse with the covariance of its two neurons, at a learning rate $\eta$, plus a regulariser $\rho(w) = -\eta\theta - \lambda w$ with threshold $\theta$ and decay rate $\lambda$. A synapse grows while $\mathrm{Cov}(u_i, u_j) &gt; \theta + (\lambda/\eta)\,w_{ij}$ and shrinks when the covariance is below that, though never below a small floor $w_{\min}$; synapses onto the inputs learn the same way, from $\mathrm{Cov}(u_i, g_b)$.</p>
+
+<div class="eq" id="basics-eq-rule" data-num="5">$$\frac{dw_{ij}}{dt} = \eta\,\mathrm{Cov}(u_i, u_j) + \rho(w_{ij}) = \eta\big(h_i^\top \Sigma_g h_j - \theta\big) - \lambda\,w_{ij}, \qquad w_{ij} \ge w_{\min}.$$</div>
+
+<p>The rule looks only at pairs of neurons, but what it reads, covariance, is set by their mixtures (<a href="#basics/basics-eq-cov">4</a>), and what it changes, wiring, moves the mixtures (<a href="#basics/basics-eq-pull">3</a>). So it is really a motion of points in input space.</p>
+
+<p>Nobody wrote down a loss function: every synapse followed its own local rule, and the groups came out anyway. Where they sit and how many there are is the subject of the next page, <a href="#perron">Perron clusters</a>.</p>
+
+<h2 id="basics-result">A cousin with an energy</h2>
+
+<p><a href="#readout">Reading the weights</a> uses a variant, the <b>distance rule</b>, in which only synapses between neurons learn, with growth rate $b &gt; 0$ and decay rate $\alpha &gt; 0$:</p>
+
+<div class="eq" id="basics-eq-dist" data-num="6">$$\frac{dw_{ij}}{dt} = b - \alpha\,w_{ij} - \tfrac12\,\mathbb E\big[(u_i - u_j)^2\big], \qquad w_{ij} \ge 0 .$$</div>
+
+<p>It is exactly gradient descent on one global quantity $J$: half the power the network dissipates, averaged over inputs, plus a cost per synapse (derivation in Details).</p>
+
+<figure class="fig wide card" id="basics-fig-energy">
+  <div class="fig-title">Under the distance rule the objective $J$ only goes down, while the neurons gather</div>
+  <div class="fig-sub">Thirty neurons on three independent inputs, starting with no synapses between neurons.</div>
+  <div data-slot="energy"></div>
+  <figcaption>Left (input space): rings are the mixtures before learning, dots at the end of the run, joined by grey lines. Right, over the same run: $J$ falls at every step; the half-dissipation $E^*$ ends higher, but the synapse term falls by more.</figcaption>
+  <details class="fig-details"><summary>Details</summary>
+    <p>Let $E_W(u; g) = \tfrac12\sum w\,(\Delta u)^2$, summed over all synapses (input attachments included), be half the power dissipated; for given inputs the voltages settle where it is smallest. Then (<a href="#basics/basics-eq-dist">6</a>), kept to $w \ge 0$, is gradient descent on</p>
+    <div class="eq" id="basics-eq-J" data-num="7">$$J(W) = \underbrace{\mathbb E_g\Big[\min_u E_W(u; g)\Big]}_{E^*} + \sum_{i&lt;j}\Big(\frac{\alpha}{2}\,w_{ij}^2 - b\,w_{ij}\Big).$$</div>
+    <p>By the envelope theorem, at the settled voltages $E_W$ is already minimal in $u$, so when $w_{ij}$ changes only its explicit dependence counts: $\partial E^*/\partial w_{ij} = \tfrac12\mathbb E[(u_i - u_j)^2]$. For zero-mean inputs, $-\tfrac12\mathbb E[(u_i - u_j)^2] = \mathrm{Cov}(u_i, u_j) - \tfrac12\mathrm{Var}(u_i) - \tfrac12\mathrm{Var}(u_j)$: the Hebbian term minus each neuron's own power.</p>
+    <div data-slot="energy-details"></div>
+  </details>
+</figure>
+
+<p>At its fixed point, $w_{ij} = \big(b - \tfrac12\mathbb E[(u_i - u_j)^2]\big)_+/\alpha$: a synapse survives only between neurons whose root-mean-square voltage difference is below $\sqrt{2b}$, and its weight records how close they are, which is what makes the weights readable. The covariance rule (<a href="#basics/basics-eq-rule">5</a>) is not gradient descent on this objective, and no global objective is known for it.</p>
+
+<p><a class="explore-link big" href="#perron">Next: where the groups end up (Perron clusters)</a></p>

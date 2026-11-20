@@ -4,17 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hebbian Learning on a Resistor Network</title>
-<meta name="description" content="An exploratory, live-simulated explorer of Hebbian plasticity as energy descent on a resistor network with nonlinear neurons: response functions, a distance-based rule, clusters, allocation, and reading the input statistics back out of the weights.">
+<meta name="description" content="An exploratory, live-simulated explorer of Hebbian plasticity as energy descent on a resistor network with linear neurons: harmonic embeddings, Perron clusters, and reading the input statistics back out of the weights.">
 <link rel="preload" href="vendor/fonts/inter-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="vendor/fonts/source-serif-4-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
 <link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/site.css">
 <link rel="stylesheet" href="css/ui.css">
-<link rel="stylesheet" href="css/primer.css">
+<link rel="stylesheet" href="css/talk.css">
+<link rel="stylesheet" href="css/experiments.css">
+<link rel="stylesheet" href="css/readout.css">
+<link rel="stylesheet" href="css/perron.css">
+<link rel="stylesheet" href="css/basics.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 2.2L14 13H2z' fill='none' stroke='%2316161a' stroke-width='.8' opacity='.5'/%3E%3Crect x='6' y='0.5' width='4' height='4' fill='%232a78d6'/%3E%3Crect x='12' y='11' width='4' height='4' fill='%23eb6834'/%3E%3Crect x='0' y='11' width='4' height='4' fill='%231baf7a'/%3E%3Ccircle cx='8' cy='9.3' r='1.7' fill='%2316161a'/%3E%3C/svg%3E">
 </head>
-<body data-tab="primer">
+<body data-tab="talk">
 <a class="skip" href="#main">Skip to content</a>
 <div class="banner" role="note">
   <span class="banner-tag">Exploratory report</span>
@@ -25,69 +29,79 @@
     <h1 class="title">Hebbian Learning on a Resistor Network</h1>
     <p class="subtitle">or, The Path of Least Resistance</p>
     <p class="byline"><span>Charles R-W</span><span class="dot">·</span><time datetime="2026-11-17">17 November 2026</time><span class="dot">·</span><span>work in progress</span></p>
-    <p class="cta"><a class="explore-link big" href="#primer">Start with the primer</a></p>
+    <p class="cta"><a class="explore-link big" href="#talk/talk-title">Start with the talk</a></p>
   </div>
 </header>
 <nav class="tabs" aria-label="Chapters">
   <div class="tabs-inner">
-    <a class="tabs-home" href="#primer" title="Hebbian Learning on a Resistor Network: back to the start">The Path of Least Resistance</a>
+    <a class="tabs-home" href="#talk" title="Hebbian Learning on a Resistor Network: back to the start">The Path of Least Resistance</a>
     <div class="tablist" role="tablist">
-      <a role="tab" href="#primer" data-tab="primer" class="tab-mark">Primer</a>
-      <a role="tab" href="#idea" data-tab="idea">The idea</a>
-      <a role="tab" href="#perron" data-tab="perron">Perron parts</a>
-      <a role="tab" href="#readout" data-tab="readout">Reading the weights</a>
-      <a role="tab" href="#nonlinear" data-tab="nonlinear">Nonlinear neurons</a>
-      <span class="tab-group" role="presentation"><span class="tab-group-label">Appendix</span></span>
-      <a role="tab" href="#fusion" data-tab="fusion" class="tab-app">Fusion</a>
-      <a role="tab" href="#many" data-tab="many" class="tab-app">Many inputs</a>
-      <a role="tab" href="#diversity" data-tab="diversity" class="tab-app">Diversity</a>
-      <a role="tab" href="#allocation" data-tab="allocation" class="tab-app">Allocation</a>
-      <a role="tab" href="#old" data-tab="old" class="tab-app">More on the covariance rule</a>
-      <a role="tab" href="#method" data-tab="method" class="tab-app">Choices &amp; caveats</a>
+      <a role="tab" href="#talk" data-tab="talk" class="tab-mark" aria-selected="true">The talk</a>
+      <a role="tab" href="#basics" data-tab="basics" aria-selected="false">The basics</a>
+      <a role="tab" href="#perron" data-tab="perron" aria-selected="false">Perron clusters</a>
+      <a role="tab" href="#readout" data-tab="readout" aria-selected="false">Reading the weights</a>
+      <a role="tab" href="#experiments" data-tab="experiments" aria-selected="false">Experiments</a>
     </div>
   </div>
 </nav>
 <main id="main">
-  <section class="tab-panel" id="tab-primer" data-tab="primer" hidden>
+  <section class="tab-panel" id="tab-talk" data-tab="talk">
     <article class="prose"></article>
   </section>
-  <section class="tab-panel" id="tab-idea" data-tab="idea">
+  <section class="tab-panel" id="tab-basics" data-tab="basics" hidden>
+    <header class="page-head"><h1>The basics</h1></header>
     <article class="prose"></article>
   </section>
   <section class="tab-panel" id="tab-perron" data-tab="perron" hidden>
-    <header class="page-head"><p class="kicker">Part 2 · live simulation</p><h1>Clusters are Perron parts</h1></header>
+    <header class="page-head"><p class="kicker">Covariance rule</p><h1>Clusters are Perron parts</h1></header>
     <article class="prose"></article>
   </section>
   <section class="tab-panel" id="tab-readout" data-tab="readout" hidden>
-    <header class="page-head"><p class="kicker">Part 3</p><h1>Reading the weights</h1></header>
+    <header class="page-head"><h1>Reading the weights</h1></header>
     <article class="prose"></article>
   </section>
-  <section class="tab-panel" id="tab-nonlinear" data-tab="nonlinear" hidden>
-    <header class="page-head"><p class="kicker">Part 4</p><h1>Nonlinear neurons</h1></header>
+  <section class="tab-panel" id="tab-experiments" data-tab="experiments" hidden>
+    <header class="page-head"><h1>Experiments</h1></header>
     <article class="prose"></article>
   </section>
   <section class="tab-panel" id="tab-fusion" data-tab="fusion" hidden>
-    <header class="page-head"><p class="kicker">Appendix A · live simulation</p><h1>Fusion</h1></header>
+    <header class="page-head">
+      <a class="experiments-back" href="#experiments">← Experiments</a>
+      <p class="kicker">Experiments · fusion</p>
+      <h1>Fusion</h1>
+    </header>
     <article class="prose"></article>
   </section>
   <section class="tab-panel" id="tab-many" data-tab="many" hidden>
-    <header class="page-head"><p class="kicker">Appendix B · live simulation and precomputed sweeps</p><h1>Many inputs</h1></header>
-    <article class="prose"></article>
-  </section>
-  <section class="tab-panel" id="tab-diversity" data-tab="diversity" hidden>
-    <header class="page-head"><p class="kicker">Appendix C</p><h1>Diversity within a cluster</h1></header>
+    <header class="page-head">
+      <a class="experiments-back" href="#experiments">← Experiments</a>
+      <p class="kicker">Experiments · many</p>
+      <h1>Many inputs</h1>
+    </header>
     <article class="prose"></article>
   </section>
   <section class="tab-panel" id="tab-allocation" data-tab="allocation" hidden>
-    <header class="page-head"><p class="kicker">Appendix D</p><h1>Who gets the neurons?</h1></header>
+    <header class="page-head">
+      <a class="experiments-back" href="#experiments">← Experiments</a>
+      <p class="kicker">Experiments · allocation</p>
+      <h1>Who gets the neurons?</h1>
+    </header>
     <article class="prose"></article>
   </section>
   <section class="tab-panel" id="tab-old" data-tab="old" hidden>
-    <header class="page-head"><p class="kicker">Appendix E · the first model, condensed</p><h1>More on the covariance rule</h1></header>
+    <header class="page-head">
+      <a class="experiments-back" href="#experiments">← Experiments</a>
+      <p class="kicker">Experiments · old</p>
+      <h1>More on the covariance rule</h1>
+    </header>
     <article class="prose"></article>
   </section>
-  <section class="tab-panel" id="tab-method" data-tab="method" hidden>
-    <header class="page-head"><p class="kicker">Appendix F</p><h1>Choices &amp; caveats</h1></header>
+  <section class="tab-panel" id="tab-spont" data-tab="spont" hidden>
+    <header class="page-head">
+      <a class="experiments-back" href="#experiments">← Experiments</a>
+      <p class="kicker">Experiments · spont</p>
+      <h1>Spontaneous activity</h1>
+    </header>
     <article class="prose"></article>
   </section>
 </main>

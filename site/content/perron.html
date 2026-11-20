@@ -1,131 +1,136 @@
-<p class="lede">Take the note's rule literally: Hebb's covariance rule with a pruning threshold $\theta$, on the linear network of <a href="#idea">the idea chapter</a>. The neurons end up in clusters of identical copies. Where each cluster sits can be worked out by hand, and the answer is not an eigenvector of the input covariance. It is a <b>part</b>: the Perron vector of a block of the thresholded covariance $\Sigma_g - \theta\mathbf 1\mathbf 1^\top$. This chapter explains what that means, which blocks qualify, and why, for hierarchically correlated inputs, $\theta$ picks a level of the hierarchy.</p>
+<p class="lede">Run Hebb's covariance rule with a pruning threshold $\theta$ on the network of <a href="#basics">The basics</a>, and the neurons gather into a few groups of nearly identical copies. This page shows where those groups sit, and why: each group sits on a non-negative piece of the input covariance, which in the runs here is not one of its eigenvectors. All inputs here are synthetic.</p>
 
-<h2 id="perron-rule">The rule only sees a thresholded covariance</h2>
+<p>One caveat first. This is the one part of the story that depends on a modelling choice: the pruning threshold $\theta$ is subtracted from every synapse's growth. With the more standard multiplicative normalisation, the neurons would all go to the top eigenvector of the input covariance instead (<a href="#perron/perron-subtractive">see the last section</a>). I kept the subtractive version because it gives the hierarchy below, which seems important.</p>
 
-<p>A neuron's voltage is $u_i = h_i^\top g$, with $h_i$ its harmonic embedding, so the covariance of two neurons is $h_i^\top\Sigma_g h_j$. Hebb's rule with a constant negative drift is</p>
+<h2 id="perron-where">The theory predicts where the groups go</h2>
 
-<div class="eq" id="perron-eq-rule" data-num="1">$$\frac{dw_{ij}}{dt} = \eta\big(h_i^\top \Sigma_g h_j - \theta\big) - \lambda w_{ij}, \qquad w_{ij} \ge w_{\min}.$$</div>
+<p>Take three inputs $g_1, g_2, g_3$ and 60 neurons. Each neuron is a mixture $h_i$ of the inputs, a point in the triangle. We start the neurons at random mixtures, run the rule until the weights stop changing, and compare the end points with the prediction of the next section.</p>
 
-<p>A synapse grows when its two ends covary by more than $\theta$, and otherwise shrinks to a small floor $w_{\min}$. A synapse from neuron $i$ to input $b$ uses $(\Sigma_g h_i)_b$ in place of $h_i^\top\Sigma_g h_j$. Lateral synapses (neuron to neuron) can learn with a different gain $\gamma$, which makes their threshold $\theta/\gamma$; take $\gamma = 1$ until the last section.</p>
-
-<p>Every $h_i$ sums to one, so $h_i^\top\Sigma_g h_j - \theta = h_i^\top(\Sigma_g - \theta\mathbf 1\mathbf 1^\top)h_j$. The rule never sees $\Sigma_g$ and $\theta$ separately, only</p>
-
-<div class="eq" id="perron-eq-a" data-num="2">$$A = \Sigma_g - \theta\,\mathbf 1\mathbf 1^\top .$$</div>
-
-<p>Raising $\theta$ lowers every entry of $A$ by the same amount. Pairs of inputs that covary by less than $\theta$ turn negative: the rule treats them as anticorrelated. In the figure, the red blocks of $A$ are groups of inputs that covary by more than $\theta$; they are what the rest of the chapter is about.</p>
-
-<figure class="fig full card" id="perron-fig-a">
-  <div class="fig-title">Thresholding the covariance <span class="space-badge" data-space="input">input space</span> <span class="synthetic-tag">synthetic Σ</span></div>
-  <div class="fig-sub">Move $\theta$; pick a covariance. Hover a cell for its value.</div>
-  <div data-slot="fig-a"></div>
-  <figcaption><b>Plotted:</b> left, $\Sigma_{bc}$ over inputs $b, c$; middle, $A_{bc} = \Sigma_{bc} - \theta$; both on one diverging map over $[-1, 1]$ (blue negative, grey 0, red positive), inputs in dendrogram leaf order. Coloured outlines on $A$: the blocks $S \times S$ of the stable parts at $\theta$ (positive Perron vector $h_S$ of $A_{SS}$ with eigenvalue $c &gt; 0$ strictly the top one, and $(Ah)_b &lt; 0$ for every $b \notin S$), found by checking every support. Right: average-linkage dendrogram of the correlation of $\Sigma$ (merge height = mean correlation between the two merged groups; leaves at $\Sigma_{bb} = 1$); orange dashed line at $\theta$; branches above the line coloured like the stable part with the same support, dark grey if no stable part has that support. <b>Values:</b> $B = 8$, unit variances; hierarchy: 0.75 / 0.45 / 0.15; hierarchy + noise: plus a symmetric perturbation of amplitude 0.06 (seed 7), rescaled to unit diagonal; two blocks: 0.5 within, 0.1 across; ring: $\exp(-d^2/(2\cdot1.2^2))$.</figcaption>
+<figure class="fig wide card" id="perron-fig-grid">
+  <div class="fig-title">In these 12 runs, every group of neurons ends close to a predicted resting place <span class="space-badge" data-space="input">input space</span></div>
+  <div class="fig-sub">Each triangle is one run (a point is a mixture of the three inputs), with lateral covariance gain $\gamma = 0.25$. Hover a triangle for the numbers.</div>
+  <div data-slot="grid"><p class="u-help">loading…</p></div>
+  <figcaption>Every coloured dot (a group of neurons with nearly identical mixtures) sits in a ring (a predicted resting place). As $\theta$ rises the rings move, and a ring shared by two inputs splits once $\theta$ exceeds their covariance; with $\gamma = 1$ the groups still sit in rings, but some rings stay empty (line above).</figcaption>
+  <details class="fig-details"><summary>Details</summary>
+  <p>Computed in your browser when the page opens, with the site's engine: $N = 60$ neurons, every pair of neurons and every neuron–input pair may be joined; input weights start at random (exponential, mean 0.2), lateral weights at the floor $w_{\min} = 10^{-4}$; exact covariance at every step (no sampling noise); Euler steps of 0.05 until the largest weight change falls below $10^{-7}$ per unit time, or 6,000 steps; seed 0 in every cell. Groups: single linkage on the mixtures (sum of absolute differences), cut at the largest ratio between consecutive merge heights above 0.05 (at a fixed 0.1 if no ratio reaches 3); neurons with no synapse above the floor are dropped after clustering. Group position: the mean mixture of its members. Rings: the stable parts of the next section, found by checking all seven subsets of inputs.</p>
+  </details>
 </figure>
 
-<h2 id="perron-parts">Where a cluster can sit</h2>
 
-<p>Suppose the neurons have formed clusters, each a set of identical copies with one embedding $h$, and the lateral synapses between clusters have shrunk to the floor. Then three facts fix $h$.</p>
+<p>The grid samples 12 settings. The map below covers a whole plane of them, for one family of covariances, and runs the network wherever you click.</p>
 
-<ol>
-<li>Copies are at equal voltage for every input, so the synapses among them carry no current. With the floor negligible, no current reaches the cluster from other clusters either. Kirchhoff's law then says $h$ is the cluster's input weights, normalised: $h_b \propto w_{ib}$.</li>
-<li>Each input synapse is at the fixed point of (<a href="#perron/perron-eq-rule">1</a>): $w_{ib} \propto (A h)_b$ where it is above the floor. Combined with 1, on the support $S$ of $h$ (the inputs the cluster listens to), $A_{SS}h_S = c\,h_S$: $h_S$ is an eigenvector of the block of $A$ on $S$, with $c$ the cluster's total input conductance.</li>
-<li>An input outside $S$ has its synapse at the floor, which needs $(A h)_b \le 0$: no outside input covaries with the cluster by more than $\theta$. If one did, the cluster would grow a synapse to it and $S$ would not be its support.</li>
-</ol>
-
-<div class="eq" id="perron-eq-part" data-num="3">$$A_{SS}\, h_S = c\, h_S,\quad h_S &gt; 0,\ c &gt; 0; \qquad (A h)_b \le 0 \ \text{ for } b \notin S.$$</div>
-
-<p>A solution is a <b>part</b>. A part is stable when $c$ is the top eigenvalue of $A_{SS}$ (so $h_S$ is its Perron vector; any other direction would grow) and the outside inequality is strict. Neither the number of neurons nor the lateral weights appear in (<a href="#perron/perron-eq-part">3</a>): where a cluster can sit is a property of $\Sigma_g$ and $\theta$ alone.<span class="sidenote">With a finite floor each neuron leaks to the population mean through total conductance $\omega = N w_{\min}$, which shifts parts slightly. Every simulation here keeps $\omega = 0.009$.</span></p>
-
-<p>On three inputs every candidate part can be listed. Independent inputs give only the corners: a support of two inputs has a positive vector with eigenvalue $1 - 2\theta$ and a contrast with eigenvalue $1$, so the contrast wins. Correlate $g_1$ and $g_2$ by $\rho$ and the midpoint of their edge becomes a part while $\theta &lt; \rho$; it is then the top eigenvector of $\Sigma_g$ as well, but the corner $g_3$ is a part too, and the signed eigenvector $(1, -1, 0)$ never is. Move $\theta$ past $\rho$ and the midpoint gives way to the corners $g_1$ and $g_2$, neither of which is an eigenvector.</p>
-
-<figure class="fig wide card" id="perron-fig-parts3">
-  <div class="fig-title">Where clusters can sit, three inputs <span class="space-badge" data-space="input">input space</span> <span class="synthetic-tag">synthetic Σ</span></div>
-  <div class="fig-sub">Move $\theta$ and the correlation $\rho_{12}$. Hover a marker.</div>
-  <div data-slot="fig-parts3"></div>
-  <figcaption><b>Plotted:</b> the triangle of probability vectors $h$ over inputs $g_1, g_2, g_3$ (barycentric; the squares are the inputs, drawn just outside the corner they define). For every support $S$, its candidate is the top eigenvector of $A_{SS}$, $A = \Sigma - \theta\mathbf 1\mathbf 1^\top$, normalised to sum 1, when it is positive. Filled dots: stable parts (area rising with $c$, $r = 4 + 10\sqrt{c/2}$ px), with their support shaded (corner, edge or face); dashed rings: parts that are not stable; grey crosses: candidates with $c \le 0$ or an off-support violation $(Ah)_b &gt; 0$. Star: the top eigenvector of $\Sigma$, normalised to sum 1, when it is non-negative and unique. Table: every candidate with $h$, $c$, margin $\theta - \max_{b \notin S} (\Sigma h)_b$, and status. <b>Values:</b> $\Sigma = \left(\begin{smallmatrix}1 &amp; \rho_{12} &amp; 0\\ \rho_{12} &amp; 1 &amp; 0\\ 0 &amp; 0 &amp; 1\end{smallmatrix}\right)$; defaults $\rho_{12} = 0.6$, $\theta = 0.5$.</figcaption>
+<figure class="fig wide card" id="perron-sim">
+  <div class="fig-title">Across the plane of θ and the g₁–g₂ correlation, the runs end in the arrangement of groups the theory predicts <span class="space-badge" data-space="input">triangle: input space</span></div>
+  <div class="fig-sub">Held fixed: unit variances, g₃ correlated 0.3 with both g₁ and g₂, 60 neurons, $\gamma = 0.25$. Click the map, or move the sliders, to run the network there.</div>
+  <div data-slot="phase"><p class="u-help">loading…</p></div>
+  <figcaption>Each coloured region is one predicted arrangement, drawn in its small triangle; each black dot is a precomputed run that ended in its region's arrangement, and a hollow dot one that left a predicted part empty. In the triangle, the run at the orange ring: its neurons gather into groups that stop in the predicted rings.</figcaption>
+  <details class="fig-details"><summary>Details</summary>
+  <p>Regions: the set of stable parts at each point, by checking every subset of inputs, precomputed with the dots by <code>hebb/perron/phase3.mjs</code> (<code>data/perron/phase3.json</code>); where two regions meet the prediction is a tie. Dots: 80 runs on a grid of θ and correlation that avoids exact ties, same model as the grid above, all run to convergence. A run "ends in the arrangement" when every group lies within 0.1 (sum of absolute differences) of a stable part and every stable part holds a group. The icons show the arrangement at one point inside each region; the groups' exact mixtures change across a region. The live run uses the same settings, stops at θ = 0.75, and reports whether it converged or reached the step limit, and whether the setting is at or near a tie.</p>
+  </details>
 </figure>
 
-<p>The simulation below runs the rule live on three inputs, with the network beside the triangle. <a class="explore-link" href="#perron/perron-sim?tour=edge-midpoint">A correlated pair at $\theta = 0.5$</a> settles on the midpoint and on $g_3$; <a class="explore-link" href="#perron/perron-sim?tour=three-corners">independent inputs at $\theta = 0.4$</a> fill the three corners.</p>
+<h2 id="perron-why">Why: each group sits on a peak of $R_\theta$</h2>
 
-<figure class="fig full card" id="perron-sim">
-  <div class="fig-title">Harmonic embeddings of $N$ interior neurons over time under the covariance rule, three clamped inputs, in input space and in neuron space <span class="synthetic-tag">synthetic Σ</span></div>
-  <div class="fig-sub">Drag to orbit, scroll to zoom, hover anything. $\theta$, $\gamma$ and $\Sigma_g$ act on the running network; the seed and $N$ restart it. The scrubber replays the run.</div>
-  <div data-slot="sim"></div>
-  <figcaption><b>Plotted:</b> top left, in input space: squares are the inputs $g_1, g_2, g_3$, drawn just outside the corner they define (coloured leader); each circle is an interior neuron $i$ at its harmonic embedding $h_i$ (barycentric position in the triangle of inputs), raised by $\kappa\, h_i^\top\Sigma_g h_i$ with $\kappa = 0.8/\max_b \Sigma_{bb}$ (or flat); colour: the $h_i$-weighted mix of the input colours; grey, smaller: dead neurons (every synapse at $w_{\min}$). Once the clustering is clear-cut, a cluster of $n_c$ neurons is drawn with radius $\propto 0.8 + 2\sqrt{n_c/N}$. Ink lines (only with "show synapses"): synapses, opacity $w/\max w$ over the current frame, at most the 4,000 strongest. Fading ink: the last 10 frames of each neuron's path. Faint mesh: the surface $\kappa\, h^\top\Sigma_g h$ over the triangle; dashed: the flat triangle. Top right, in neuron space: the same network with every neuron and input at a fixed random position (seeded), same colours; lines are the 1,500 strongest synapses (lateral and input), width and opacity rising with $w/\max w$; hovering a neuron in either panel rings it in the other. Below: (a) $H\Sigma_g H^\top$ with neurons sorted by cluster (band colour: the colour of the cluster's mean embedding), diverging map, range $\pm\max_b\Sigma_{bb}$; (b) number of neurons in each cluster against time, stacked, dead neurons in grey. Orange line: the time shown. Clusters: single linkage on the embeddings in $L_1$, cut at the largest gap between merge heights; the count includes only clusters with at least $\max(2, 2\%\,N)$ members. Member spread: the largest $L_1$ distance between a member's $h_i$ and its cluster's mean embedding. Stationarity $r$: $\max |dw/dt|$ over synapses, synapses at the floor with negative drift counting 0. <b>Values:</b> $B = 3$, $\lambda = \eta = 1$, $dt = 0.05$, mean-field (exact $\Sigma_g$ every step), paused when $r &lt; 10^{-5}$; defaults $N = 90$, $\theta = 0.4$, $\gamma = 1$, $w_{\min} = 10^{-4}$, lateral weights starting at $w_{\min}$, $W_{IB} \sim \mathrm{Exp}(0.2)$, independent unit-variance inputs, seed 0; tours set their own $\Sigma_g$, $\theta$, $\gamma$ and seed.</figcaption>
+<p>The engine changes each synapse as follows, with learning rate and decay set to 1 and every weight kept above a small floor $w_{\min}$:</p>
+
+<div class="eq" id="perron-eq-rule" data-num="1">$$\dot w_{ib} = (\Sigma h_i)_b - \theta - w_{ib}, \qquad \dot w_{ij} = \gamma\, h_i^\top\Sigma h_j - \theta - w_{ij}.$$</div>
+
+<p>The first is a synapse from neuron $i$ to input $b$, the second one between two neurons; $\Sigma$ is the input covariance and $\gamma$, the lateral covariance gain, scales only the covariance term. A mixture sums to one, so the input drive is $(Ah_i)_b$ with $A = \Sigma - \theta\mathbf 1\mathbf 1^\top$ ($\mathbf 1$ the all-ones vector: every entry of $\Sigma$ lowered by $\theta$). For a mixture $h$ define</p>
+
+<div class="eq" id="perron-eq-r" data-num="2">$$R_\theta(h) = \frac{h^\top A h}{h^\top h} = z^\top\Sigma z - \theta\,\|z\|_1^2, \qquad z = h/\|h\|_2 .$$</div>
+
+<p>Take one group on its own and let the floor go to zero. At rest it keeps a set $S$ of inputs, and its mixture is an eigenvector of the block $A_{SS}$ whose eigenvalue $c$ is its total input weight (derivation below). The rings are the <b>stable parts</b>: sets $S$ whose block has a simple top eigenvalue $c &gt; 0$ with an all-positive eigenvector, called a <b>Perron vector</b> (after Perron's theorem: a matrix with positive entries always has one), and every other input covarying with it by less than $\theta$. These conditions make $h$ a strict local maximum, a peak, of $R_\theta$ over mixtures. So the idealised groups are local optima of non-negative sparse PCA with an $\ell_1^2$ penalty $\theta$; we do not claim the network as a whole optimises it.</p>
+
+<figure class="fig wide card" id="perron-fig-land">
+  <div class="fig-title">The predicted parts are the peaks of $R_\theta$; raising $\theta$ moves the peak and then splits it <span class="space-badge" data-space="input">input space</span></div>
+  <div class="fig-sub">The bottom row of the first figure (all three inputs correlated), drawn over the triangle of mixtures. Hover for $R_\theta$ at a point.</div>
+  <div data-slot="land"><p class="u-help">loading…</p></div>
+  <figcaption>Colour is the height $R_\theta(h)$ at each mixture; the rings sit on the peaks, and the paths of 20 of the neurons end near them. The paths show where the neurons went, not that they climbed: the network is not known to increase $R_\theta$.</figcaption>
+  <details class="fig-details"><summary>Details</summary>
+  <p>Paths: every third neuron of the same runs as the first figure, sampled every 10 steps, from its random start (dot) to the end of the run. Peaks on the grid: points of the grid $\{i/160\}$ on the triangle that are at least as high as their six neighbours.</p>
+  </details>
 </figure>
 
-<h2 id="perron-which">Which groups of inputs: $\theta$ cuts the correlation tree</h2>
-
-<p>Condition 3 has a short reading. Draw a graph on the inputs, joining $a$ and $b$ when $\Sigma_{ab} &gt; \theta$; call it $G_\theta$. Then:</p>
-
-<ul>
-<li><b>A stable part never straddles two pieces of $G_\theta$.</b> If its support spans two groups with no edge between them, the block of $A$ coupling them is $\le 0$, and flipping the sign of $h$ on one group raises $h^\top A h$: the positive vector is not the top one.</li>
-<li><b>A stable part inside a coherent group takes all of it.</b> If every input in a group covaries with every other by more than $\theta$, a part made of some of them must contain them all: a left-out member covaries with the part by more than $\theta$, which breaks condition 3.</li>
-</ul>
-
-<p>For a <b>hierarchical</b> covariance these two facts settle everything. Say the inputs are the leaves of a tree and the correlation of two inputs depends only on how far up the tree they meet (an ultrametric). Cut the tree at height $\theta$: each branch below the cut is a group whose pairs all covary above $\theta$, and different branches covary below it. On a branch $A$ is entrywise positive, so its Perron vector is positive and on top; outside inputs covary with it below $\theta$. So the stable parts at $\theta$ are exactly the branches of the cut. Nothing else is stable. The diagram below makes this visible: at each $\theta$, a bar for every stable part over the inputs it covers.</p>
-
-<figure class="fig full card" id="perron-fig-hier">
-  <div class="fig-title">The part diagram <span class="synthetic-tag">synthetic Σ</span></div>
-  <div class="fig-sub">Drag on the diagram (or use the slider) to move the cursor $\theta$. Hover for the parts at a point.</div>
-  <div data-slot="fig-hier"></div>
-  <figcaption><b>Plotted:</b> centre, against $\theta$ (201 values from 0 to 1, computed live): each stable part of $A = \Sigma - \theta\mathbf 1\mathbf 1^\top$ as a bar over the rows of its support $S$ (rows: inputs in dendrogram leaf order), outlined over the range of $\theta$ where that support stays a stable part, filled by its eigenvalue $c$ (sequential map, key below; translucent where parts overlap, so overlapping fills stack). Left: the average-linkage dendrogram of the correlation of $\Sigma$, rotated, its horizontal axis the merge height on the same 0 to 1 scale. Right (below on phones): the Perron vectors $h_S$ of the stable parts at the cursor, one column each, bar length $h_b$ on a shared scale, $c$ under each column. Orange: the cursor $\theta$. <b>Values:</b> $B = 8$; presets as in the first figure.</figcaption>
-</figure>
-
-<p>Checked by exact enumeration (all $2^B - 1$ supports) on 29 ultrametric trees with up to 16 inputs, 120–200 values of $\theta$ each: no exceptions, except at $\theta$ exactly equal to a level, where the parent's top eigenvalue is degenerate and nothing at that level is stable. It also survives unequal variances (the Perron vector stops being uniform, and an input whose variance is below $\theta$ is left out).</p>
-
-<p>Without an exact tree the picture blurs at the edges. Add noise of size $\pm 0.03$ to the 16-input hierarchy and the stable parts still match the branches, except within about $0.03$ of a level. On a ring, where correlation falls off smoothly with distance, there is no tree: the parts are bumps, as many as there are inputs, and their width shrinks steadily as $\theta$ rises (choose "ring" above).</p>
-
-<p><b>So is raising $\theta$ the same as solving the problem again on each block?</b> Statically, yes, for any $\Sigma_g$. Take a piece $S$ of $G_\theta$ and a larger threshold $\theta'$. Every input outside $S$ covaries with every input in $S$ by at most $\theta &lt; \theta'$, so condition 3 holds for them automatically, for any candidate inside $S$. What is left is the same problem with $\Sigma_g$ replaced by its block on $S$. The stable parts are therefore a recursion down the tree of pieces of $G_\theta$ (the single-linkage dendrogram of the correlations), and $\theta$ selects the level. Whether a network actually walks down that tree is a separate question, about dynamics.</p>
-
-<details class="more"><summary>In 400-neuron networks: each cluster against its predicted part and against the closest eigenvector</summary>
-<figure class="fig wide card" id="perron-partsfig">
-  <div class="fig-title">Each cluster against its predicted part and against the closest eigenvector of $\Sigma_g$ <span class="synthetic-tag">synthetic Σ</span></div>
-  <div class="fig-sub">Pick a run. Hover a bar for the three values.</div>
-  <div data-slot="parts"><p class="u-help">loading…</p></div>
-  <figcaption><b>Plotted:</b> one panel per cluster with at least 2% of the neurons (largest first, one colour each), over the inputs $g_1 \dots g_B$: bars, the cluster centroid (mean $h_i$ of its members); ink dots, the predicted part (the Perron vector of $A_{SS}$, $A = \Sigma_g - \theta\mathbf 1\mathbf 1^\top$, on the cluster's support, zero elsewhere, from the exact enumeration of stable parts); grey dashed, the eigenvector of $\Sigma_g$ closest to the centroid (where an eigenvalue is degenerate, the centroid's projection on its eigenspace). All three scaled to unit length; one shared vertical range per run. Panel subtitles: cosine of the centroid with the part and with that eigenvector. <b>Values:</b> $N = 400$, $\omega = 0.009$, seed 0, $\Sigma_g$ and $\theta$ as named in the picker. Source: <code>data/big/cov_all.json</code>.</figcaption>
-</figure><details class="more"><summary>The Perron report, run by run</summary>
-<div data-slot="parts-table"><p class="u-help">loading…</p></div>
-<p class="u-help">Table: the Perron report of every $B = 12$–$16$ run (seed 0), from <code>data/big/cov_all.json</code>; grey rows: the same setting at the floor $\omega/3$. Sizes: the cluster sizes, largest first (past four: the three largest, then the smallest in brackets). Clusters: at least 2% of the $N = 400$ neurons. The top-eigenvalue test: the eigenvector of $A_{SS}$ closest to the centroid is the top one, positive, with a simple positive eigenvalue. Off-support: $\max_{b \notin S}(A h)_b$, which a part needs $\le 0$.</p>
-</details>
-<p>Over 30 precomputed runs ($N = 300$–$400$, up to 16 inputs, blocks, hierarchy and ring), every cluster with at least 2% of the neurons fits its predicted part to cosine $\ge 0.9999$, and passes the stability test. The closest eigenvector of $\Sigma_g$ reaches 0.49–0.87 where $\Sigma_g$ has structure (12–16 inputs).</p>
+<details class="more" id="perron-derivation"><summary>The derivation: one group, floor taken to zero</summary>
+<p>Let a group of copies have mixture $h$ and total input weight $c = \sum_b w_{ib} &gt; 0$. Kirchhoff's law gives $c\,h_i = w_{iB} + \sum_j w_{ij}(h_j - h_i)$; copies contribute nothing to the sum, and with the floor at zero and no synapses to other groups neither does anyone else, so $w_{iB} = c\,h$. At rest each input weight is $\max(0, (Ah)_b)$. On the inputs $S$ it keeps, and off them:</p>
+<div class="eq" id="perron-eq-part" data-num="3">$$A_{SS}\,h_S = c\,h_S,\quad h_S &gt; 0; \qquad (Ah)_b \le 0 \ \text{ for } b \notin S.$$</div>
+<p>These are exactly the first-order (Karush–Kuhn–Tucker) conditions for a maximum of $R_\theta$ over $h \ge 0$, with $c = R_\theta(h)$. They are stationarity conditions, not a stability test. A stable part adds a simple top eigenvalue on $S$ and a strict inequality outside, which together certify a strict local maximum; cases with equality outside need a separate test and are not drawn. With a positive floor the outside condition becomes $(Ah)_b \le w_{\min}$, and floor synapses to other groups move a group slightly off its part. This calculation says where one group can sit; whether several groups can coexist, and which of them the dynamics reach, are separate questions (see the ramps below).</p>
 </details>
 
-<h2 id="perron-dynamics">Which parts get populated</h2>
+<h2 id="perron-tree">$\theta$ cuts the correlation tree</h2>
 
-<p>The parts are the places a cluster can rest. Which of them the network actually fills depends on how it gets there, and lateral synapses decide most of it. A lateral synapse grows while its two ends covary by more than $\theta/\gamma$. Early in learning, embeddings are spread out and two random neurons covary by about $\kappa_0 = \mathbf 1^\top\Sigma_g\mathbf 1/B^2$, the mean entry of $\Sigma_g$. If $\theta &lt; \gamma\kappa_0$, lateral synapses grow before any neuron has chosen a part, the population binds into one body, and one body can only fill one part.</p>
+<p>With more inputs, the outside test has a short reading. A stable part's inputs can never be split into two sets that covary with each other by less than $\theta$: the block of $A$ between them is negative, so flipping the sign of $h$ on one set raises the Rayleigh quotient, and $h$ is not the top eigenvector. And a part built from a set whose pairs all covary by more than $\theta$ takes the whole set: a member left out would covary with it by more than $\theta$. For an exact <b>hierarchy</b> of unit-variance inputs, where the covariance of two inputs depends only on how high in a tree they meet, these facts settle it: away from the merge levels, the stable parts are exactly the branches of the tree above the cut at $\theta$.</p>
 
-<p><b>From a fresh start</b> (300 neurons, the 16-input hierarchy with levels 0.8, 0.5, 0.25, 0.05, so $\kappa_0 = 0.26$), the number of parts filled is a function of $\theta$ and $\gamma$: it was the same in every seed at 28–29 of 30 values of $\theta$. Which of several equal parts gets filled depends on the seed; where parts differ in $c$, the largest wins (24 of 24 seeds). With $\gamma = 1$ everything binds into one cluster below $\theta \approx 0.22$, and a second round of binding inside each branch leaves gaps above it: 2 of 4 quarters filled for $\theta$ between 0.25 and 0.38. Weaker lateral learning, $\gamma = 0.1$, fills every stable part from $\theta = 0.065$ up to $0.82$. Two artefacts of the floor show at the top of the range: just below the 0.8 level ($\theta \approx 0.79$) neurons stay pinned to single inputs, which are not parts there, and above $\theta \approx 0.86$ most neurons die.</p>
-
-<figure class="fig full card" id="perron-fig-cold">
-  <div class="fig-title">Fresh starts: stable parts and filled parts against $\theta$ <span class="synthetic-tag">synthetic Σ</span></div>
-  <div class="fig-sub">Pick the covariance and the lateral gain $\gamma$. Hover a point for its seeds.</div>
-  <div data-slot="fig-cold"><p class="u-help">loading…</p></div>
-  <figcaption><b>Plotted:</b> against $\theta$, the number of stable parts (staircase) and the number of parts filled by the end of a fresh run (dots, one per seed; mean line), for each $\gamma$; vertical marks at $\gamma\kappa_0$. A part counts as filled if a cluster of at least 1% of the neurons has its support and cosine above 0.98 with its Perron vector. <b>Values:</b> $N = 300$, 5 seeds (8 for blocks of 3, 4 and 5, run at four settings only), 30 values of $\theta$, $\omega = 0.009$; covariances as named. Source: <code>data/perron2/cold_starts.json</code> (<code>hebb/perron2/cold.py</code>).</figcaption>
+<figure class="fig wide card" id="perron-fig-tree">
+  <div class="fig-title">For an exact hierarchy of unit-variance inputs, away from merge levels, the stable parts are the branches above the cut at $\theta$</div>
+  <div class="fig-sub">Move $\theta$, or pick a frame. The noisy hierarchy and the ring are comparisons where the claim need not hold.</div>
+  <div data-slot="tree"></div>
+  <figcaption>Each matrix is $\Sigma - \theta$ over pairs of the 8 inputs, in tree order: red pairs covary above $\theta$, blue below, outlined blocks are stable parts; for the exact hierarchy the frames show that raising $\theta$ splits each part into its children. The tree (average linkage, leaves at the top) has its branches above the orange cut coloured like the matching part, and dashed where no stable part matches.</figcaption>
+  <details class="fig-details"><summary>Details</summary>
+  <p>Stable parts by checking all 255 subsets of inputs. At $\theta$ exactly equal to a merge level, the branches that meet there tie and are not stable; other branches are unaffected. <span data-slot="c1-text"></span> With noise the tree is only approximate and the parts can differ from the branches near a level; on the ring there is no tree, and the parts are overlapping bumps whose width shrinks as $\theta$ rises.</p>
+  </details>
 </figure>
 
-<p><b>Moving $\theta$ slowly</b> is the direct test of refinement. Going down, the tree is followed exactly: start with all 16 single inputs filled at $\theta = 0.82$ and lower $\theta$ in 80 steps; at the levels 0.5, 0.25 and 0.05 the children merge into their parent within one step (at the top level, 0.8, about 0.03 late, an effect of the floor), and every stable part stays filled throughout. Going up, it is not. With $\gamma = 1$ the whole population is one cluster at low $\theta$, and at each level it falls as a body into one child: 1 of 2, 1 of 4, 1 of 8, 1 of 16. Coverage halves at every level. Weak lateral learning helps but does not fix it: with $\gamma = 0.1$ the ramp reaches 2 of 2, 3 of 4, 6 of 8 and about 10 of 16, with very unequal sizes.</p>
+<h2 id="perron-not-eig">Groups are parts, not eigenvectors</h2>
 
-<figure class="fig full card" id="perron-fig-ramp">
-  <div class="fig-title">Raising and lowering $\theta$ slowly: which parts stay filled <span class="synthetic-tag">synthetic Σ</span></div>
-  <div class="fig-sub">Pick a ramp. Drag on the diagram to choose $\theta$; the film below shows the network at that point.</div>
-  <div data-slot="fig-ramp"><p class="u-help">loading…</p></div>
-  <figcaption><b>Plotted:</b> the part diagram of the 16-input hierarchy (bars: stable parts at each $\theta$, as in the figure above), overlaid with the clusters present at the end of each step of the ramp (ink bars over their supports, dot size rising with the number of neurons; filled if the cluster sits on a stable part). Below: the network at the selected step, in input space (first two principal axes of $\Sigma_g^{1/2}h_i$) and in neuron space (seeded random layout). <b>Values:</b> $N = 300$, 80 values of $\theta$ from 0.03 to 0.95, a $10^{-3}$ relative kick to every weight at each step, then integration to residual $&lt; 10^{-7}$; $\omega = 0.009$. Source: <code>data/perron2/ramps.json</code> and the films in <code>data/perron2/</code> (<code>hebb/perron2/ramps.py</code>).</figcaption>
+<p>In networks of 400 neurons on 12 to 16 inputs, each group listens (above the floor) to only some of the inputs, and its mixture matches its predicted part. The eigenvectors of these covariances do not: after the first they take both signs, and the first spreads over every input.</p>
+
+<figure class="fig wide card" id="perron-fig-big">
+  <div class="fig-title">In these 18 runs, every group of 8 or more neurons matches its predicted part far better than any eigenvector of $\Sigma$</div>
+  <div class="fig-sub">Pick a run. Bars are vectors over the inputs. Hover bars and points for values.</div>
+  <div data-slot="big"><p class="u-help">loading…</p></div>
+  <figcaption>Left: each group's mixture (bars) ends on its predicted part (dots), and looks nothing like the eigenvectors below, which after the first take both signs (red positive, blue negative). Right: for every group of at least 8 neurons, cosine with its nearest stable part (top track) and with the closest eigenvector of $\Sigma$ (bottom track).</figcaption>
+  <details class="fig-details"><summary>Details</summary>
+  <p>Precomputed (<code>hebb/big/cov_runs.py</code>, <code>data/big/cov_all.json</code>): $N = 400$, $\gamma = 1$, floor $w_{\min} = 0.009/N$, seed 0, run until the largest weight change is below $10^{-7}$; the right panel also includes every setting rerun at a floor three times lower. Vectors are scaled to unit length, so a cosine of 1 means the same direction, not the same total weight. Groups: at least 2% of the neurons (8 of 400). "Closest eigenvector": the largest cosine of the group's mixture with its projection onto an eigenspace of $\Sigma$ (repeated eigenvalues grouped, so a ring's cosine–sine pairs count as one shifted wave). Where eigenvalues repeat, the eigenvectors drawn are one basis of their eigenspace.</p>
+  </details>
 </figure>
 
-<p>Why can a cluster not split? Just past a level the parent part has lost stability, but only barely: the push towards the children grows from zero. Holding the copies together are the lateral synapses (pruned only if $\theta/\gamma$ exceeds their covariance) and the floor, which ties every neuron to the population mean. The push loses. Two tests show it: jumping $\theta$ two steps past the level, or lowering the floor tenfold, splits the cluster almost evenly (159 and 141 neurons), for $\gamma = 0.5$ and $0.1$ alike; with $\gamma = 1$ it never splits.</p>
 
-<p>So $\theta$ is a resolution knob in the sense that it fixes which groups of inputs can be represented, level by level down the correlation tree. The network realises the whole level when it comes from coarser to finer only if lateral synapses are weak and the change is abrupt; coming from finer to coarser, or from a fresh start with weak lateral learning, it realises it fully. Refinement is history-dependent, not a fresh solve on each block.</p>
+<h2 id="perron-split">Which parts get a group</h2>
 
-<h2 id="perron-more">Clones and allocation</h2>
+<p>A stable part is a place a group can sit; whether a group actually sits there depends on how the network gets there. On 16 hierarchically correlated inputs, we start 300 neurons fresh at each threshold and lateral gain and count the stable parts that end up holding a group.</p>
 
-<p>Members of a cluster are exact copies, so a cluster is one function repeated, not a reservoir of different features. And how many neurons each part receives is inherited from the start: at equilibrium any split among compatible parts is a fixed point. Both, with the attempts to break them, are in the appendix, <a href="#old">More on the covariance rule</a>.</p>
+<figure class="fig wide card" id="perron-fig-fill">
+  <div class="fig-title">On 16 hierarchical inputs, θ picks the level of the tree, and the lateral gain γ decides how many of its parts get a group</div>
+  <div class="fig-sub">Held fixed: covariances 0.8 / 0.5 / 0.25 / 0.05 by level of the tree, unit variances, 300 neurons, fresh random starts. Hover a cell for each start.</div>
+  <div data-slot="fill"><p class="u-help">loading…</p></div>
+  <figcaption>Each cell is one threshold θ (column) and lateral gain γ (row); dark means every stable part at that level holds a group. Left of the orange line the lateral synapses bind all neurons into one group, so only one part is filled; with $\gamma = 1$, half the parts also stay empty just above the levels 0.25 and 0.5.</figcaption>
+  <details class="fig-details"><summary>Details</summary>
+  <p>Precomputed (<code>hebb/perron2/cold.py</code>, <code>data/perron2/cold_starts.json</code>): floor $w_{\min} = 0.009/N$; each start run to convergence, then kicked and re-run to rule out saddles. A part holds a group when a group of at least 1% of the neurons has exactly its inputs (synapses above $1.001\,w_{\min}$ in most members) and cosine above 0.98 with the nearest stable part. Thresholds above 0.78 are not drawn: there the floor dominates, neurons stay pinned to single inputs just below the 0.8 level and many die above it.</p>
+  </details>
+</figure>
 
-<aside class="callout found">
-  <p class="callout-title">What the covariance rule does</p>
-  <ul>
-    <li><span class="verdict holds">holds</span>A cluster sits on a part: the Perron vector of $A = \Sigma_g - \theta\mathbf 1\mathbf 1^\top$ on a group of inputs, with no outside input covarying with it above $\theta$. Not, in general, an eigenvector of $\Sigma_g$.</li>
-    <li><span class="verdict holds">holds</span>For hierarchically correlated inputs the stable parts are exactly the branches of the correlation tree cut at height $\theta$; in general they recurse down the pieces of the graph $\Sigma_{ab} &gt; \theta$.</li>
-    <li><span class="verdict amended">amended</span>Which parts are filled is decided by lateral binding: below $\theta \approx \gamma\kappa_0$ the population is one cluster. Lowering $\theta$ merges clusters exactly along the tree; raising it usually does not split them.</li>
-    <li><span class="verdict fails">fails</span>Clusters as reservoirs of different features, and allocation set by the parameters (<a href="#old">appendix</a>).</li>
-  </ul>
-</aside>
+<details class="more" id="perron-ramps"><summary>Raising or lowering θ slowly instead of starting fresh</summary>
+<p>We ramp $\theta$ in the same network: 80 steps up from 0.03, or 69 steps down from 0.82, integrating towards equilibrium at each step.</p>
+<figure class="fig wide card" id="perron-fig-ramp">
+  <div class="fig-title">In these ramps, lowering $\theta$ merges groups along the tree; on the way up, a weaker lateral gain lets more groups split</div>
+  <div class="fig-sub">Choose the direction of the ramp. Hover for the groups at a step.</div>
+  <div data-slot="ramp"><p class="u-help">loading…</p></div>
+  <figcaption>Rows are the 16 inputs in tree order; light bars are the stable parts at each $\theta$, dark bars the parts that hold a group at the end of a step. Raising $\theta$ at $\gamma = 1$, the dark band halves at each level instead of filling both children; at $\gamma = 0.1$ more children fill.</figcaption>
+  <details class="fig-details"><summary>Details</summary>
+  <p>Precomputed (<code>hebb/perron2/ramps.py</code>, <code>data/perron2/ramps.json</code>): $N = 300$, covariances 0.8 / 0.5 / 0.25 / 0.05 by level, unit variances, floor $w_{\min} = 0.009/N$. Each ramp starts from a fresh network; at every later $\theta$ the above-floor weights get a small random kick (relative size $10^{-3}$), then integration until the largest weight change is below $10^{-7}$, or 40,000 steps (marked). Groups count when they have at least 1% of the neurons (3). A group's inputs are those whose synapse exceeds $1.001\,w_{\min}$ in most of its members; it holds a part when those inputs are a stable part and its cosine with the nearest stable part exceeds 0.98. A neuron counts as dead when none of its input synapses exceeds $1.001\,w_{\min}$. Near the top level (0.8) the floor dominates: lowering $\theta$, the single-input groups merge into pairs only below it (see the line under the figure), and raising $\theta$ above about 0.83 kills many neurons at $\gamma = 0.1$; the counts under the figure therefore stop below that level.</p>
+  </details>
+</figure>
+
+<p>Just past a level the parent part has only barely lost stability, and the lateral synapses that bind the copies pull them along together. <span data-slot="split-text"></span></p>
+</details>
+
+<p>So $\theta$ sets the predicted parts for this covariance; the lateral gain, the floor and the history decide which groups the network reaches.</p>
+
+<h2 id="perron-subtractive">This depends on subtracting $\theta$</h2>
+
+<p>The threshold $\theta$ in (1) is subtractive: the same fixed amount is removed from every synapse's growth. That is what gives non-negative parts and the sparse-PCA reading of (2). The alternative scales all of a neuron's synapses down in proportion to hold its total fixed; <a href="https://ctn.zuckermaninstitute.columbia.edu/sites/default/files/content/PDFs%20Miller/The%20Role%20of%20Constraints%20in%20Hebbian%20Learning.pdf">Miller and MacKay (1994)</a> call this a multiplicative constraint; under their conditions Hebbian learning then converges to the principal eigenvector of the input correlations, and Oja's unit-norm neuron (<a href="https://doi.org/10.1007/BF00275687">Oja 1982</a>) is the related principal-component result. Their subtractive constraint, which subtracts whatever amount keeps the total fixed, is a related contrast rather than our rule: it typically drives weights to their bounds, and its outcome is in general not an eigenvector either. The result on this page therefore depends on this modelling choice.</p>
+
+<figure class="fig wide card" id="perron-fig-norm">
+  <div class="fig-title">40 uncoupled neurons: with subtractive pruning they end on separate parts; with multiplicative normalisation, all on the top eigenvector <span class="space-badge" data-space="input">input space</span></div>
+  <div class="fig-sub">Same inputs (all three correlated), the same 40 random starts, single neurons with input synapses only.</div>
+  <div data-slot="norm"></div>
+  <figcaption>Left, the rule of this page: the neurons split between two stable parts on the edges of the triangle. Right, the same Hebbian term with each neuron's total weight held fixed: every neuron goes to one interior point, the top eigenvector of $\Sigma$ (star).</figcaption>
+  <details class="fig-details"><summary>Details</summary>
+  <p>No lateral synapses, so $h = w/\mathbf 1^\top w$. Left: $\dot w_b = (\Sigma h)_b - \theta - w_b$ with floor $10^{-4}$, which keeps the end points just inside the triangle. Right: $\dot w_b = (\Sigma h)_b - \alpha w_b$, with $\alpha$ chosen so the neuron's total weight stays fixed (Miller and MacKay's multiplicative constraint); $w$ then points along the solution of the linear flow $\dot v = \Sigma v/(\mathbf 1^\top w)$, rescaled, so it converges to the top eigenvector of $\Sigma$, all-positive here because every covariance is positive. Euler steps of 0.05, 4,000 steps, computed in your browser. Setting $\theta = 0$ in the left rule, so that only the proportional decay $-w$ remains, also sends every neuron to the top eigenvector.</p>
+  </details>
+</figure>
+
+<h2 id="perron-limits">Limits</h2>
+
+<p>Everything here is a linear network driven by the exact input covariance, with no sampling noise. The predicted parts are computed for one group with the floor at zero; the floor that keeps the network connected shifts the simulated groups slightly off them (cosine at least 0.9999 in the large runs), and the members of a group are copies only up to that shift. Which stable parts get filled, and by how many neurons, is not fixed by $\Sigma$ and $\theta$: it depends on the random start, on the lateral gain $\gamma$ and, as the ramps show, on history. The tree result needs an exact hierarchy with unit variances and fails at $\theta$ exactly equal to a merge level.</p>

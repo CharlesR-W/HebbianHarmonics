@@ -1,0 +1,74 @@
+<section class="slide wide" id="talk-readout">
+  <h2>Read the inputs out of the weights</h2>
+  <p class="claim">Given the learned weights, how the neurons are wired to the inputs, and the learning rule, you can solve for the statistics of the inputs the network was trained on.</p>
+  <div class="side">
+    <p class="eq">\[ (h_i - h_j)^{\top} C\, (h_i - h_j) = 2\,(b - \alpha\, w_{ij}) \]</p>
+    <p class="eq-note">Distance rule: each surviving synapse gives one linear equation on the inputs' second moment \(C\), saying how differently its two neurons responded.</p>
+    <ul class="points">
+      <li>Linear network at equilibrium: with enough surviving synapses, we recover exactly how the training inputs varied relative to one another (not the part shared by all inputs).</li>
+      <li>It needs the rule's exact form and constants.</li>
+    </ul>
+    <a class="see explore-link" href="#readout">See it live</a>
+  </div>
+  <div class="fig">
+    <svg id="talk-c-readout-svg" viewBox="0 0 960 300" role="img" aria-label="Weights, then embeddings, then recovered input covariance next to the true covariance"></svg>
+    <p class="fig-cap">Schematic with a toy block-structured covariance. Weights and input wiring fix the embeddings H; the fixed-point condition is then a linear equation for the input covariance. Both right-hand panels show P&#8202;Σ&#8202;P, the part not shared by all inputs: the part the weights can see.</p>
+  </div>
+</section>
+
+<section class="slide" id="talk-knobs">
+  <h2>Plasticity parameters are clustering knobs</h2>
+  <p class="claim">The constants in a plasticity rule play the role of the settings of a clustering algorithm.</p>
+  <div class="side">
+    <ul class="points">
+      <li>Fusion scale b: resolution, a length rather than a number of groups.</li>
+      <li>α: how tight the groups are, and how much they remember their history; not when fusion starts.</li>
+      <li>So we can ask what trade-off a given homeostatic or pruning rule is making.</li>
+    </ul>
+    <a class="see explore-link" href="#many/many-resolution">See it live</a>
+  </div>
+  <div class="fig">
+    <svg id="talk-c-knobs-svg" viewBox="0 0 640 300" role="img" aria-label="Thirty neurons grouped by colour; groups change with the two sliders"></svg>
+    <p class="fig-cap">Toy illustration, not a simulation. Each dot is a neuron placed by its response; colour is its group.</p>
+    <div class="fig-ctl">
+      <label>resolution b <input type="range" id="talk-c-b" min="0" max="100" value="45"></label>
+      <label>tightness α <input type="range" id="talk-c-alpha" min="0" max="100" value="30"></label>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="talk-allocation">
+  <h2>Open: a neuron allocation rule?</h2>
+  <p class="claim">Perhaps plasticity parameters set how many neurons each input pattern gets, as a function of its energy.</p>
+  <div class="side">
+    <p class="eq">\[ n_a = n(\lambda_a) \]</p>
+    <ul class="points">
+      <li>Represent many different input patterns, or devote more neurons to just a few?</li>
+      <li>So far: with fixed wiring, the wiring sets the counts (a louder block of inputs is only cut finer); when the wiring learns, neurons drain to the quietest inputs.</li>
+      <li>An added objective gives water-filling for variance, not for neuron counts.</li>
+    </ul>
+    <a class="see explore-link" href="#allocation">See it live</a>
+  </div>
+  <div class="fig">
+    <svg id="talk-c-alloc-svg" viewBox="0 0 640 340" role="img" aria-label="Mode energies as bars with a fixed budget of neurons shared among them"></svg>
+    <p class="fig-cap">Candidate rules, not results, for sharing 60 neurons among 8 input patterns. Taller bars: stronger fluctuations. Dots: neurons assigned. Water-filling gives none to patterns below a cutoff.</p>
+    <div class="fig-ctl" id="talk-c-alloc-ctl">
+      <button type="button" data-rule="prop" aria-pressed="true">proportional to energy</button>
+      <button type="button" data-rule="water" aria-pressed="false">water-filling</button>
+      <button type="button" data-rule="equal" aria-pressed="false">equal</button>
+    </div>
+  </div>
+</section>
+
+<section class="slide title-slide" id="talk-end">
+  <h2>What we get</h2>
+  <div class="side">
+    <ul class="points">
+      <li>A minimal-assumption model of Hebbian learning that says what it computes: clustering of harmonic embeddings.</li>
+      <li>Harmonic embeddings are the natural variables for interpretability.</li>
+      <li>The input statistics can be inferred from the weights, the input wiring and the plasticity rule (exact with enough surviving synapses, except the part shared by all inputs).</li>
+      <li>Plasticity parameters are the parameters of a clustering algorithm, possibly a neuron-allocation rule (open).</li>
+    </ul>
+    <p class="fig-cap">Open: directed networks via a directed Laplacian; the allocation law; noise.</p>
+  </div>
+</section>

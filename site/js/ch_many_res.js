@@ -1,8 +1,6 @@
-// Chapter "many": the resolution figures (SPEC §3 Q-resolution), three statements kept apart.
-//   (1) frozen law: live check on a random frozen linear network (B = 8, Hadamard eigenbasis);
-//   (2) edge activation from W = 0: planted pairs from resolution.json (p2);
-//   (3a) the pair's saddle-node: closed form (computed here) against resolution.json (p3a);
-//   (3b) a line of neurons along one mode: live sim (onsite_engine) plus the population sweep (pop).
+// Chapter "many": the resolution figures.
+//   activation from W = 0: planted pairs from resolution.json (p2);
+//   a line of neurons along one mode: live sim (onsite_engine) plus the population sweep (pop).
 import * as ui from "./ui.js";
 import { lineChart, hidpi, scale } from "./charts.js";
 import { P, catColor } from "./palette.js";
@@ -12,41 +10,8 @@ import { BR, BR_LABEL } from "./ch_many_live.js";
 const sub = "₀₁₂₃₄₅₆₇";
 
 export function buildResolution(ctx, R) {
-  buildLaw(ctx, ctx.slot("law"));
   buildActivation(ctx, ctx.slot("act"), R);
-  buildPair(ctx.slot("pair"), R);
   buildLine(ctx, ctx.slot("line"), R);
-}
-
-// ------------------------------------------------------------------ (1) the frozen law
-function buildLaw(ctx, slot) {
-  const st = { sig: ctx.param("zs", "contrast8") === "power8" ? "power8" : "contrast8", wrand: ctx.param("zw", false), S: Math.min(4096, Math.max(32, ctx.param("zS", 256))), seed: Math.min(9, Math.max(0, Math.round(ctx.param("zseed", 0)))) };
-  const sig = ui.segmented({ label: "$\\Sigma_g$", options: [{ value: "contrast8", label: "Hadamard, λ = 4 … 1/16" }, { value: "power8", label: "power law" }], value: st.sig, onChange: x => { st.sig = x; go(); } });
-  const wr = ui.segmented({ label: "frozen $W$", options: [{ value: false, label: "0 (uncoupled)" }, { value: true, label: "random" }], value: st.wrand, onChange: x => { st.wrand = x; go(); } });
-  const sS = ui.slider({ label: "training bank size $S$", min: 32, max: 4096, log: true, sig: 2, value: st.S, fmt: x => ui.fmtInt(x), onChange: x => { st.S = Math.round(x); go(); } });
-  const seedS = ui.slider({ label: "seed", min: 0, max: 9, step: 1, value: st.seed, fmt: String, onChange: x => { st.seed = x; go(); } });
-  const ctl = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: "6px 26px", marginBottom: "8px", font: "13px/1.4 var(--sans)" } }, sig.el, wr.el, sS.el, seedS.el);
-  const chartBox = ui.h("div");
-  const stats = ui.stats({ cols: 4, items: [
-    { key: "c", label: "law with $\\hat C$", fmt: x => ui.fmt(x, 2), help: "max |D² − Σ λ̂ (Δh·v̂)²| / max D², training bank" },
-    { key: "s", label: "law with $\\Sigma_g$, training bank", fmt: x => ui.fmtPct(x, 1) },
-    { key: "e", label: "law with $\\Sigma_g$, evaluation bank", fmt: x => ui.fmtPct(x, 1) },
-    { key: "h", label: "$\\max_{ij} |\\mathbf 1^\\top \\Delta h|$", fmt: x => ui.fmt(x, 2) },
-  ] });
-  slot.append(ctl, stats.el, chartBox);
-  const ch = lineChart(chartBox, { series: [], xlog: true, ylog: true, xlabel: "D²ᵢⱼ measured on the training bank", ylabel: "the law's prediction", height: 300, xname: "D²" });
-  function go() {
-    ctx.setParams({ zs: st.sig === "contrast8" ? null : st.sig, zw: st.wrand ? true : null, zS: st.S === 256 ? null : st.S, zseed: st.seed || null });
-    const r = M.frozenLaw(st), x = r.pts.meas;
-    const all = [...x, ...r.pts.chat, ...r.pts.sig].filter(v => v > 0), lo = Math.min(...all), hi = Math.max(...all);
-    ch.update({ series: [
-      { name: "Σ λ̂ₐ (Δh·v̂ₐ)², eigenpairs of Ĉ", x, y: r.pts.chat, color: catColor(0), points: true, r: 2.4 },
-      { name: "Σ λₐ (Δh·vₐ)², eigenpairs of Σ_g", x, y: r.pts.sig, color: catColor(1), points: true, r: 2.4 },
-      { name: "equality", x: [lo / 1.3, hi * 1.3], y: [lo / 1.3, hi * 1.3], color: P.mute2, width: 1 },
-    ], xrange: [lo / 1.3, hi * 1.3], yrange: [lo / 1.3, hi * 1.3] });
-    stats.update({ c: r.errChat, s: r.errSig, e: r.errEval, h: r.sumdh });
-  }
-  go();
 }
 
 // ------------------------------------------------------------------ (2) activation from the uncoupled state
@@ -58,7 +23,7 @@ function buildActivation(ctx, slot, R) {
   const note = ui.h("p", { class: "u-help", style: { margin: "4px 0 6px" } });
   const box = ui.h("div");
   slot.append(ui.h("div", { style: { font: "13px/1.4 var(--sans)" } }, seg.el), note, box);
-  const ch = lineChart(box, { series: [], xlog: true, ylog: true, xlabel: "variance of the mode the pair differs along", ylabel: "δ = |Δh·vₐ| (attachment share)", height: 300, xname: "λ" });
+  const ch = lineChart(box, { series: [], xlog: true, ylog: true, xlabel: "variance λ of the input direction the pair differs along", ylabel: "δ = |Δh·vₐ| (attachment share)", height: 300, xname: "λ" });
   function go() {
     const xOf = r => (ax === "hat" ? r[2] : r[1]);
     const alive = rows.filter(r => r[7]), dead = rows.filter(r => !r[7]);
@@ -76,26 +41,6 @@ function buildActivation(ctx, slot, R) {
   go();
 }
 
-// ------------------------------------------------------------------ (3a) the pair's saddle-node
-export const ratioOffOn = (b, kappa) => (b <= kappa / 4 ? 1 : Math.sqrt(16 * Math.pow(b + kappa / 2, 3) / (27 * kappa * kappa * b)));
-function buildPair(slot, R) {
-  const box = ui.h("div"); slot.append(box);
-  const alphas = [...new Set(R.p3a.ratio_rows.map(r => r[0]))];
-  const bs = Array.from({ length: 80 }, (_, k) => 1e-3 * Math.pow(1000, k / 79));
-  const series = [];
-  alphas.forEach((al, i) => {
-    series.push({ name: `α = ${al}, closed form`, x: bs, y: bs.map(b => ratioOffOn(b, al)), color: catColor(3 + i), width: 1.8 });
-    const pts = R.p3a.ratio_rows.filter(r => r[0] === al);
-    series.push({ name: `α = ${al}, resolution.json`, x: pts.map(r => r[1]), y: pts.map(r => r[2]), color: catColor(3 + i), points: true, r: 3.5 });
-  });
-  const ymax = Math.max(...series.flatMap(s => s.y));
-  lineChart(box, { series, xlog: true, ylog: true, xlabel: "fusion scale b", ylabel: "δ_off / δ_on", height: 260, xname: "b", yrange: [0.85, ymax * 1.3], refs: [{ y: 1 }] });
-  const head = ["mode", "λ̂ₐ", "α", "δ", "b_on predicted", "b_on simulated", "b_off predicted", "b_off simulated", "grid step"];
-  const tr = r => ui.h("tr", {}, ...r.map((v, j) => ui.h("td", { class: "num", text: j === 0 ? String(v) : ui.fmt(v, j === 1 || j === 3 ? 3 : 4) })));
-  slot.append(ui.h("div", { class: "table-scroll", style: { marginTop: "12px" } }, ui.h("table", { class: "data" },
-    ui.h("thead", {}, ui.h("tr", {}, ...head.map(t => ui.h("th", { class: "num", text: t })))), ui.h("tbody", {}, ...R.p3a.rows.map(tr)))));
-}
-
 // ------------------------------------------------------------------ (3b) a line of neurons along one mode
 function buildLine(ctx, slot, R) {
   const fig = slot.closest("figure");
@@ -103,33 +48,31 @@ function buildLine(ctx, slot, R) {
   readURL();
   const L = ui.simLayout({ parent: slot });
   // input space: positions along mode a of the attachments (top) and of the embedding h_i (bottom); arcs opt-in
-  const head = ui.h("div", { class: "panel-head", style: { justifyContent: "space-between", gap: "4px 14px" } }, ui.spaceBadge("input", "input space · along mode a"));
+  const head = ui.h("div", { class: "panel-head", style: { justifyContent: "space-between", gap: "4px 14px" } }, ui.spaceBadge("input", "input space · along direction a"));
   L.view.append(head);
   const view = rulers(L.view, { tooltip: i => tip(i) });
   ui.synapseToggle({ parent: head, label: "show synapses (live edges as arcs)", onChange: on => view.setArcs(on) });
   const tp = ui.transport({
     parent: L.view, watch: fig, speeds: [{ value: 1, label: "×1" }, { value: 10, label: "×10" }, { value: 400, label: "max" }], speed: 400,
-    autoplay: false, maxHistory: 200, timeFmt: t => `t = ${ui.fmt(t, 3)}`,
+    autoplay: true, maxHistory: 200, timeFmt: t => `t = ${ui.fmt(t, 3)}`,
     onTick: sp => tick(sp), onSeek: f => seek(f), onRestore: f => restore(f), onReset: () => reset(),
   });
   const tours = ui.chips({ parent: L.side, label: "Tours", items: M.LINE_TOURS, active: tour ? tour.id : null, onPick: t => applyTour(t) });
   const bS = ui.slider({ label: "fusion scale $b$", min: 2e-4, max: 0.05, log: true, sig: 2, value: p.b, marks: [{ value: 0.001, label: "0.001" }, { value: 0.01, label: "0.01" }],
     help: "Acts on the running network (continuation).", onInput: x => setB(x, true) });
   const aS = ui.segmented({ label: "stiffness $\\alpha$", options: [0.01, 0.1, 1].map(x => ({ value: x, label: String(x) })), value: p.a, onChange: x => { p.a = x; structural(); } });
-  const mS = ui.select({ label: "mode $a$", options: [1, 2, 3, 4, 5, 6, 7].map(a => ({ value: a, label: `${a}: λ = ${ui.fmt(M.LAM8[a], 3)}` })), value: p.m, onChange: x => { p.m = x; structural(); } });
-  const seedS = ui.slider({ label: "seed (positions, banks)", min: 0, max: 9, step: 1, value: p.seed, fmt: String, onChange: x => { p.seed = x; structural(); } });
-  ui.controls({ parent: L.side, primary: [bS, aS, mS], advanced: [seedS] });
+  const mS = ui.select({ label: "input direction $a$", options: [1, 2, 3, 4, 5, 6, 7].map(a => ({ value: a, label: `${a}: variance ${ui.fmt(M.LAM8[a], 3)}` })), value: p.m, onChange: x => { p.m = x; structural(); } });
+  ui.controls({ parent: L.side, primary: [bS, aS, mS] });
   const stats = ui.stats({ parent: L.side, items: [
     { key: "k", label: "components $K$", fmt: String },
-    { key: "kp", label: "predicted by (2)", fmt: String, help: "Components of the uncoupled graph: pairs with λ̂ (x_i − x_j)² < 2b." },
-    { key: "br", label: "widest bridged gap$/\\delta_{on}$", fmt: x => ui.fmt(x, 3), help: "Largest uncoupled gap x_{i+1} − x_i inside one component, over sqrt(2b/λ̂). Above 1: a component bridges a gap that (2) would not." },
+    { key: "kp", label: "predicted", fmt: String, help: "Components of the uncoupled graph: pairs with λ̂ (x_i − x_j)² < 2b." },
+    { key: "br", label: "widest bridged gap$/\\delta_{on}$", fmt: x => ui.fmt(x, 3), help: "Largest uncoupled gap x_{i+1} − x_i inside one component, over sqrt(2b/λ̂). Above 1: a component bridges a gap that the prediction would leave open." },
     { key: "sp", label: "widest span$/\\sqrt{2b}$", fmt: x => ui.fmt(x, 3), help: "Training bank; the evaluation bank (4096 samples) in the sub-line." },
-    { key: "r", label: "plasticity residual $r$", fmt: x => ui.fmt(x, 2) },
-    { key: "eq", label: "neuronal residual", fmt: x => ui.fmt(x, 2) },
+    { key: "r", label: "residual $r$", fmt: x => ui.fmt(x, 2) },
   ] });
   ui.legend({ parent: L.side, items: [
     { label: "neuron, at $x_i$ and at $y_i$", color: P.interior, shape: "dot" },
-    { label: "within $\\delta_{on}$ at $W = 0$", color: P.other, shape: "band" },
+    { label: "within $\\delta_{on}$ at $W = 0$ (predicted)", color: P.other, shape: "band" },
     { label: "component (bottom)", color: catColor(0), shape: "dot" },
     { label: "live edge (arc, with show synapses on)", color: P.edge, shape: "line" },
   ] });
@@ -148,10 +91,9 @@ function buildLine(ctx, slot, R) {
     view.draw({ x: sys.x, y: a.y, labels: a.labels, comps: a.comps, W, N: M.LINE_N, don: a.don, lh: sys.lh, b: a.b, xmax: M.XMAX });
     stats.set("k", a.K, `${a.comps.filter(c => c.size > 1).length} with ≥ 2 members`);
     stats.set("kp", a.Kpred, `δ_on = √(2b/λ̂) = ${ui.fmt(a.don, 3)}`);
-    stats.set("br", +a.bridged.toPrecision(3), a.bridged > 1 ? "bridges a gap (2) leaves open" : "no gap wider than δ_on bridged");
+    stats.set("br", +a.bridged.toPrecision(3), a.bridged > 1 ? "bridges a gap the prediction leaves open" : "no gap wider than δ_on bridged");
     stats.set("sp", +a.spanT.toPrecision(3), `evaluation bank: ${ui.fmt(a.spanE, 3)}`);
     stats.set("r", +a.residual.toPrecision(2), a.residual < M.RES_TOL ? "below 10⁻⁶: fixed point" : "still moving");
-    stats.set("eq", +a.eq.toPrecision(2), `λ̂ = ${ui.fmt(sys.lh, 3)} (training), ${ui.fmt(sys.lhE, 3)} (evaluation)`);
   }
   function tick(speed) {
     const sim = sys.sim;
@@ -188,23 +130,23 @@ function buildLine(ctx, slot, R) {
   function untour() { if (!tour) return; tour = null; tours.moved(); }
   function writeURL() {
     const d = M.LINE_DEFAULTS, o = { ltour: tour ? tour.id : null };
-    for (const [k, u] of [["m", "lm"], ["b", "lb"], ["a", "la"], ["seed", "lseed"]]) o[u] = tour || p[k] === d[k] ? null : p[k];
+    for (const [k, u] of [["m", "lm"], ["b", "lb"], ["a", "la"]]) o[u] = tour || p[k] === d[k] ? null : p[k];
     ctx.setParams(o);
   }
   function applyTour(t) {
     tour = t; p = { ...M.LINE_DEFAULTS, ...t.p }; path = t.path ? { bs: t.path, i: 0 } : null; if (path) p.b = path.bs[0];
-    bS.set(p.b); aS.set(p.a); mS.set(p.m); seedS.set(p.seed); writeURL(); tp.reset(); tp.play();
+    bS.set(p.b); aS.set(p.a); mS.set(p.m); writeURL(); tp.reset(); tp.play();
   }
   function readURL() {
     const t = M.lineTourById(ctx.param("ltour", ""));
     if (t) { tour = t; p = { ...M.LINE_DEFAULTS, ...t.p }; path = t.path ? { bs: t.path, i: 0 } : null; if (path) p.b = path.bs[0]; return; }
     const d = M.LINE_DEFAULTS; tour = null; path = null;
     p = { m: Math.min(7, Math.max(1, Math.round(ctx.param("lm", d.m)))), b: Math.min(0.05, Math.max(2e-4, ctx.param("lb", d.b))),
-      a: [0.01, 0.1, 1].includes(ctx.param("la", d.a)) ? ctx.param("la", d.a) : d.a, seed: Math.min(9, Math.max(0, Math.round(ctx.param("lseed", d.seed)))) };
+      a: [0.01, 0.1, 1].includes(ctx.param("la", d.a)) ? ctx.param("la", d.a) : d.a, seed: d.seed };
   }
   ctx.onParams(() => {
-    if (!["ltour", "lm", "lb", "la", "lseed"].some(k => ctx.params.has(k))) return;
-    readURL(); bS.set(p.b); aS.set(p.a); mS.set(p.m); seedS.set(p.seed);
+    if (!["ltour", "lm", "lb", "la"].some(k => ctx.params.has(k))) return;
+    readURL(); bS.set(p.b); aS.set(p.a); mS.set(p.m);
     if (tour) tours.set(tour.id); else tours.clear();
     tp.reset(); tp.play();
   });
@@ -218,14 +160,14 @@ function buildLine(ctx, slot, R) {
     const ps = R.pop.filter(q => q.a === m && q.alpha === al);
     const agg = f => { const mean = [], lo = [], hi = []; bgp.forEach((_, k) => { const v = ps.map(q => f(q, k)); mean.push(v.reduce((s, x) => s + x, 0) / v.length); lo.push(Math.min(...v)); hi.push(Math.max(...v)); }); return { mean, lo, hi }; };
     const s = (name, a, color, extra = {}) => ({ name, x: bgp, y: a.mean, band: [a.lo, a.hi], color, width: 1.8, ...extra });
-    const series = [s("predicted by (2), uncoupled", agg((q, k) => q.cold[k][1]), P.mute2, { dash: true }), s(BR_LABEL.cold, agg((q, k) => q.cold[k][0]), BR.cold),
+    const series = [s("predicted from the uncoupled positions", agg((q, k) => q.cold[k][1]), P.mute2, { dash: true }), s(BR_LABEL.cold, agg((q, k) => q.cold[k][0]), BR.cold),
       s(BR_LABEL.up, agg((q, k) => q.up[k][0]), BR.up), s(BR_LABEL.down, agg((q, k) => q.down[k][0]), BR.down)];
     const match = p.m === m && p.a === al;
     if (match) for (const br of ["cold", "up", "down"]) { const q = done.filter(d => d.m === p.m && d.a === p.a && d.seed === p.seed && d.branch === br); if (q.length) series.push({ name: `live, ${br}`, x: q.map(d => d.b), y: q.map(d => d.K), color: BR[br], points: true, r: 4.5 }); }
     pop.update({ series, cursor: p.b, xrange: [bgp[0] * 0.8, bgp[bgp.length - 1] * 1.25], yrange: [0.8, 40] });
-    popTitle.innerHTML = `Precomputed: components against $b$ on a line along mode ${m}, $\\alpha = ${al}$ (resolution.json, ${ps.length} seeds)`;
-    popNote.innerHTML = match ? "Large dots: fixed points this live figure has reached at the current mode, α and seed. Lines: seed means; bands: seed range." :
-      `The sweep has modes ${modes.join(" and ")} and $\\alpha \\in \\{${alphas.join(", ")}\\}$; it shows the nearest. Lines: seed means; bands: seed range.`;
+    popTitle.innerHTML = `Precomputed: components against $b$ on a line along direction ${m}, $\\alpha = ${al}$ (${ps.length} seeds)`;
+    popNote.innerHTML = match ? "Large dots: fixed points this live figure has reached at the current direction and α. Lines: seed means; bands: seed range." :
+      `The sweep has directions ${modes.join(" and ")} and $\\alpha \\in \\{${alphas.join(", ")}\\}$; it shows the nearest. Lines: seed means; bands: seed range.`;
     ui.renderMath(popTitle); ui.renderMath(popNote);
   }
 
@@ -257,7 +199,7 @@ function rulers(el, { tooltip }) {
     // axes
     for (const y0 of [yTop, yBot]) { g.strokeStyle = P.line || "#d9d8d2"; g.lineWidth = 1; g.beginPath(); g.moveTo(m.l, y0 + 0.5); g.lineTo(Wd - m.r, y0 + 0.5); g.stroke(); }
     g.fillStyle = P.ink2; g.font = "560 11.5px Inter, system-ui, sans-serif"; g.textAlign = "left";
-    g.fillText("uncoupled position xᵢ along the mode (W = 0)", m.l, 14);
+    g.fillText("uncoupled position xᵢ along the input direction (W = 0)", m.l, 14);
     g.fillText("position yᵢ at the current W", m.l, yBot + 66);
     g.font = "11px Inter, system-ui, sans-serif"; g.fillStyle = P.mute;
     // edge-range bar

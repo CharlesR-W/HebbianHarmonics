@@ -1,4 +1,4 @@
-// Chapter "many": the live population sim. N neurons with s random fixed attachments to B inputs (up to 24),
+// Chapter "many": the live population sim. N linear neurons with s random fixed attachments to B inputs (up to 24),
 // simulated with onsite_engine.js; b acts on the running network (continuation), every other control restarts
 // from W = 0. Views: classical MDS of the responses (3D, response-function space; live edges behind a toggle)
 // beside the network itself (netview, neuron space, linked hover), log10(D^2/2b) sorted by component,
@@ -14,7 +14,7 @@ import * as M from "./ch_many_model.js";
 export const BR = { cold: catColor(0), up: catColor(1), down: catColor(2) };   // branch colours, whole chapter
 export const BR_LABEL = { cold: "cold start (W = 0)", up: "continuation up", down: "continuation down" };
 
-const KEYS = { sig: "sig", b: "b", a: "a", pot: "lp", n: "n", s: "s", seed: "seed" };   // state -> URL key
+const KEYS = { sig: "sig", b: "b", a: "a" };   // state -> URL key (the network itself is fixed: linear, N = 40, s = 3, seed 1)
 const compColor = (cs, i) => {
   const k = cs.labels[i], c = cs.st[k];
   if (c.size === 1) return P.interior;
@@ -63,19 +63,13 @@ export function buildLive(slot, ctx, F) {
     help: "Acts on the running network: $W$ is kept, so moving $b$ is a continuation. An edge can live only where $D_{ij}^2 &lt; 2b$.",
     onInput: x => setB(x, true) });
   const aS = ui.segmented({ label: "stiffness $\\alpha$", options: [0.1, 1, 10].map(x => ({ value: x, label: String(x) })), value: p.a, onChange: x => { p.a = x; structural(); } });
-  const potS = ui.segmented({ label: "potential", options: [{ value: "linear", label: "linear" }, { value: "rect", label: "leaky rectifier" }], value: p.pot, onChange: x => { p.pot = x; structural(); } });
-  const nS = ui.slider({ label: "neurons $N$", min: 20, max: 60, step: 10, value: p.n, fmt: String, onChange: x => { p.n = x; structural(); } });
-  const sS = ui.slider({ label: "attachments per neuron $s$", min: 1, max: 6, step: 1, value: p.s, fmt: String, onChange: x => { p.s = x; structural(); } });
-  const seedS = ui.slider({ label: "seed (attachments, thresholds, banks)", min: 0, max: 20, step: 1, value: p.seed, fmt: String, onChange: x => { p.seed = x; structural(); } });
-  ui.controls({ parent: L.side, primary: [sigS, bS, aS, potS], advanced: [nS, sS, seedS] });
+  ui.controls({ parent: L.side, primary: [sigS, bS, aS] });
 
   const stats = ui.stats({ parent: L.side, items: [
     { key: "k", label: "components $K$", fmt: String, help: "Connected components of the live graph (w > 1e-9), singletons included." },
     { key: "big", label: "largest", fmt: String },
     { key: "span", label: "widest span$/\\sqrt{2b}$", fmt: x => ui.fmt(x, 3), help: "Largest pairwise D inside one component, over the edge range sqrt(2b). Above 1: a chain." },
-    { key: "J", label: "objective $J$", fmt: x => ui.fmt(x, 4), help: "J(W) = mean energy over the training bank + sum over pairs of (alpha/2 w^2 - b w); the rule descends it." },
-    { key: "r", label: "plasticity residual $r$", fmt: x => ui.fmt(x, 2), help: "Projected max |dw/dt|. Fixed-point statements only below 1e-6." },
-    { key: "eq", label: "neuronal residual", fmt: x => ui.fmt(x, 2), help: "max |dE/du| of the last equilibrium solve (training bank)." },
+    { key: "r", label: "residual $r$", fmt: x => ui.fmt(x, 2), help: "Projected max |dw/dt|. A fixed point when below 1e-6." },
   ] });
   ui.legend({ parent: L.side, items: [
     { label: "neuron; colour: its component", color: catColor(0), shape: "dot" },
@@ -84,7 +78,7 @@ export function buildLive(slot, ctx, F) {
     { label: "live synapse, width ∝ $w_{ij}$", color: P.edge, shape: "line" },
   ] });
 
-  // below: matrix, recorded fixed points, component table
+  // below: matrix and recorded fixed points
   const mid = ui.h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "18px 28px", marginTop: "18px" } });
   const oneCol = window.matchMedia("(max-width: 900px)");
   const placeMid = () => (oneCol.matches ? L.below : L.view).append(mid);
@@ -92,17 +86,15 @@ export function buildLive(slot, ctx, F) {
   const box = (title, sub) => { const b = ui.h("div"); mid.append(ui.h("div", { style: { minWidth: "0" } }, ui.h("div", { class: "chart-title", html: title }), ui.h("div", { class: "u-help", style: { margin: "-2px 0 6px" }, html: sub }), b)); return b; };
   const hmBox = box("(a) $\\log_{10} D_{ij}^2/2b$, sorted by component", "blue: within one edge's range; bands: components (grey: singletons)");
   const recBox = box("(b) Fixed points reached, against $b$", "each dot: a state with $r &lt; 10^{-6}$, coloured by how it was reached");
-  const tabBox = box("(c) Components with two or more members", "diameters on the training bank / the evaluation bank");
   ui.renderMath(mid);
   const hm = heatmap(hmBox, { map: "div", range: [-2, 2], size: 300, zlabel: "$\\log_{10} D_{ij}^2/2b$", xlabel: "neuron j (sorted)", ylabel: "neuron i", tooltip: (i, j) => tipPair(i, j) });
   const rec = lineChart(recBox, { series: [], xlog: true, ylog: true, xrange: [0.0018, 2.4], yrange: [0.8, 80], xlabel: "fusion scale b", ylabel: "components K", height: 230, xname: "b" });
   const recList = ui.h("div", { class: "u-help", style: { marginTop: "4px" } }); recBox.append(recList);
-  const tab = ui.h("div"); tabBox.append(tab);
 
   // ------------------------------------------------------------ state
   let sys = null, cur = null, prevX = null, tickN = 0, T = 0, branch = "cold", lastB = p.b;
-  let points = [], pointsKey = "", order = null, Ueval = null, evalStats = null, evalFor = -1;
-  const configKey = () => [p.sig, p.a, p.pot, p.n, p.s, p.seed].join("|");
+  let points = [], pointsKey = "", order = null;
+  const configKey = () => [p.sig, p.a, p.n, p.s, p.seed].join("|");
 
   function analyse() {
     const sim = sys.sim, N = sim.net.N;
@@ -139,9 +131,7 @@ export function buildLive(slot, ctx, F) {
     setStat("k", a.cs.K, `${a.cs.multi} with ≥ 2 members · ${nSing} singleton${nSing === 1 ? "" : "s"}`);
     setStat("big", a.cs.largest, `of N = ${a.N}`);
     setStat("span", +a.spanR.toPrecision(3), a.spanR > 1 ? "a chain: wider than one edge's range" : "within one edge's range");
-    setStat("J", +a.J.toPrecision(5), `b = ${ui.fmt(a.b, 3)}, α = ${p.a}`);
     setStat("r", +a.residual.toPrecision(2), a.residual < M.RES_TOL ? "below 10⁻⁶: fixed point" : "still moving");
-    setStat("eq", +a.eq.toPrecision(2), "max |∂E/∂u|, exact pattern solve");
   }
   function drawMatrix(a, D2) {
     const N = a.N, cs = a.cs, ord = cs.order, vals = new Float32Array(N * N), b2 = 2 * a.b;
@@ -156,40 +146,19 @@ export function buildLive(slot, ctx, F) {
     order = ord;
     hm.update({ values: vals, rows: N, cols: N, groups: { rows: groups } });
   }
-  function drawTable(a) {
-    const multi = a.cs.ids.filter(k => a.cs.st[k].size > 1).slice(0, 8);
-    const ev = evalStats && evalFor === a.stamp ? evalStats : null;
-    const b2 = Math.sqrt(2 * a.b);
-    const head = ui.h("tr", {}, ...["", "n", "max D", "mean D", "span/√(2b)"].map((t, i) => ui.h("th", { class: i ? "num" : null, text: t })));
-    const rows = multi.map(k => {
-      const c = a.cs.st[k], e = ev ? ev[k] : null, pair = (x, y) => `${ui.fmt(x, 2)} / ${y == null ? "…" : ui.fmt(y, 2)}`;
-      return ui.h("tr", {}, ui.h("td", {}, ui.h("span", { class: "swatch round", style: { "--sw": compColor(a.cs, c.members[0]) } })),
-        ui.h("td", { class: "num", text: String(c.size) }), ui.h("td", { class: "num", text: pair(c.diamMax, e && e.diamMax) }),
-        ui.h("td", { class: "num", text: pair(c.diamMean, e && e.diamMean) }), ui.h("td", { class: "num", text: pair(c.span / b2, e && e.span / b2) }));
-    });
-    const nSing = a.cs.st.filter(c => c.size === 1).length, more = a.cs.multi - multi.length;
-    tab.replaceChildren(rows.length ? ui.h("div", { class: "table-scroll" }, ui.h("table", { class: "data" }, ui.h("thead", {}, head), ui.h("tbody", {}, ...rows))) : ui.h("p", { class: "u-help", text: "No component has two or more members." }),
-      ui.h("p", { class: "u-help", text: `${more > 0 ? `and ${more} more multi-member components; ` : ""}${nSing} singleton${nSing === 1 ? "" : "s"}. D: RMS distance of a member to its component's mean response; span: largest D between two members.${ev ? "" : " Evaluation bank: computing…"}` }));
-  }
-  function evalBank(a) {
-    const sim = sys.sim, N = sim.net.N;
-    const e = O.equilibrate(sim.net, sys.Ge, sys.Se, { U0: Ueval && Ueval.length === sys.Se * N ? Ueval : null });
-    Ueval = e.U;
-    evalStats = M.componentsOn(Ueval, sys.Se, N, a.cs); evalFor = a.stamp;
-  }
   function drawRecord() {
     const ser = ["cold", "up", "down"].map(br => { const q = points.filter(x => x.branch === br); return { name: `${BR_LABEL[br]}, live`, x: q.map(x => x.b), y: q.map(x => x.K), color: BR[br], points: true, r: 4 }; });
     const ref = sweepRef();
     rec.update({ series: [...ref, ...ser], yrange: [0.8, p.n * 1.6], cursor: sys ? sys.sim.b : null });
     const last = points.slice(-5).reverse();
     recList.innerHTML = last.length ? "Latest: " + last.map(x => `<span style="white-space:nowrap"><span class="swatch round" style="--sw:${BR[x.branch]}"></span> b = ${ui.fmt(x.b, 2)}: K = ${x.K}, J = ${ui.fmt(x.J, 4)}</span>`).join(" · ") : "No fixed point reached yet with these settings.";
-    if (ref.length) recList.innerHTML += `<br>Thin lines: the precomputed sweep's seed means for this $\\Sigma_g$ family, potential and $\\alpha$ (B = ${F.meta.config.B}, N = ${F.meta.config.N}, s = ${F.meta.config.s}; different random draws).`;
+    if (ref.length) recList.innerHTML += `<br>Thin dashed lines: the precomputed sweep's seed means for these inputs and $\\alpha$ (different random draws).`;
     ui.renderMath(recList);
   }
   function sweepRef() {
     const sg = M.sigmaById(p.sig), fam = sg.family;
     if (sg.B !== F.meta.config.B || p.n !== F.meta.config.N || p.s !== F.meta.config.s || !F.meta.config.alphas.includes(p.a) || (fam !== "blocks" && fam !== "power")) return [];
-    const rs = F.runs.filter(r => r.sigma === fam && r.pot === p.pot && r.alpha === p.a);
+    const rs = F.runs.filter(r => r.sigma === fam && r.pot === "linear" && r.alpha === p.a);
     if (!rs.length) return [];
     const bg = F.meta.config.b_grid;
     return ["cold", "up", "down"].map(br => ({ name: `sweep ${br}, seed mean`, x: bg, y: bg.map((_, k) => rs.reduce((s, r) => s + r[br].K[k], 0) / rs.length), color: BR[br], width: 1.1, dash: true }));
@@ -200,7 +169,7 @@ export function buildLive(slot, ctx, F) {
   let curW = null;
   function show(a, W, D2, heavy) {
     curW = W; draw3d(a, W); showStats(a); cur = a;
-    if (heavy) { drawMatrix(a, D2); drawTable(a); rec.setCursor(a.b); }
+    if (heavy) { drawMatrix(a, D2); rec.setCursor(a.b); }
   }
   function tick(speed) {
     const sim = sys.sim;
@@ -208,7 +177,6 @@ export function buildLive(slot, ctx, F) {
     T = stepsT0 + (sim.steps - steps0) * sim.dt;
     const a = analyse(); a.stamp = ++stamp; tickN++;
     const done = a.residual < M.RES_TOL;
-    if (done) evalBank(a);
     show(a, sim.net.W, sim.D2, done || tickN % 8 === 0);
     if (!done) return frame(a);
     if (pointsKey !== configKey()) { points = []; pointsKey = configKey(); }
@@ -233,7 +201,7 @@ export function buildLive(slot, ctx, F) {
     let span = 0; cs.st.forEach(c => { span = Math.max(span, c.span); });
     const dW = O.driftFromD2(f.W, D2, N, f.b, sys.sim.alpha);
     const a = { N, md, cs, wmax, spanR: span / Math.sqrt(2 * f.b), b: f.b, residual: O.projectedResidual(f.W, dW, N), eq: e.residual, J: M.objectiveJ(fake), stamp: ++stamp };
-    evalStats = null; show(a, f.W, D2, true);
+    show(a, f.W, D2, true);
   }
   function restore(f) {
     sys.sim.net.W.set(f.W); sys.sim.setParams({ b: f.b }); sys.sim.refresh();
@@ -242,7 +210,7 @@ export function buildLive(slot, ctx, F) {
     writeURL();
   }
   function reset() {
-    sys = M.buildLive(p); prevX = null; Ueval = null; evalStats = null; branch = "cold"; lastB = p.b;
+    sys = M.buildLive(p); prevX = null; branch = "cold"; lastB = p.b;
     stepsT0 = 0; steps0 = sys.sim.steps; T = 0; tickN = 0;
     if (pointsKey !== configKey()) { points = []; pointsKey = configKey(); }
     const a = analyse(); a.stamp = ++stamp;
@@ -266,7 +234,7 @@ export function buildLive(slot, ctx, F) {
     for (const [k, u] of Object.entries(KEYS)) o[u] = tour || p[k] === M.LIVE_DEFAULTS[k] ? null : p[k];
     ctx.setParams(o);
   }
-  function syncControls() { sigS.set(p.sig); bS.set(p.b); aS.set(p.a); potS.set(p.pot); nS.set(p.n); sS.set(p.s); seedS.set(p.seed); }
+  function syncControls() { sigS.set(p.sig); bS.set(p.b); aS.set(p.a); }
   function applyTour(t) {
     tour = t; p = { ...M.LIVE_DEFAULTS, ...t.p };
     path = t.path ? { bs: t.path, i: 0 } : null;
@@ -278,9 +246,7 @@ export function buildLive(slot, ctx, F) {
     if (t) { tour = t; p = { ...M.LIVE_DEFAULTS, ...t.p }; path = t.path ? { bs: t.path, i: 0 } : null; if (path) p.b = path.bs[0]; return; }
     tour = null; path = null;
     const d = M.LIVE_DEFAULTS;
-    p = { sig: M.sigmaById(ctx.param("sig", d.sig)).id, b: Math.min(2, Math.max(0.002, ctx.param("b", d.b))), a: [0.1, 1, 10].includes(ctx.param("a", d.a)) ? ctx.param("a", d.a) : d.a,
-      pot: ctx.param("lp", d.pot) === "rect" ? "rect" : "linear", n: Math.min(60, Math.max(20, Math.round(ctx.param("n", d.n) / 10) * 10)),
-      s: Math.min(6, Math.max(1, Math.round(ctx.param("s", d.s)))), seed: Math.min(20, Math.max(0, Math.round(ctx.param("seed", d.seed)))) };
+    p = { ...d, sig: M.sigmaById(ctx.param("sig", d.sig)).id, b: Math.min(2, Math.max(0.002, ctx.param("b", d.b))), a: [0.1, 1, 10].includes(ctx.param("a", d.a)) ? ctx.param("a", d.a) : d.a };
   }
   ctx.onParams(() => {
     if (!ctx.params.has("tour") && !Object.values(KEYS).some(k => ctx.params.has(k))) return;   // a link for another figure
@@ -298,7 +264,6 @@ export function buildLive(slot, ctx, F) {
     if (c.size > 1) { let d = 0; for (let s = 0; s < sys.sim.S; s++) { const x = sys.sim.U[s * net.N + i] - c.proto[s]; d += x * x; } rows.push({ name: "D to its prototype", value: ui.fmt(Math.sqrt(d / sys.sim.S), 3) }); }
     const att = []; for (let b = 0; b < B; b++) if (net.A[i * B + b] > 0) att.push(`g${b + 1}: ${ui.fmt(net.A[i * B + b], 2)}`);
     rows.push({ name: "attachments", value: att.join(", ") });
-    if (p.pot === "rect") rows.push({ name: "threshold tᵢ", value: ui.fmt(net.t[i], 3) });
     return ui.tipRows(`neuron ${i}`, rows);
   }
   function tipInput(b) {

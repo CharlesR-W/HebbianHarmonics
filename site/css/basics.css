@@ -1,0 +1,26 @@
+/* page-local styles for #tab-basics (owned by that page's author) */
+#tab-basics .bx-two { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px 24px; align-items: start; }
+#tab-basics .bx-two.cov { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+#tab-basics .bx-two.energy { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+@media (max-width: 700px) { #tab-basics .bx-two, #tab-basics .bx-two.cov, #tab-basics .bx-two.energy { grid-template-columns: minmax(0, 1fr); } }
+#tab-basics .bx-panel { position: relative; min-width: 0; }
+#tab-basics .bx-badge { position: absolute; left: 4px; top: 2px; z-index: 1; }
+#tab-basics .bx-readout { font: 14px/1.5 var(--sans); color: var(--ink-2); margin: 8px 0 2px; min-height: 1.5em; font-variant-numeric: tabular-nums; }
+#tab-basics .bx-readout b { color: var(--fg); }
+#tab-basics .bx-controls { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: flex-end; margin: 4px 0 12px; }
+#tab-basics .bx-controls .u-slider { min-width: 240px; flex: 0 1 320px; }
+#tab-basics .bx-controls .bx-readout { flex: 1 1 280px; margin: 0; }
+#tab-basics .bx-row { display: flex; justify-content: flex-end; margin-top: 6px; }
+#tab-basics .bx-btn { font: 13px/1 var(--sans); padding: 7px 14px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); cursor: pointer; }
+#tab-basics .bx-btn:hover { border-color: var(--mute-2); color: var(--fg); }
+#tab-basics .bx-player { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; }
+#tab-basics .bx-player .u-scrub { flex: 1 1 auto; }
+#tab-basics .bx-time { font: 13.5px/1 var(--sans); color: var(--ink-2); font-variant-numeric: tabular-nums; min-width: 72px; }
+#tab-basics .bx-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 2px 0 4px; }
+@media (max-width: 760px) { #tab-basics .bx-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+#tab-basics .bx-frame { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 4px 2px 6px; cursor: pointer; min-width: 0; }
+#tab-basics .bx-frame:hover { border-color: var(--mute-2); }
+#tab-basics .bx-frame.on { border-color: var(--fg); box-shadow: 0 0 0 1px var(--fg); }
+#tab-basics .bx-frame-t { font: 12.5px/1.2 var(--sans); color: var(--ink-2); text-align: center; font-variant-numeric: tabular-nums; }
+#basics-fig-learn .space-pair { margin-top: 10px; }
+#tab-basics .seg button { font-family: var(--sans); }

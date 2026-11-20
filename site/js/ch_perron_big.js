@@ -1,191 +1,156 @@
-// Chapter "perron": the precomputed big runs (site/data/big/, hebb/big/cov_runs.py, findings B1), shown inside the
-// closed <details> of the "Which groups" section:
-//   parts    per cluster: centroid vs predicted Perron vector vs best eigenvector of Sigma (unit length), for any of
-//            the nine B = 12-16 runs at the default floor (its own run picker, URL key `pr`; default hierarchy)
-//   table    the Perron report of all B = 12-16 runs (cosines, stability test, off-support margin, best eigenvector)
-// Nothing is fetched or drawn until the <details> holding the slots is first opened (the panels need a width).
-// Every number shown is read from cov_all.json; the only thing computed here is the best eigenvector itself
-// (cov_all.json stores its cosine, not the vector): the projection of the centroid on the eigenspace of Sigma
-// (degenerate eigenvalues grouped) with the largest cosine, as in hebb/big/cov_runs.py.
+// Chapter "perron", figure "groups are parts, not eigenvectors" ([data-slot="big"]), from the precomputed big runs
+// (site/data/big/cov_all.json, hebb/big/cov_runs.py; findings_v2 B1). Left, for one run: each group's mixture (its
+// centroid, scaled to unit length) as bars with the predicted part as ink dots, and the top eigenvectors of Σ as signed
+// bars on the same scale. Right: every group of every B = 12–16 run, cosine with its predicted part against cosine
+// with the closest eigenvector of Σ (both read from the file; degenerate eigenspaces grouped, as in cov_runs.py).
 import * as ui from "./ui.js";
-import { svgEl, scale, niceTicks } from "./charts.js";
-import { P, catColor } from "./palette.js";
-import { eigh } from "./onsite_engine.js";
+import { svgEl } from "./charts.js";
+import { P, catColor, colorOf } from "./palette.js";
+import { eigh } from "./engine.js";
 
 const SUBS = "₀₁₂₃₄₅₆₇₈₉", sub = n => String(n).split("").map(c => SUBS[+c]).join("");
 const gl = b => `g${sub(b + 1)}`;
 const OMEGA = 0.009;
-const DEFAULT_RUN = "hier16_0.35";
-const SIGMA_NAME = { blocks12: "blocks (3 × 4)", hier16: "hierarchy (16)", ring16: "ring (16)" };
-const SIGMA_LONG = {
-  blocks12: "12 inputs in three blocks of four (correlation 0.5 within a block, 0.1 across), unit variances",
-  hier16: "16 inputs in a binary hierarchy (correlations 0.8 / 0.5 / 0.25 / 0.05 by level), unit variances",
-  ring16: "16 inputs on a ring, correlation exp(−d²/(2·1.5²)) at ring distance d",
-};
+const DEFAULT_RUN = "ring16_0.5";
+const NAME = { blocks12: "3 blocks of 4 inputs", hier16: "hierarchy, 16 inputs", ring16: "ring, 16 inputs" };
 const isMajor = (c, N) => c.size >= Math.max(2, 0.02 * N);
 const runKey = r => `${r.name}_${r.theta}`;
 const Bof = r => r.config.Sigma.length;
-
-// Waits until the <details> around the slots is open (immediately if there is none or it is open already).
-function whenOpen(el) {
-  const det = el?.closest("details");
-  if (!det || det.open) return Promise.resolve();
-  return new Promise(res => {
-    const on = () => { if (det.open) { det.removeEventListener("toggle", on); requestAnimationFrame(() => res()); } };
-    det.addEventListener("toggle", on);
-  });
-}
-
-export async function initBig(ctx) {
-  const slot = ctx.slot("parts") || ctx.slot("parts-table");
-  if (!slot) return;
-  await whenOpen(slot);
-  const data = await fetch("data/big/cov_all.json").then(r => { if (!r.ok) throw new Error(`cov_all.json: HTTP ${r.status}`); return r.json(); });
-  const runs = data.runs;
-  const big = runs.filter(r => Bof(r) !== 3 && r.N === 400 && r.omega === OMEGA && r.seed === 0)
-    .sort((a, b) => a.name.localeCompare(b.name) || a.theta - b.theta);
-  const parts = partsFigure(ctx, big);
-  partsTable(ctx, runs);
-  ctx.onParams?.(p => { const k = p.get("pr"); if (k && parts) parts.pick(k); });
-}
-
-// ---------------------------------------------------------------- best eigenvector (degenerate eigenspaces grouped)
-function bestEigen(Sigma, c) {
-  const B = c.length, { values, vectors } = eigh(Float64Array.from(Sigma.flat()), B);
-  const nc = Math.hypot(...c), tol = 1e-8 * Math.max(...values.map(Math.abs));
-  let best = { cos: -1 };
-  for (let k = 0; k < B;) {
-    let e = k + 1; while (e < B && Math.abs(values[e] - values[k]) <= tol) e++;
-    const proj = new Float64Array(B);
-    for (let q = k; q < e; q++) { let d = 0; for (let i = 0; i < B; i++) d += vectors[i * B + q] * c[i]; for (let i = 0; i < B; i++) proj[i] += d * vectors[i * B + q]; }
-    const np = Math.hypot(...proj), cos = np / nc;
-    if (cos > best.cos + 1e-12) best = { cos, vec: Array.from(proj, x => x / np), rank: k, mult: e - k };
-    k = e;
-  }
-  return best;
-}
 const unit = v => { const n = Math.hypot(...v) || 1; return v.map(x => x / n); };
+const N_EIG = 4;
 
-// ---------------------------------------------------------------- per-cluster small multiples
-function partsFigure(ctx, big) {
-  const slot = ctx.slot("parts"); if (!slot) return null;
+export async function mountBig(slot, ctx) {
+  const data = await fetch("data/big/cov_all.json").then(r => { if (!r.ok) throw new Error(`cov_all.json: HTTP ${r.status}`); return r.json(); });
+  const all = data.runs.filter(r => Bof(r) >= 12).sort((a, b) => a.name.localeCompare(b.name) || a.theta - b.theta || b.omega - a.omega);
+  const pickable = all.filter(r => r.omega === OMEGA && r.seed === 0);
+  let cur = pickable.find(r => runKey(r) === ctx.param("pr", DEFAULT_RUN)) || pickable[0];
+
   slot.replaceChildren();
-  const def = ctx.param("pr", DEFAULT_RUN);
-  let cur = big.find(r => runKey(r) === def) || big[0];
-  const sel = ui.select({ label: "run", options: big.map(r => ({ value: runKey(r), label: `${SIGMA_NAME[r.name]}, θ = ${r.theta}` })), value: runKey(cur),
-    onChange: k => { pick(k); ctx.setParams({ pr: k === DEFAULT_RUN ? null : k }); } });
-  sel.el.style.maxWidth = "360px";
-  const sum = ui.h("p", { class: "u-help", style: { margin: "6px 0 10px" } });
-  const grid = ui.h("div", { class: "bars-multi", style: { "--panel-w": "200px" } });
-  const lg = ui.legend({ items: [
-    { label: "cluster centroid (mean $h_i$ of the members)", color: P.ink2, shape: "square" },
-    { label: "predicted part: Perron vector of $A_{SS}$ on the support", color: P.fg, shape: "dot" },
-    { label: "best eigenvector of $\\Sigma_g$ (signed)", color: P.mute, shape: "dash" },
-  ] });
-  lg.el.classList.add("chart-legend");
-  slot.append(sel.el, sum, lg.el, grid);
-  ui.renderMath(slot);
+  const sel = ui.select({ label: "run", options: pickable.map(r => ({ value: runKey(r), label: `${NAME[r.name]}, θ = ${r.theta}` })), value: runKey(cur),
+    onChange: k => { cur = pickable.find(r => runKey(r) === k) || cur; ctx.setParams({ pr: k === DEFAULT_RUN ? null : k }); draw(); } });
+  sel.el.style.maxWidth = "380px";
+  const left = ui.h("div", { class: "pb-rows" }), right = ui.h("div");
+  const sumLine = ui.h("div", { class: "pc-panel-sub" });
+  left.append(sumLine);
+  const rowsBox = ui.h("div"); left.append(rowsBox);
+  right.append(ui.h("div", { class: "pc-panel-title", text: `Every group of ≥ ${Math.max(2, Math.ceil(0.02 * all[0].N))} neurons, all ${all.length} runs` }));
+  const scBox = ui.h("div"); right.append(scBox);
+  const read = ui.h("div", { class: "pc-read" });
+  slot.append(ui.h("div", { class: "pt-ctl" }, sel.el), ui.h("div", { class: "pb-wrap" }, left, right), read);
 
-  function pick(k) {
-    const r = big.find(x => runKey(x) === k); if (!r) return;
-    cur = r; sel.set(k); draw();
-  }
+  // scatter data: every major group of every run (both floors)
+  const pts = [];
+  for (const r of all) r.clusters.filter(c => isMajor(c, r.N)).forEach((c, k) => pts.push({ r, c, k }));
+  const strip = stripPlot(scBox, pts);
+  const minPart = Math.min(...pts.map(p => p.c.nearest_stable_part_cos)), eigLo = Math.min(...pts.map(p => p.c.best_eig_cos)), eigHi = Math.max(...pts.map(p => p.c.best_eig_cos));
+  read.innerHTML = `Over ${all.length} runs and ${pts.length} groups of at least ${Math.max(2, Math.ceil(0.02 * all[0].N))} neurons, the cosine with the nearest stable part is at least ${ui.fmtFixed(Math.floor(minPart * 1e4) / 1e4, 4)}; with the closest eigenvector of Σ it lies between ${ui.fmtFixed(eigLo, 2)} and ${ui.fmtFixed(eigHi, 2)}.`;
+
   function draw() {
-    const r = cur, B = Bof(r), Sigma = r.config.Sigma, labels = Array.from({ length: B }, (_, b) => gl(b));
-    const cl = r.clusters.filter(c => isMajor(c, r.N));
-    const panels = cl.map((c, k) => {
-      const part = (r.metrics.stable_parts || []).find(s => s.S.join(",") === (c.nearest_stable_part_support || c.support).join(","));
-      const ev = bestEigen(Sigma, c.centroid);
-      return { c, k, bars: unit(c.centroid), dots: part ? unit(part.h) : null, line: ev.vec, ev };
+    const r = cur, B = Bof(r), Sigma = Float64Array.from(r.config.Sigma.flat());
+    const groups = r.clusters.filter(c => isMajor(c, r.N));
+    const parts = r.metrics.stable_parts || [];
+    const gRows = groups.map((c, k) => {
+      const part = parts.find(s => s.S.join(",") === (c.nearest_stable_part_support || c.support).join(","));
+      return { k, c, bars: unit(c.centroid), dots: part ? unit(part.h) : null };
     });
-    let lo = 0, hi = 0;
-    panels.forEach(p => [p.bars, p.dots || [], p.line].forEach(v => v.forEach(x => { lo = Math.min(lo, x); hi = Math.max(hi, x); })));
-    const yr = [Math.min(0, Math.floor(lo * 10) / 10), Math.max(0.5, Math.ceil(hi * 10 + 0.5) / 10)];
-    grid.replaceChildren(...panels.map(p => {
-      const box = ui.h("div");
-      box.append(ui.h("div", { class: "bm-title" }, ui.h("i", { class: "u-mk dot", style: { "--sw": catColor(p.k) } }),
-        ui.h("span", { text: `c${p.k + 1}: ${p.c.size} neurons, support ${p.c.support.length === B ? "all" : p.c.support.length === 1 ? gl(p.c.support[0]) : `${gl(p.c.support[0])}…${gl(p.c.support[p.c.support.length - 1])}`}` })));
-      box.append(ui.h("div", { class: "bm-sub", html: `cos with part ${ui.fmtFixed(p.c.perron_cos, 5)} · with eigenvector ${ui.fmtFixed(p.c.best_eig_cos, 3)}` }));
-      const c = ui.h("div"); box.append(c);
-      partPanel(c, { labels, bars: p.bars, dots: p.dots, line: p.line, color: catColor(p.k), yr, tip: b => ui.tipRows(`${labels[b]}, cluster c${p.k + 1}`, [
-        { name: "centroid (unit length)", value: ui.fmtFixed(p.bars[b], 3), color: catColor(p.k), shape: "square" },
-        { name: "Perron vector of A_SS", value: p.dots ? ui.fmtFixed(p.dots[b], 3) : "n/a", color: P.fg },
-        { name: `best eigenvector (rank ${p.ev.rank + 1}${p.ev.mult > 1 ? `, ${p.ev.mult}-fold` : ""})`, value: ui.fmtFixed(p.line[b], 3), color: P.mute },
-      ]) });
-      return box;
-    }));
-    const m = r.metrics;
-    sum.innerHTML = `${SIGMA_LONG[r.name]}; $\\theta = ${r.theta}$, $N = ${r.N}$, seed ${r.seed}. ` +
-      `${m.n_stable_parts} stable part${m.n_stable_parts === 1 ? "" : "s"} exist (exact enumeration); ${cl.length} ${cl.length === 1 ? "is" : "are"} populated` +
-      `${m.n_dead ? `, ${m.n_dead} neuron${m.n_dead === 1 ? "" : "s"} dead` : ""}${r.clusters.length > cl.length ? `, ${r.clusters.length - cl.length} straggler${r.clusters.length - cl.length === 1 ? "" : "s"} below 2% not shown` : ""}. ` +
-      `$\\kappa_0 = ${ui.fmt(m.kappa0, 3)}$`;
-    ui.renderMath(sum);
+    const { values, vectors } = eigh(Sigma, B);
+    const eRows = Array.from({ length: N_EIG }, (_, q) => {
+      let v = Array.from({ length: B }, (_, i) => vectors[i * B + q]);
+      const s = v.reduce((a, x) => a + x, 0) || v[0];
+      if (s < 0) v = v.map(x => -x);
+      return { q, v, lam: values[q] };
+    });
+    let m = 0;
+    for (const g of gRows) for (const x of [...g.bars, ...(g.dots || [])]) m = Math.max(m, Math.abs(x));
+    for (const e of eRows) for (const x of e.v) m = Math.max(m, Math.abs(x));
+    m = Math.ceil(m * 10) / 10;
+    const em = Math.max(...eRows.flatMap(e => e.v.map(Math.abs)));      // colour range of the eigenvector bars
+    sumLine.innerHTML = `${NAME[r.name]}, θ = ${r.theta}, ${r.N} neurons: ${groups.length} group${groups.length === 1 ? "" : "s"} of at least ${Math.max(2, Math.ceil(0.02 * r.N))} neurons (${r.metrics.n_stable_parts} stable parts exist).`;
+    rowsBox.replaceChildren(
+      ui.h("div", { class: "pc-panel-title", text: "Mixtures of the groups (bars) and their predicted parts (dots)" }),
+      ...gRows.map(g => barRow({ B, m, signed: false, values: g.bars, dots: g.dots, color: catColor(g.k),
+        label: `${g.c.size} neurons`, tip: b => ui.tipRows(`${gl(b)}, group of ${g.c.size}`, [
+          { name: "group mixture (unit length)", value: ui.fmtFixed(g.bars[b], 3), color: catColor(g.k), shape: "square" },
+          { name: "predicted part (unit length)", value: g.dots ? ui.fmtFixed(g.dots[b], 3) : "n/a", color: P.fg }]) })),
+      ui.h("div", { class: "pc-panel-title", style: { marginTop: "14px" }, text: `The top ${N_EIG} eigenvectors of Σ` }),
+      ...eRows.map(e => barRow({ B, m, cm: em, signed: true, values: e.v, label: `eigenvalue ${ui.fmtFixed(e.lam, 2)}`,
+        tip: b => ui.tipRows(`${gl(b)}, eigenvector ${e.q + 1}`, [{ name: "entry (unit length)", value: ui.fmtFixed(e.v[b], 3) }]) })),
+      axisRow(B));
+    // highlight this run's groups in the scatter with their colours
+    strip.highlight(r);
   }
   draw();
-  return { pick };
+  ctx.onParams?.(p => { const k = p.get("pr"); const r = k && pickable.find(x => runKey(x) === k); if (r && r !== cur) { cur = r; sel.set(k); draw(); } });
 }
 
-// one small SVG panel: bars (centroid), ink dots joined by a thin line (Perron vector), dashed grey line with small
-// dots (eigenvector), shared y range, zero line
-function partPanel(el, o) {
-  el.classList.add("chart");
-  const ro = new ResizeObserver(() => render()); ro.observe(el);
-  let Wd = 0;
-  function render() {
-    const W = Math.max(150, el.clientWidth || 200); if (Math.abs(W - Wd) < 1 && el.firstChild) return; Wd = W;
-    const H = 116, m = { l: 30, r: 4, t: 6, b: 18 }, n = o.labels.length, bw = (W - m.l - m.r) / n;
-    const Y = scale("linear", o.yr[0], o.yr[1], H - m.b, m.t), X = i => m.l + (i + 0.5) * bw;
-    const svg = svgEl("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "centroid, Perron vector and eigenvector over the inputs" });
-    const g = svgEl("g", { class: "grid" }, svg);
-    niceTicks(o.yr[0], o.yr[1], 3).forEach(v => {
-      svgEl("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v) }, g);
-      const t = svgEl("text", { x: m.l - 4, y: Y(v) + 3.5, "text-anchor": "end" }, svg); t.textContent = ui.fmt(v, 2);
-    });
-    svgEl("line", { x1: m.l, x2: W - m.r, y1: Y(0), y2: Y(0), stroke: P.mute2, "stroke-width": 1 }, svg);
-    o.bars.forEach((v, i) => svgEl("rect", { x: X(i) - bw * 0.36, width: bw * 0.72, y: Math.min(Y(v), Y(0)), height: Math.abs(Y(v) - Y(0)), fill: o.color, opacity: 0.85 }, svg));
-    const path = v => v.map((x, i) => (i ? "L" : "M") + X(i).toFixed(1) + "," + Y(x).toFixed(1)).join("");
-    svgEl("path", { d: path(o.line), fill: "none", stroke: P.mute, "stroke-width": 1.3, "stroke-dasharray": "4 3" }, svg);
-    o.line.forEach((x, i) => svgEl("circle", { cx: X(i), cy: Y(x), r: 1.8, fill: P.mute }, svg));
-    if (o.dots) {
-      svgEl("path", { d: path(o.dots), fill: "none", stroke: P.fg, "stroke-width": 0.8, opacity: 0.6 }, svg);
-      o.dots.forEach((x, i) => svgEl("circle", { cx: X(i), cy: Y(x), r: Math.min(2.8, bw / 3 + 0.6), fill: P.fg, stroke: P.surface, "stroke-width": 0.8 }, svg));
-    }
-    const every = n > 12 ? 4 : n > 6 ? 2 : 1;
-    o.labels.forEach((l, i) => { if (i % every === 0 || i === n - 1) { const t = svgEl("text", { x: X(i), y: H - 5, "text-anchor": "middle" }, svg); t.textContent = l; } });
-    const hit = svgEl("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "transparent" }, svg);
-    hit.addEventListener("pointermove", ev => { const r = svg.getBoundingClientRect(), i = Math.max(0, Math.min(n - 1, Math.floor((ev.clientX - r.left - m.l) / bw))); ui.showTip(ev.clientX, ev.clientY, o.tip(i)); });
+// one row of bars over the inputs: label at the left, bars (colour, or diverging colours when signed), optional dots
+const LW = 104;
+function barRow(o) {
+  const box = ui.h("div", { class: "chart" });
+  const render = () => {
+    const W = Math.max(260, box.clientWidth || 500), unitPx = 34;
+    const H = Math.round(o.signed ? 2 * o.m * unitPx + 6 : o.m * unitPx + 6), y0 = o.signed ? H / 2 : H - 3;
+    const bw = (W - LW - 4) / o.B, X = i => LW + (i + 0.5) * bw, Y = v => y0 - v * unitPx;
+    const s = svgEl("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img" });
+    const t = svgEl("text", { x: LW - 8, y: y0 - (o.signed ? -4 : 6), "text-anchor": "end" }, s); t.textContent = o.label;
+    svgEl("line", { x1: LW, x2: W - 4, y1: y0, y2: y0, stroke: P.mute2, "stroke-width": 1 }, s);
+    o.values.forEach((v, i) => svgEl("rect", { x: X(i) - bw * 0.38, width: bw * 0.76, y: Math.min(Y(v), y0), height: Math.abs(Y(v) - y0),
+      fill: o.signed ? colorOf("div", v, -o.cm, o.cm) : o.color, rx: 1 }, s));
+    if (o.dots) o.dots.forEach((v, i) => { if (v > 1e-6) svgEl("circle", { cx: X(i), cy: Y(v), r: 3, fill: P.fg, stroke: P.surface, "stroke-width": 1 }, s); });
+    const hit = svgEl("rect", { x: LW, y: 0, width: W - LW - 4, height: H, fill: "transparent" }, s);
+    hit.addEventListener("pointermove", ev => { const rr = s.getBoundingClientRect(), i = Math.max(0, Math.min(o.B - 1, Math.floor((ev.clientX - rr.left - LW) / bw))); ui.showTip(ev.clientX, ev.clientY, o.tip(i)); });
     hit.addEventListener("pointerleave", () => ui.hideTip());
-    el.replaceChildren(svg);
-  }
-  render();
+    box.replaceChildren(s);
+  };
+  new ResizeObserver(() => requestAnimationFrame(render)).observe(box);
+  return box;
+}
+function axisRow(B) {
+  const box = ui.h("div", { class: "chart" });
+  const render = () => {
+    const W = Math.max(260, box.clientWidth || 500), bw = (W - LW - 4) / B, s = svgEl("svg", { width: W, height: 30, viewBox: `0 0 ${W} 30` });
+    const every = bw < 22 ? 2 : 1;
+    for (let b = 0; b < B; b += every) { const t = svgEl("text", { x: LW + (b + 0.5) * bw, y: 12, "text-anchor": "middle" }, s); t.textContent = gl(b); }
+    const t = svgEl("text", { x: LW + (W - LW) / 2, y: 27, "text-anchor": "middle" }, s); t.textContent = "input";
+    box.replaceChildren(s);
+  };
+  new ResizeObserver(() => requestAnimationFrame(render)).observe(box);
+  return box;
 }
 
-// ---------------------------------------------------------------- the Perron report, all B = 12-16 runs
-function partsTable(ctx, runs) {
-  const el = ctx.slot("parts-table"); if (!el) return;
-  const big = runs.filter(r => Bof(r) !== 3 && r.seed === 0).sort((a, b) => a.name.localeCompare(b.name) || a.theta - b.theta || b.omega - a.omega);
-  const rng = (xs, d) => { const lo = Math.min(...xs), hi = Math.max(...xs); return Math.abs(hi - lo) < 0.5 * 10 ** -d ? ui.fmtFixed(lo, d) : `${ui.fmtFixed(lo, d)}–${ui.fmtFixed(hi, d)}`; };
-  const rows = [];
-  let prev = null;
-  for (const r of big) {
-    const cl = r.clusters.filter(c => isMajor(c, r.N)), m = r.metrics, first = r.name !== prev; prev = r.name;
-    rows.push(ui.h("tr", { style: r.omega === OMEGA ? null : { color: "var(--mute)" } },
-      ui.h("td", { text: first && r.omega === OMEGA ? SIGMA_NAME[r.name] : "" }),
-      ui.h("td", { class: "num", text: r.omega === OMEGA ? String(r.theta) : "" }),
-      ui.h("td", { class: "num", text: r.omega === OMEGA ? "ω" : "ω/3" }),
-      ui.h("td", { class: "num", text: String(m.n_stable_parts) }),
-      ui.h("td", { class: "num", text: String(cl.length) }),
-      ui.h("td", { class: "num", style: { whiteSpace: "nowrap" }, text: cl.length > 4 ? `${cl.slice(0, 3).map(c => c.size).join("/")}/… (${cl[cl.length - 1].size})` : cl.map(c => c.size).join("/") }),
-      ui.h("td", { class: "num", text: ui.fmtFixed(Math.floor(Math.min(...cl.map(c => c.perron_cos)) * 1e4) / 1e4, 4) }),
-      ui.h("td", { class: "num", text: cl.every(c => c.top_eig_ok) ? "all pass" : `${cl.filter(c => c.top_eig_ok).length} pass` }),
-      ui.h("td", { class: "num", text: ui.fmt(Math.max(...cl.map(c => c.offsupport_violation)), 2) }),
-      ui.h("td", { class: "num", text: rng(cl.map(c => c.best_eig_cos), 3) }),
-    ));
-  }
-  const th = (t, title) => ui.h("th", { text: t, title });
-  el.replaceChildren(ui.h("div", { class: "table-scroll" }, ui.h("table", { class: "data" },
-    ui.h("thead", {}, ui.h("tr", {}, th("Σ_g"), th("θ"), th("floor"), th("stable parts", "exact enumeration of the parts of A that pass the stability test"),
-      th("clusters", "clusters with at least 2% of the neurons"), th("sizes"), th("min cos(centroid, Perron)", "over the clusters"),
-      th("top-eigenvalue test"), th("max off-support (Ah)_b", "≤ 0 is required of a part; more negative = larger margin"), th("best Σ_g eigenvector cos"))),
-    ui.h("tbody", {}, ...rows))));
+// Two tracks on a shared 0–1 axis: each group's cosine with its predicted part (top) and with the closest eigenvector
+// of Σ (bottom), one dot per group, spread vertically within a track so dots do not hide each other. The groups of
+// the selected run are drawn in their colours, the rest grey.
+function stripPlot(box, pts) {
+  let sel = null;
+  const tip = p => ui.tipRows(`${NAME[p.r.name]}, θ = ${p.r.theta}${p.r.omega === OMEGA ? "" : " (lower floor)"}`, [
+    { name: "group", value: `${p.c.size} neurons on ${p.c.support.length} input${p.c.support.length === 1 ? "" : "s"}` },
+    { name: "cosine with nearest stable part", value: ui.fmtFixed(p.c.nearest_stable_part_cos, 5) },
+    { name: "cosine with closest eigenvector", value: ui.fmtFixed(p.c.best_eig_cos, 3) }]);
+  const jit = pts.map((_, i) => ((i * 0.6180339887) % 1) - 0.5);       // fixed, evenly spread offsets
+  const render = () => {
+    const W = Math.max(240, box.clientWidth || 300), H = 200, l = 14, r = 14, X = v => l + v * (W - l - r);
+    const tracks = [{ y: 50, name: "cosine with the nearest stable part", get: p => p.c.nearest_stable_part_cos }, { y: 138, name: "best cosine with an eigenspace of Σ", get: p => p.c.best_eig_cos }];
+    const s = svgEl("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "cosines of every group with its part and with the closest eigenvector" });
+    for (const tr of tracks) {
+      const t = svgEl("text", { x: l, y: tr.y - 30, "font-weight": 600 }, s); t.textContent = tr.name;
+      svgEl("line", { x1: X(0), x2: X(1), y1: tr.y + 22, y2: tr.y + 22, stroke: P.line }, s);
+      for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+        svgEl("line", { x1: X(v), x2: X(v), y1: tr.y - 20, y2: tr.y + 25, stroke: P.line, "stroke-width": 0.6 }, s);
+        const tt = svgEl("text", { x: X(v), y: tr.y + 37, "text-anchor": "middle" }, s); tt.textContent = ui.fmt(v);
+      }
+    }
+    const order = pts.map((p, i) => i).sort((a, b) => (pts[a].r === sel) - (pts[b].r === sel));
+    for (const tr of tracks) for (const i of order) {
+      const p = pts[i], on = p.r === sel;
+      const c = svgEl("circle", { cx: X(tr.get(p)), cy: tr.y + jit[i] * 30, r: on ? 5 : 3.4, fill: on ? catColor(p.k) : P.other, stroke: P.surface, "stroke-width": 1 }, s);
+      c.addEventListener("pointermove", ev => ui.showTip(ev.clientX, ev.clientY, tip(p)));
+      c.addEventListener("pointerleave", () => ui.hideTip());
+    }
+    const t = svgEl("text", { x: (X(0) + X(1)) / 2, y: H - 4, "text-anchor": "middle" }, s); t.textContent = "cosine (1 = same direction)";
+    box.replaceChildren(s);
+  };
+  box.classList.add("chart");
+  new ResizeObserver(() => requestAnimationFrame(render)).observe(box);
+  return { highlight(r) { sel = r; render(); } };
 }

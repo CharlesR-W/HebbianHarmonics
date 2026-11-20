@@ -3,9 +3,9 @@
 //                #<tab>/<id>       scroll to the element with that id inside the chapter
 //                #<tab>?k=v&...    chapter state (read/write it through ctx, never directly)
 //                #<id>             any id: finds the chapter holding it (after that chapter has loaded)
-import { parseHash, renderMath, tabsMeta, tabAliases, HOME_TAB } from "./ui.js";
+import { parseHash, renderMath, tabsMeta, tabAliases, retiredTabs, HOME_TAB } from "./ui.js";
 
-const TABS = tabsMeta.map(t => t.id);
+const tabsById = new Map(tabsMeta.map(t => [t.id, t]));
 // Anchors that moved or were removed: old deep links (#old/old-sim?tour=…, #talk/talk-hierarchy) go to the surviving
 // place, always chapter-qualified so a cold load can lazy-load the chapter. [tab, anchor | null (chapter top)].
 const anchorMoves = {
@@ -13,28 +13,37 @@ const anchorMoves = {
     "old-parts": ["perron", "perron-parts"], "old-eq-part": ["perron", "perron-eq-part"] },
   perron: { "perron-cases": ["perron", "perron-parts"], "perron-collapse": ["perron", "perron-dynamics"], "perron-big": ["perron", "perron-which"],
     "perron-film3": ["perron", "perron-parts"], "perron-many": ["perron", "perron-which"], "perron-filmB": ["perron", "perron-which"] },
-  talk: { "talk-hierarchy": ["primer", "primer-perron"], "talk-expansion": ["primer", "primer-nonlinear"],
-    "talk-allocation": ["allocation", null] },
+  talk: { "talk-hierarchy": ["talk", "talk-perron"], "talk-expansion": ["talk", "talk-readout"],
+    "talk-nonlinear": ["talk", "talk-knobs"], "talk-energy": ["talk", "talk-rule"],
+    "talk-c-readout": ["talk", "talk-readout"], "talk-c-readout-stat": ["talk", "talk-readout"] },
 };
-// Old addresses -> new: #talk… -> #primer… (ids inside were renamed talk-* -> primer-*); anchors that moved chapter
-// (also as bare #id); #old?k=v (the old chapter's simulation state) -> #perron?k=v; a bare #<tab>-… id ->
-// #<tab>/<tab>-… (so it loads that chapter). Rewrites the URL in place.
-const bareMoves = Object.fromEntries(Object.values(anchorMoves).flatMap(m => Object.entries(m)));
-const at = (t2, a2, qs) => `#${t2}${a2 ? "/" + a2 : ""}${qs}`;
+// Canonicalise renamed tabs and their anchor prefixes before resolving anchors that moved.
+const at = (tab, anchor, qs) => `#${tab}${anchor ? "/" + anchor : ""}${qs}`;
 function redirect() {
-  const raw = location.hash.replace(/^#/, ""); if (!raw) return;
-  const { tab, anchor, params } = parseHash();
+  const raw = location.hash.slice(1); if (!raw) return;
+  let { tab, anchor, params } = parseHash();
   const qi = raw.indexOf("?"), qs = qi < 0 ? "" : raw.slice(qi);
-  let to = null;
-  if (anchor && anchorMoves[tab]?.[anchor]) to = at(...anchorMoves[tab][anchor], qs);
-  else if (tabAliases[tab]) { const t2 = tabAliases[tab]; to = at(t2, anchor && anchor.replace(new RegExp(`^${tab}-`), `${t2}-`), qs); }
-  else if (!anchor && tab === "old" && [...params.keys()].length) to = `#perron${qs}`;
-  else if (!TABS.includes(tab) && bareMoves[tab]) to = at(...bareMoves[tab], qs);
-  else if (!TABS.includes(tab)) {
-    const m = /^([a-z]+)-(.*)$/.exec(tab);
-    if (m && tabAliases[m[1]]) { const t2 = tabAliases[m[1]]; to = at(t2, `${t2}-${m[2]}`, qs); }
-    else if (m && TABS.includes(m[1])) to = at(m[1], tab, qs);
+
+  // Bare #tab-id anchors should work even before the chapter has loaded.
+  if (!anchor && !tabsById.has(tab)) {
+    const prefix = /^[a-z]+(?=-)/.exec(tab)?.[0];
+    if (prefix && (tabsById.has(prefix) || Object.hasOwn(tabAliases, prefix) || Object.hasOwn(retiredTabs, prefix))) {
+      anchor = tab; tab = prefix;
+    }
   }
+  if (Object.hasOwn(tabAliases, tab)) {
+    const canonical = tabAliases[tab];
+    if (anchor?.startsWith(`${tab}-`)) anchor = canonical + anchor.slice(tab.length);
+    tab = canonical;
+  }
+
+  let to;
+  if (Object.hasOwn(retiredTabs, tab)) to = at(retiredTabs[tab], null, "");
+  else if (anchor && Object.hasOwn(anchorMoves[tab] ?? {}, anchor)) {
+    const [destination, target] = anchorMoves[tab][anchor];
+    to = at(destination, target, destination === "experiments" ? "" : qs);
+  } else if (!anchor && tab === "old" && [...params.keys()].length) to = `#perron${qs}`;
+  else if (tabsById.has(tab)) to = at(tab, anchor, qs);
   if (to && to !== location.hash) history.replaceState(history.state, "", to);
 }
 
@@ -136,7 +145,7 @@ async function loadChapter(tab) {
 async function route() {
   redirect();
   let { tab, anchor, params } = parseHash();
-  if (!TABS.includes(tab)) {
+  if (!tabsById.has(tab)) {
     // a bare #id: look for it in the loaded chapters; otherwise the first chapter
     const el = tab && document.getElementById(tab), p = el && el.closest(".tab-panel");
     anchor = p ? tab : null; tab = p ? p.dataset.tab : HOME_TAB;
@@ -146,8 +155,9 @@ async function route() {
   current = tab;
   document.body.dataset.tab = tab;
   document.querySelectorAll(".tab-panel").forEach(p => p.hidden = p.dataset.tab !== tab);
-  document.querySelectorAll(".tablist a").forEach(a => a.setAttribute("aria-selected", String(a.dataset.tab === tab)));
-  document.title = tabsMeta.find(t => t.id === tab).title;
+  const meta = tabsById.get(tab), navTab = meta.parent ?? tab;
+  document.querySelectorAll(".tablist a").forEach(a => a.setAttribute("aria-selected", String(a.dataset.tab === navTab)));
+  document.title = meta.title;
   const firstLoad = !chapters[tab];
   await loadChapter(tab);
   if (current !== tab) return;                       // the reader moved on while it loaded
@@ -164,7 +174,7 @@ async function route() {
   if (target) requestAnimationFrame(() => target.scrollIntoView({ block: "start" }));
   else if (changed) window.scrollTo(0, 0);
   // keep the selected tab visible in the scrolling tab strip on phones
-  document.querySelector(`.tablist a[data-tab="${tab}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  document.querySelector(`.tablist a[data-tab="${navTab}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 window.addEventListener("hashchange", route);

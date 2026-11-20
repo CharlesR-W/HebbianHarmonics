@@ -1,139 +1,93 @@
-<p class="lede">The note's most striking claim was that the weights can be read backwards: compute each neuron's embedding from the weights, then solve for the input statistics. For linear neurons under the distance rule this works, exactly, and this chapter says under which conditions. Each live synapse turns out to be a measurement of one squared distance between two neurons, which is one linear equation on the input second moment; with enough of them, and many more neurons than inputs, the contrast part of that moment is determined.</p>
+<p class="lede">Suppose you have a trained network's synaptic weights, you know how its neurons are wired to the inputs, and you know the learning rule and its constants. Can you work out what the network was trained on? For linear neurons and the distance rule of <a href="#basics">The basics</a>, largely yes: from those three ingredients you can solve for the second moment of the training inputs (the average of $g g^\top$), apart from one part that the weights cannot see. The inputs here are synthetic and zero-mean by construction, so this second moment is their covariance up to sampling: 256 Gaussian samples of 12 inputs $g_1, \dots, g_{12}$ that fall into four correlated groups of three, loud to quiet.</p>
 
-<h2 id="readout-rule">A change of rule</h2>
-
-<p>The covariance rule of <a href="#perron">the previous chapter</a> does not support this: at its fixed point the weights record only the populated parts (<a href="#readout/readout-cov">below</a>). This chapter uses the <b>distance rule</b> of <a href="#idea">the idea chapter</a>,</p>
-
-$$\frac{dw_{ij}}{dt} = b - \alpha w_{ij} - \tfrac12 D_{ij}^2, \qquad D_{ij}^2 = \mathbb E_g\big[(u_i - u_j)^2\big], \qquad w_{ij} \ge 0,$$
-
-<p>which is gradient descent on the network's own equilibrium energy, averaged over inputs, plus a cost $\tfrac\alpha2 w^2 - b w$ per synapse (the envelope theorem: the derivative of the minimised energy in $w_{ij}$ is $\tfrac12(u_i - u_j)^2$ at the minimiser). It is a close cousin of the covariance rule: $-\tfrac12 D_{ij}^2 = \mathbb E[u_i u_j] - \tfrac12\mathbb E[u_i^2] - \tfrac12\mathbb E[u_j^2]$ is the same Hebbian coactivity term minus each neuron's power, and $b$ plays the part of the threshold. Two things change in the setup: only the <b>lateral</b> synapses $w_{ij}$ are plastic, while each neuron's attachments $a_{ib}$ to the inputs are fixed ($s = 3$ random inputs, shares summing to one); and the expectation is over a fixed <b>training bank</b> of $S$ stimuli, so $\hat C = G^\top G/S$, the bank's uncentred second moment, stands where $\Sigma_g$ stood. Neurons are linear throughout this chapter; <a href="#nonlinear">the next chapter</a> adds on-site potentials.</p>
-
-<h2 id="readout-store">Each live synapse is a measurement</h2>
-
-<p>At a fixed point, every pair of neurons is in one of two states:</p>
-
-<div class="eq" id="readout-eq-store" data-num="1">$$\begin{aligned} w_{ij} &gt; 0: &amp;\quad D_{ij}^2 = 2\,(b - \alpha w_{ij}) \quad\text{exactly},\\ w_{ij} = 0: &amp;\quad D_{ij}^2 \ge 2b . \end{aligned}$$</div>
-
-<p>Away from the fixed point the stored value is off by exactly twice the drift, $2(b - \alpha w_{ij}) - D_{ij}^2 = 2\,dw_{ij}/dt$, so the plasticity residual bounds the error of every live entry. Reading the table needs $b$ and $\alpha$.<span class="sidenote">If $b$ and $\alpha$ are unknown, the live-edge equations are homogeneous in $(C, \alpha, b)$, so the readout is determined up to one common factor. I checked on the configurations of the live figure that the extended operator then has a one-dimensional kernel and that fixing $b$ returns the true $\alpha$; it is not part of the sweeps.</span></p>
-
-<p>For linear neurons $u = Hg$, with the harmonic kernel computed from the plastic weights and the fixed attachments alone ($L$ the graph Laplacian of $W$, $A$ the $N \times B$ attachments):</p>
-
-<div class="eq" id="readout-eq-h" data-num="2">$$H = \big(L + \operatorname{diag}(A\mathbf 1)\big)^{-1} A ,$$</div>
-
-<p>With $d_{ij} = h_i - h_j$ the distance is a quadratic form, $D_{ij}^2 = d_{ij}^\top \hat C\, d_{ij}$, so each live edge is one <b>linear</b> equation in an unknown symmetric matrix $C$, and each dead pair one linear inequality:</p>
-
-<div class="eq" id="readout-eq-lin" data-num="3">$$\begin{aligned} d_{ij}^\top C\, d_{ij} &amp;= 2\,(b - \alpha w_{ij}) &amp;&amp; \text{(live)},\\ d_{ij}^\top C\, d_{ij} &amp;\ge 2b &amp;&amp; \text{(dead)} . \end{aligned}$$</div>
-
-<p>This is the note's $HCH^\top = R$, with distances in place of covariances. Since $H\mathbf 1 = \mathbf 1$, every difference is a contrast, $d_{ij}^\top\mathbf 1 = 0$, and</p>
-
-<div class="eq" id="readout-eq-blind" data-num="4">$$\begin{aligned} d^\top \big(C + \mathbf 1 a^\top + a \mathbf 1^\top\big)\, d &amp;= d^\top C\, d + 2\,(d^\top \mathbf 1)(a^\top d) \\ &amp;= d^\top C\, d . \end{aligned}$$</div>
-
-<p>for every $a \in \mathbb R^B$. So the measurements see $C$ only through $P C P$, $P = I - \mathbf 1\mathbf 1^\top/B$: the second moment of the input with its instantaneous mean over the $B$ inputs removed. The common mode, $\mathbf 1 a^\top + a\mathbf 1^\top$ ($B$ of the $B(B+1)/2$ dimensions), is invisible in principle: the network cannot tell whether all its inputs tend to rise together. Whether $P\hat C P$ is determined is then a rank question. In an orthonormal contrast basis $Q$ write $c_e = Q^\top d_e$ for edge $e$; the live edges define the <b>measurement operator</b> $\mathcal M: Y \mapsto (c_e^\top Y c_e)_{e\ \text{live}}$ on the $B(B-1)/2$-dimensional space of symmetric contrast matrices (66 for $B = 12$), and $P\hat C P$ is determined if and only if $\mathcal M$ has full rank.</p>
-
-<aside class="callout key"><p class="callout-title">Key point</p><p>For linear neurons under the distance rule: exact identifiability of the training-bank contrast second moment $P\hat C P$, for stationary noiseless weights, known attachments and rule parameters ($b$, $\alpha$), and a full-rank, well-conditioned live-edge operator $\mathcal M$ (derived). The common mode is never seen.</p></aside>
-
-<details class="more"><summary>The estimator, as implemented on this page and in the sweeps</summary>
-<p><b>Masked ridge least squares.</b> $\hat Y = \arg\min_Y \sum_{e\ \text{live}} \big(c_e^\top Y c_e - 2(b - \alpha w_e)\big)^2 + \rho\,\lVert Y\rVert_F^2$ with $\rho = 10^{-10}\sigma_{\max}^2$ ($\sigma_{\max}$ the largest singular value of $\mathcal M$). Along singular directions of $\mathcal M$ with $\sigma_k \gg 10^{-5}\sigma_{\max}$ this is plain least squares; weaker directions are shrunk by the factor $\sigma_k^2/(\sigma_k^2 + \rho)$, and unmeasured ones are set to zero. That zero is a prior, not data, and so is the shrinkage: an operator of full rank but with tiny singular values identifies the target in exact arithmetic without the ridge returning all of it.</p>
-<p><b>Dead-pair hinge</b> (optional). Add $\sum_{\text{dead}} \big(2b - c^\top Y c\big)_+^2$, the squared violation of the inequalities in <a href="#readout/readout-eq-lin">(3)</a>. The page minimises this convex, piecewise-quadratic objective exactly (semismooth Newton with an exact line search, started from the ridge solution). The sweep used L-BFGS from the ridge solution instead; rerunning some of its small-$b$ configurations, I found that it stops with an objective orders of magnitude above the minimum, so the sweep's hinge cosines at small $b$ describe that early-stopped iterate, which mostly scores somewhat higher than the minimiser. At full rank the two agree.</p>
-<p><b>PSD projection</b> of $\hat Y$ (negative eigenvalues set to zero), then back to input coordinates, $Q\hat Y Q^\top$, which is a matrix of the form $PCP$.</p>
-<p><b>Scores.</b> The Frobenius cosine $\langle X, T\rangle_F/(\lVert X\rVert_F \lVert T\rVert_F)$ against $T = P\hat C P$ (what the weights encode) and against $T = P\Sigma_g P$ (the population, which differs by sampling); spectra; the Bures–Wasserstein distance on the contrast space divided by $\sqrt{\operatorname{tr} T}$. The rank of $\mathcal M$ is the number of singular values above $10^{-8}\sigma_{\max}$, computed by a Householder QR and a one-sided Jacobi SVD (the normal equations would square the condition number).</p>
-<p><b>Baselines</b>, all fitted to the same live measurements and scored the same way: a multiple of the identity $cI$ (least squares), a non-negative diagonal covariance (NNLS), the formula applied to an untrained random network with the same number of live edges at random pairs and $w \sim U(0, b/\alpha)$, and to the trained weights shuffled over pairs. $W = 0$ itself has no live edge and gives nothing to read.</p>
-</details>
-
-<h2 id="readout-live">Reading out a network trained in the page</h2>
-
-<p>The figure trains a linear network on twelve inputs from $W = 0$, reads $P\hat C P$ back from its weights and attachments, and compares it with the truth. The readout is recomputed during training as well, which shows the fixed-point error shrinking with the drift.</p>
-
-<figure class="fig full card" id="readout-fig-live">
-  <div class="fig-title">The input second moment read back from the weights of a trained linear network <span class="synthetic-tag">synthetic Σ</span></div>
-  <div class="fig-sub">Changing $b$, $N$, $\Sigma_g$ or the seed retrains from $W = 0$ (a cold start, as in the sweeps). Weight noise and the method act on the trained weights without retraining. Hover any cell or curve.</div>
-  <div data-slot="live"><p class="u-help">loading…</p></div>
-  <figcaption><b>Plotted:</b> (a) the target $P\hat C P$ ($\hat C = G^\top G/S$ of the training bank, $P = I - \mathbf 1\mathbf 1^\top/B$); (b) the recovery $Q\hat Y Q^\top$ from the (noisy) weights, after PSD projection, by the selected method; (c) recovery minus target; (d) the population matrix $P\Sigma_g P$; all $B \times B$, rows and columns are the inputs $g_1 \dots g_{12}$, diverging map with one fixed symmetric range for the four panels. (e) Eigenvalues, in decreasing order, of $P\hat C P$, $P\Sigma_g P$, the recovery and the identity baseline $cI$, on the 11-dimensional contrast space. (f) Singular values of the live-edge operator $\mathcal M$ in decreasing order (log scale); dashed: the rank tolerances $10^{-8}\sigma_{\max}$ and $10^{-4}\sigma_{\max}$. (g) During training, against the step number: $1 - \cos$ of the recovery with $P\hat C P$, the fixed-point error $\max_{\text{live}}|2(b - \alpha w) - d^\top\hat C d|$, and the plasticity residual $r = \max|dw/dt|$ (projected); orange: the frame shown. (h) The weights $w_{ij}$, neurons sorted by connected component of the live graph (largest first; bands mark components of two or more), ink map from $0$ to $b/\alpha$. Tiles: live edges and components $K$ (with the largest component's size and the largest RMS distance $D$ of a member to its component's mean response); the rank of $\mathcal M$ out of $66$; the Frobenius cosines; the three errors of <a href="#readout/readout-errors">the error section</a>; the median noise gain $2\alpha w/D^2$ over live edges. Weight noise multiplies every weight by $1 + \varepsilon\xi$ with $\xi \sim N(0,1)$ (one fixed draw, symmetric), and the whole readout ($H$, $\mathcal M$ and the measured values) is rebuilt from the noisy weights. <b>Values:</b> $B = 12$, $S = 256$ Gaussian training inputs, $\alpha = 1$, linear neurons ($V_i = 0$), each neuron attached to $s = 3$ random inputs with total conductance $1$ (Dirichlet shares), projected Euler with $dt = 0.5$ from $W = 0$, stopped when $\max|\Delta w|/dt &lt; 10^{-9}$; exact equilibria over the bank (<code>onsite_engine.js</code>). Blocks: four blocks of three inputs, variances $2, 1, 0.5, 0.25$, within-block correlation $0.8$; power law: eigenvalues $\propto k^{-1}$ in a random basis (this page's RNG, seed 12345; not the sweep's matrix). Defaults $N = 80$, $b = 0.05$, $\varepsilon = 0$, seed 1, ridge.</figcaption>
+<figure class="fig wide card" id="readout-fig-idea">
+  <div class="fig-title">From the weights, the inputs' second moment can be solved for; with enough well-spread synapses it matches the truth</div>
+  <div class="fig-sub">Uses the learned weights, the fixed input wiring, and the rule with its constants. The network is trained in your browser; the neuron count retrains it, and every figure below that is computed in the browser reads this same network.</div>
+  <div data-slot="idea"><p class="u-help">training…</p></div>
+  <figcaption>Read left to right: the learned weights; the neurons' mixtures of the inputs, computed from the weights and the wiring; the second moment solved from them, next to the true one of the training inputs, on one colour scale. Recovery needs at least 66 independent equations from settled weights: with 40 neurons there are too few.</figcaption>
+  <details class="fig-details"><summary>Details</summary>
+    <p>Both right-hand maps show the contrast part $P\hat C P$, with $P = I - \mathbf 1\mathbf 1^\top / B$ and $\mathbf 1$ the all-ones vector (<a href="#readout/readout-blind">below</a>). $\hat C$ is the average of $g g^\top$ over the 256 training inputs; its contrast part differs from the population's by sampling (here by <span data-v="samp">…</span>). Error is the relative Frobenius error $\lVert X - P\hat C P\rVert_F / \lVert P\hat C P\rVert_F$, where $\lVert M\rVert_F$ is the square root of the sum of squared entries. Neurons are sorted by connected component of the synapse graph and, within that, by the input they listen to most. Each neuron is wired to 3 random inputs with Dirichlet(1) shares summing to 1; $b$ = <span data-v="b">…</span>, $\alpha = 1$; trained from $W = 0$ by projected Euler steps of size 0.5 until no weight moves by more than $10^{-9}$ per unit time; exact equilibria over the training set (<code>onsite_engine.js</code>). Inputs: four blocks of three, variances 2, 1, 0.5, 0.25, correlation 0.8 within a block and 0 between blocks. Seeds: wiring 1, training inputs 1001, weight noise 8.</p>
+  </details>
 </figure>
 
-<p>Things to look for, each a tour in the figure: with <a class="explore-link" href="#readout/readout-fig-live?tour=few">too few live edges</a> the rank equals the number of live edges and the recovery is no better than a fitted multiple of the identity; <a class="explore-link" href="#readout/readout-fig-live?tour=sweet">just above percolation</a> the operator reaches full rank while the network is still in many components, and the readout is exact; <a class="explore-link" href="#readout/readout-fig-live?tour=n40">with half the neurons</a> at the same $b$ there are too few live edges again; <a class="explore-link" href="#readout/readout-fig-live?tour=fused">fully fused</a> it is exact too, but <a class="explore-link" href="#readout/readout-fig-live?tour=fragile">1% weight noise</a> destroys it (<a href="#readout/readout-noise">why</a>).</p>
+<h2 id="readout-measure">Each synapse is a measurement</h2>
 
-<h2 id="readout-n">More neurons than inputs</h2>
+<p>Each of $N$ neurons is wired to three of the $B = 12$ inputs by fixed wires $A$, and the neurons are connected to each other by plastic synapses $w_{ij} \ge 0$. A neuron's response is a fixed mixture of the inputs, $u_i = h_i^\top g$, and its mixture $h_i$ (its harmonic embedding) is set by the weights and the wiring. The synapses learn by the distance rule</p>
 
-<p>The last tour points at what makes the readout work: the number of live edges, which grows faster than $N$ at fixed $b$. The precomputed runs below repeat the readout at $B = 12$ for $N$ from 40 to 500, three seeds and three values of $b$ each (<span data-nv="conv">all</span> <span data-nv="nruns">45</span> runs converged, residual at most <span data-nv="resmax">…</span>).</p>
+<div class="eq" id="readout-eq-rule" data-num="1">$$\frac{dw_{ij}}{dt} = b - \alpha\, w_{ij} - \tfrac12 D_{ij}^2, \qquad D_{ij}^2 = \mathbb E\big[(u_i - u_j)^2\big],$$</div>
+
+<p>where $D_{ij}^2$ is the mean squared difference between the two neurons' responses over the training inputs, $b &gt; 0$ is a constant growth term and $\alpha &gt; 0$ a decay rate. When learning has stopped, the rule can be read backwards:</p>
+
+<div class="eq" id="readout-eq-fp" data-num="2">$$\begin{aligned} w_{ij} &gt; 0 &amp;:\quad D_{ij}^2 = 2\,(b - \alpha\, w_{ij}),\\ w_{ij} = 0 &amp;:\quad D_{ij}^2 \ge 2b . \end{aligned}$$</div>
+
+<p>A live synapse states exactly how differently its two neurons respond; a pruned one says only that they respond differently by at least $2b$.</p>
+
+<figure class="fig wide card" id="readout-fig-law">
+  <div class="fig-title">Every surviving synapse sits on the line set by the rule, so its weight records one distance</div>
+  <div data-slot="law"><p class="u-help">training…</p></div>
+  <figcaption>Each dot is a pair of neurons: how differently they respond, against the weight between them. Live synapses (blue) lie on the line $w = (b - D^2/2)/\alpha$; pruned pairs (grey) sit at zero, all to the right of $D^2 = 2b$.</figcaption>
+  <details class="fig-details"><summary>Details</summary><p>$D^2$ is measured from the neurons' responses to the 256 training inputs, not computed from the weights. Live means $w_{ij} &gt; 10^{-9}$. The horizontal axis is cut at $4b$; the pairs beyond it are all pruned.</p></details>
+</figure>
+
+<p>The distance is a quadratic form in the second moment $C$: $D_{ij}^2 = (h_i - h_j)^\top C\, (h_i - h_j)$. And the mixtures can be computed from the weights: $H = \big(L + \operatorname{diag}(A\mathbf 1)\big)^{-1} A$, where $H$ has rows $h_i$, $L$ is the graph Laplacian of the weights and $A$ the input wiring. So each live synapse gives one <b>linear</b> equation on $C$:</p>
+
+<div class="eq" id="readout-eq-lin" data-num="3">$$(h_i - h_j)^\top C\, (h_i - h_j) = 2\,(b - \alpha\, w_{ij}) .$$</div>
+
+<p>Collect the equations of all live synapses and solve them by least squares for the part of $C$ they can see. That is the whole recipe, and it is what the first figure did.</p>
+
+<h2 id="readout-settle">Settling removes the drift error</h2>
+
+<p>During learning, the live-synapse equality in (2) is off by exactly $2\,dw_{ij}/dt$, the synapse's remaining drift. So a readout taken mid-training carries this drift error, and the error shrinks as the weights stop moving. What remains at the end depends on whether the equations are numerous and independent enough.</p>
+
+<figure class="fig wide card" id="readout-fig-film">
+  <div class="fig-title">The recovered second moment sharpens as the weights settle</div>
+  <div data-slot="film"><p class="u-help">training…</p></div>
+  <figcaption>Each frame is the second moment (contrast part) solved from the weights at one training step, on the colour scale of the true one at the end; under each frame, its error and the weights' remaining drift. With 40 neurons the drift vanishes but the last frame still differs from the true matrix: too few independent equations.</figcaption>
+  <details class="fig-details"><summary>Details</summary><p>Error is the relative Frobenius error against $P\hat C P$. Drift is the largest $|dw_{ij}/dt|$ over all synapses at that step; a pruned synapse at zero whose drift is negative counts as zero. Training starts from $W = 0$, where no synapse is live and there is nothing to read.</p></details>
+</figure>
+
+<h2 id="readout-count">Many more neurons than inputs</h2>
+
+<p>The second moment of 12 inputs has 78 distinct entries, and 66 independent combinations of them are visible to the weights (<a href="#readout/readout-blind">next section</a>). Each live synapse adds one equation, and in the runs below the number of live synapses grows much faster than the number of neurons. The equations determine the visible part once they span all 66 directions; to recover it accurately they must also be well conditioned.</p>
 
 <figure class="fig wide card" id="readout-fig-n">
-  <div class="fig-title">Readout against the number of neurons, $B = 12$ <span class="synthetic-tag">synthetic Σ</span></div>
-  <div class="fig-sub">Precomputed (<code>hebb/big/readout_vs_n.py</code> → <code>data/big/readout_vs_N.json</code>). Hover for values.</div>
+  <div class="fig-title">Recovery becomes accurate once the live equations span all 66 contrasts and are well conditioned</div>
   <div data-slot="vsn"><p class="u-help">loading…</p></div>
-  <figcaption><b>Plotted:</b> against the number of interior neurons $N$ (log scale), one colour per fusion scale $b$: (a) rank of the live-edge operator $\mathcal M$ (singular values above $10^{-8}\sigma_{\max}$), mean over seeds, band min to max; dashed: 66, the dimension of the symmetric contrast space; (b) its condition number $\sigma_{\max}/\sigma_{\min}$ over the singular values above $10^{-8}\sigma_{\max}$ (log scale), geometric mean over seeds, band min to max; (c) Frobenius cosine of the PSD-projected ridge recovery with $P\hat C P$ (solid, mean, band min to max) and with $P\Sigma_g P$ (dashed, mean); (d) the three errors, worst seed (log scale): the inverse-problem error of the recovery on the identifiable subspace (singular values above $10^{-4}\sigma_{\max}$; relative; solid), the fixed-point error $\max_{\text{live}}|2(b - \alpha w) - d^\top\hat C d|$ (absolute, units of $D^2$; dotted), and, as a horizontal line, the sampling error $\lVert P\hat C P - P\Sigma_g P\rVert_F/\lVert P\Sigma_g P\rVert_F$, mean over runs. <b>Values:</b> $B = 12$, blocks (four blocks of three inputs, variances 2, 1, 0.5, 0.25, within-block correlation 0.8), $S = 256$, $\alpha = 1$, $s = 3$, linear neurons, cold start from $W = 0$, $N \in \{40, 80, 160, 320, 500\}$, $b \in \{0.01, 0.036, 0.1\}$, seeds 0–2.</figcaption>
+  <figcaption>Left: independent equations among the live synapses for each tested network size and three values of $b$; dashed, the 66 unknowns. Right: the error of the recovered second moment, log scale; at <span data-nv="worstat">…</span> all three runs reach 66 but one is badly conditioned and its error is <span data-nv="worstrel">…</span>.</figcaption>
+  <details class="fig-details"><summary>Details</summary><p>Precomputed (<code>hebb/big/readout_vs_n.py</code> → <code>data/big/readout_vs_N.json</code>): 12 inputs (the blocks above), three seeds per point; left line: arithmetic mean over seeds, right line: geometric mean (the errors span eight decades); bands: smallest to largest seed. The tested sizes are drawn equally spaced. Independent equations: the rank of the live-synapse equations, counting singular values above $10^{-8}$ of the largest. At $b = 0.01$ the networks have <span data-nv="edges40">…</span> live synapses on average at $N = 40$ and <span data-nv="edges500">…</span> at $N = 500$, and reach full rank while still split into <span data-nv="K320">…</span> separate pieces at $N = 320$. The badly conditioned run: <span data-nv="worst">…</span>; the least-squares solver shrinks its weakest directions.</p></details>
 </figure>
 
-<p>Full rank, 66 of 66 in every seed, arrives at $N = $ <span data-nv="full_b2">…</span>, <span data-nv="full_b1">…</span> and <span data-nv="full_b0">…</span> for $b = 0.1$, $0.036$ and $0.01$. Rank follows the live-edge count until it saturates, and at fixed $b$ that count grows faster than $N$: at $b = 0.01$ there are <span data-nv="edges40">…</span> live edges on average at $N = 40$ and <span data-nv="edges500">…</span> at $N = 500$. The network does not need to fuse for this: at $b = 0.01$ the full-rank networks at $N = 320$ and $500$ are still in <span data-nv="K320">…</span> and <span data-nv="K500">…</span> components. Once the rank is full, more neurons also condition the operator better: at $b = 0.1$ the mean $\log_{10}$ condition number falls from <span data-nv="cond40">…</span> at $N = 40$ to <span data-nv="cond500">…</span> at $N = 500$.</p>
+<h2 id="readout-blind">What the weights cannot see</h2>
 
-<p>At full rank the recovery has cosine at least <span data-nv="cosfull">…</span> with $P\hat C P$, with one exception, which is the reason for "well-conditioned" in the statement above: at $N = $ <span data-nv="worstN">…</span>, $b = $ <span data-nv="worstb">…</span>, seed <span data-nv="worstseed">…</span>, the operator has rank 66 at the $10^{-8}$ tolerance but <span data-nv="worstrank4">…</span> at $10^{-4}$ (condition number <span data-nv="worstcond">…</span>), and the ridge returns cosine <span data-nv="worstcos">…</span>. Against the population $P\Sigma_g P$ the full-rank cosine is <span data-nv="cosSigma">…</span> on average: that gap is sampling, not the readout.</p>
+<p>Every neuron's mixture sums to one, $h_i^\top \mathbf 1 = 1$ with $\mathbf 1$ the all-ones vector, so the difference of two mixtures sums to zero. A signal added equally to all inputs therefore moves every neuron by the same amount and changes no distance $D_{ij}$, and no weight. Written as matrices, the part of $C$ of the form $\mathbf 1 a^\top + a \mathbf 1^\top$ drops out of every equation (3). What the weights record is the rest, $P C P$ with $P = I - \mathbf 1\mathbf 1^\top / B$: the second moment of the inputs after subtracting, sample by sample, their average.</p>
 
-<h2 id="readout-errors">Three errors, kept apart</h2>
-
-<p>A readout can be wrong for three unrelated reasons, and the page reports them separately (tiles in the live figure, panel (d) above).</p>
-
-<ol>
-<li><b>Fixed point.</b> The identity <a href="#readout/readout-eq-store">(1)</a> holds only at stationarity; the error is twice the residual drift. In the runs above it is at most <span data-nv="fpmax">…</span>.</li>
-<li><b>Inverse problem.</b> The error of the recovery on the well-determined subspace (singular values above $10^{-4}\sigma_{\max}$), at most <span data-nv="invmax">…</span> above; plus whatever share of the target lies outside it, which the ridge shrinks or sets to zero. Below full rank that share dominates, and no estimator removes it without a prior.</li>
-<li><b>Sampling.</b> The weights encode $P\hat C P$ for the $S$ inputs they were trained on, not $P\Sigma_g P$; the gap, <span data-nv="samp">…</span> here, shrinks only with $S$.</li>
-</ol>
-
-<h2 id="readout-cov">The covariance rule's readout: a sketch of the parts</h2>
-
-<p>Under the covariance rule the same idea gives much less. At its clustered fixed point the weights are a function of the parts, their conductances and their sizes, plus inequalities from the synapses at the floor: each active input synapse gives one equation, $(\Sigma_g h_k)_b = \theta + c_k h_{kb}$ on part $k$'s support, the lateral synapses add only the energy of each populated part, and clones multiply the equations without adding rank. For 12 inputs in blocks the measurement operator had rank 5–24 of the 78 entries of $\Sigma_g$. So that readout is accurate on the populated parts and blind elsewhere: a sketch of the parts, not of $\Sigma_g$. <a class="explore-link" href="#old/old-readout">More on the covariance rule</a></p>
-
-<h2 id="readout-limits">What this does not give</h2>
-
-<p>Only contrasts: the common mode is invisible without an on-site potential (<a href="#readout/readout-leak">a leak that varies across neurons</a> can expose it, fragilely). Only the training bank's uncentred second moment, not the population's, and not the input distribution: a second moment does not determine a distribution (a mixture of two stimuli with weights $p$ and $1 - p$ has centred covariance $p(1-p)\,\delta\delta^\top$, $\delta$ the difference of their features, whichever way round the weights go). Only with the attachments $A$ and the rule parameters known. And only for linear neurons: with an on-site potential, $D_{ij}^2$ is no longer a quadratic form in any fixed matrix of input moments, and what the weights state is a partial table of response distances (<a href="#nonlinear/nonlinear-readout">the next chapter</a>).</p>
-
-<details class="more" id="readout-sweep"><summary>Details: the readout across $b$, for $N = 40$ and $80$ (with baselines and weight noise)</summary>
-
-<p>The precomputed sweep repeats the readout on networks trained to stationarity on a grid of $b$, for two covariances, two network sizes and three seeds, against four baselines fitted to the same measurements.</p>
-
-<figure class="fig wide card" id="readout-fig-sweep">
-  <div class="fig-title">Readout against the fusion scale $b$: rank, accuracy, baselines, noise and errors <span class="synthetic-tag">synthetic Σ</span></div>
-  <div class="fig-sub">Precomputed (<code>hebb/sweeps2/readout.py</code> → <code>data/sweeps2/readout.json</code>). Lines: mean over three seeds; bands: min to max. Hover for values.</div>
-  <div data-slot="sweep"><p class="u-help">loading…</p></div>
-  <figcaption><b>Plotted:</b> against $b$ (log scale): (a) number of live edges, rank of the live-edge operator $\mathcal M$ (singular values above $10^{-8}\sigma_{\max}$) and number of connected components $K$, log scale; dashed: $66$, the dimension of the symmetric contrast space; (b) Frobenius cosine with the chosen target ($P\hat C P$ or $P\Sigma_g P$) of the ridge and hinge recoveries after PSD projection and of four baselines (fitted $cI$; NNLS diagonal; untrained random network; shuffled weights), and, dashed, the share of $\lVert P\hat C P\rVert_F^2$ in the identifiable subspace (singular values above $10^{-4}\sigma_{\max}$); runs without any live edge count as cosine $0$; (c) cosine of the ridge recovery with $P\hat C P$ when every weight is multiplied by $1 + \varepsilon\xi$, for four values of $\varepsilon$; (d) the three errors (log scale): fixed-point error $\max_{\text{live}}|2(b-\alpha w) - d^\top\hat C d|$ (absolute, units of $D^2$), sampling error $\lVert P\hat CP - P\Sigma_gP\rVert_F/\lVert P\Sigma_gP\rVert_F$, and the inverse-problem error of the ridge recovery on the identifiable subspace (relative). <b>Values:</b> $B = 12$, $S = 256$, $\alpha = 1$, $s = 3$, linear neurons, cold start from $W = 0$ at each $b$, seeds 0–2; blocks as in the live figure, power law with the sweep's own random basis (numpy seed 12345).</figcaption>
+<figure class="fig wide card" id="readout-fig-blind">
+  <div class="fig-title">The second moment splits into a part shared by all inputs, which the weights cannot see, and the rest, which they can measure</div>
+  <div data-slot="blind"><p class="u-help">training…</p></div>
+  <figcaption>All three maps share one colour scale; the left one is the sum of the other two. Each entry of the middle part is one number for its row plus one for its column, $a_i + a_j$.</figcaption>
 </figure>
 
-<p data-slot="sweep-text"></p>
-</details>
+<h2 id="readout-rule">It depends on knowing the rule</h2>
 
-<details class="more" id="readout-noise"><summary>Details: why fusion makes the readout fragile</summary>
+<p>The recipe inverts the fixed point of one particular rule, so it needs that rule's exact form and constants. The covariance rule with pruning (of <a href="#perron">Perron clusters</a>) also has a fixed point that is linear in $C$, and the same approach applies: each surviving synapse, input synapses included, gives one equation. Unlike the distance rule, these equations can see the shared part too. But in the pruned run below the neurons form two groups with nearly identical mixtures, so most of the equations repeat one another.</p>
 
-<p>A relative weight error $\varepsilon$ changes the stored distance by $2\alpha w\,\varepsilon$, so the relative error of $D^2$ is $\varepsilon$ times the <b>noise gain</b></p>
-
-<div class="eq" id="readout-eq-gain" data-num="5">$$\frac{2\alpha w_{ij}}{D_{ij}^2} = \frac{2b - D_{ij}^2}{D_{ij}^2} .$$</div>
-
-<p>It is of order one for edges near the end of their range ($D^2 \approx b$) and diverges as clusters tighten ($D^2 \ll 2b$). In a fused network $w \approx b/\alpha$, and the information sits in the tiny deviations from it. The noise also moves $H$, which the readout rebuilds from the same noisy weights. Just above percolation the readout survives 1% noise; fully fused, fusion amplifies the noise and can badly degrade the recovery (cosine 0.70–0.99 in the fused $N = 400$ runs of <code>dist_B.json</code>; panel (c) of the sweep above, and the noise-gain tile of the live figure).</p>
-</details>
-
-<details class="more" id="readout-leak"><summary>Details: a quadratic leak, uniform or heterogeneous</summary>
-
-<p>Any on-site potential breaks $H\mathbf 1 = \mathbf 1$. The simplest is a leak, $V_i(u) = \tfrac12 k_i u^2$, which keeps the neurons linear: $H = (L + \operatorname{diag}(A\mathbf 1) + K)^{-1}A$ with $K = \operatorname{diag}(k)$. The blind subspace survives as long as the leak is proportional to each neuron's input conductance:</p>
-
-<div class="eq" id="readout-eq-leak" data-num="6">$$\begin{gathered} \big(L + \operatorname{diag}(A\mathbf 1) + K\big)\mathbf 1 = A\mathbf 1 + k, \\ k = c\,A\mathbf 1 \ \Rightarrow\ H\mathbf 1 = \frac{\mathbf 1}{1 + c} . \end{gathered}$$</div>
-
-<p>Then $d^\top\mathbf 1 = 0$ still, and the same $B$ directions are invisible. Here every neuron has total input conductance 1, so a <em>uniform</em> leak is exactly this case: $H\mathbf 1 \ne \mathbf 1$, yet nothing changes. Only a leak that varies across neurons can make $d^\top \mathbf 1 \ne 0$; then the unknown is the full $\hat C$ (78 entries). Whether it is recovered is the same rank question as before, now on the full space: it needs the live-edge operator to reach rank 78, and to be well conditioned there. A heterogeneous leak does not guarantee that. Four neurons with identical attachment rows $(\tfrac12, \tfrac12)$ and leaks $0.1, 0.2, 0.4, 0.8$ have harmonic rows with different sums, but every difference between them is parallel to $(1, 1)$, so even all six pairs measure only one linear combination of the three entries of a $2\times 2$ $\hat C$. In the networks tested here the rank does reach 78 and $\hat C$ is recovered, an empirical result for these configurations (below). The catch is the same as before: fusion pulls connected neurons together, $d^\top\mathbf 1$ shrinks with them, and the information about the common mode sits in ever smaller numbers.</p>
-
-<figure class="fig wide card" id="readout-fig-leak">
-  <div class="fig-title">Quadratic leak: uniform versus heterogeneous <span class="synthetic-tag">synthetic Σ</span></div>
-  <div class="fig-sub">Precomputed (<code>data/sweeps2/readout.json</code>, leak arms). The toggle switches between the two kinds of leak; the zero-leak network is drawn in grey for reference.</div>
-  <div data-slot="leak"><p class="u-help">loading…</p></div>
-  <figcaption><b>Plotted:</b> against $b$ (log scale), mean over three seeds with min–max bands: (a) rank of the live-edge operator on the full space of symmetric $B\times B$ matrices (dashed: $66$ and $78$); for the zero-leak network, the rank on the contrast space; (b) Frobenius cosine of the ridge recovery (PSD-projected) with the full $\hat C$, solid, and of its restriction to the contrast space with $P\hat C P$, dashed; (c) $\max_{i&lt;j} |d_{ij}^\top \mathbf 1|$ over all pairs (log scale); (d) cosine with $\hat C$ when every weight is multiplied by $1 + 10^{-4}\xi$. <b>Values:</b> $B = 12$, $N = 40$, blocks, $S = 256$, $\alpha = 1$, $s = 3$, total input conductance 1 per neuron; uniform leak $k_i = 0.1$ or $1$; heterogeneous $k_i \sim U(0, 0.2)$ or $U(0, 1)$; seeds 0–2.</figcaption>
+<figure class="fig wide card" id="readout-fig-rule">
+  <div class="fig-title">In this pruned covariance-rule run, two groups leave much of the second moment undetermined</div>
+  <div data-slot="rule"><p class="u-help">loading…</p></div>
+  <figcaption>Recovered against true for the two rules, each trained as described beside its row, on one colour scale. Both are scored on the contrast part only, so that they can be compared.</figcaption>
+  <details class="fig-details"><summary>Details</summary>
+    <p>Covariance rule: $dw/dt = \eta\,(\operatorname{Cov}(u_i, u_j) - \theta) - \lambda w$ for every synapse, input synapses included, with learning-rate factor $\eta$, decay rate $\lambda$ and a floor $w_{\min} = 10^{-3}$; $\theta$ = <span data-cv="theta">…</span>, $\lambda = \eta = 1$, $N$ = <span data-cv="N">…</span>, trained in mean field on the population covariance of the same 12 inputs (<code>hebb/readout_cov_rule.py</code> → <code>data/readout/cov_rule.json</code>). Its fixed-point equations are $h_i^\top C h_j = \theta + \tfrac\lambda\eta w_{ij}$ for lateral synapses and $(HC)_{ib} = \theta + \tfrac\lambda\eta w_{ib}$ for input synapses above the floor, solved by masked ridge least squares with $\theta$, $\lambda$, $\eta$ known and PSD projection, over all 78 entries of $C$ (<code>core.readout_ls</code>; the distance-rule solver works on the 66 contrasts with a different ridge). Across <span data-cv="seeds">…</span> random starts the equations span <span data-cv="rank">…</span> independent combinations of the 78 numbers and the network forms <span data-cv="K">…</span> groups; the contrast error is <span data-cv="rel">…</span>.</p>
+  </details>
 </figure>
 
-<p data-slot="leak-text"></p>
-</details>
+<p>Knowing the distance rule's constants matters too. In the 80-neuron example, assuming $b$ 10% too large gives an error of <span data-sens="b">…</span>, assuming $\alpha$ 10% too large <span data-sens="a">…</span>, and multiplying every weight by $1 + 0.1\,\xi$ ($\xi$ standard normal) <span data-sens="n">…</span>. That network is in <span data-sens="K">…</span>. Strongly fused networks (large $b$) are more fragile, because their weights sit near $b/\alpha$ and the distances they encode are small next to a weight perturbation: in a precomputed sweep at $N = 80$ (<code>data/sweeps2/readout.json</code>, scored by cosine similarity rather than relative error), 1% weight noise leaves a cosine of <span data-sv="good">…</span> with the truth at $b = 0.083$ (networks in <span data-sv="goodK">…</span> pieces) but <span data-sv="bad">…</span> at $b = 0.44$ (<span data-sv="badK">…</span>).</p>
 
-<aside class="callout found">
-  <p class="callout-title">What the weights store, against the note</p>
-  <ul>
-    <li><span class="verdict holds">holds</span>Linear neurons, distance rule: each live synapse is an exact linear equation on the input second moment, and the weights and attachments identify $P\hat C P$ exactly once the live-edge operator is full-rank and well-conditioned. More neurons than inputs is what gets it there: at $B = 12$, full rank from $N = 40$, $80$ or $320$ for $b = 0.1$, $0.036$ or $0.01$, with the network still in pieces.</li>
-    <li><span class="verdict amended">amended</span>What is invisible is characterised exactly: the common mode $\mathbf 1a^\top + a\mathbf 1^\top$. A quadratic leak that varies across neurons can expose it, but only fragilely.</li>
-    <li><span class="verdict amended">amended</span>Robustness has a window: just above percolation the readout survives 1% weight noise; fully fused it is exact, but fusion amplifies weight noise and the same noise can badly degrade it.</li>
-    <li><span class="verdict amended">amended</span>The covariance rule's weights hold only a sketch of the populated parts.</li>
-    <li><span class="verdict fails">fails</span>Recovering $p(\text{stimulus})$: a second moment, let alone its contrast part, does not determine a distribution.</li>
-  </ul>
-</aside>
+<p>The form of the rule matters as much as its constants. The readout turns a weight into a distance through equation (2), which comes from this rule's regulariser $b - \alpha w$: a fixed amount $b$ added to every synapse and a decay in proportion to the weight. A regulariser of a different form can change the fixed-point equation, so the same weights would be read differently, and can change the objective the rule descends. A related distinction is old: for Hebbian learning under a constraint on the total weight, Miller and MacKay (1994) showed that subtractive and multiplicative versions of the constraint lead to different kinds of solutions. So we regard reading the weights as an important idea, but one whose details are tied to the model: to read the weights you have to know what wrote them.</p>
+
+<h2 id="readout-limits">Limits</h2>
+
+<p>The weights record second moments only, and only their contrast part $P C P$; a second moment is not the input distribution. The recipe assumes linear neurons, known input wiring $A$ and known rule constants, weights that have stopped moving and carry no noise, and enough well-conditioned equations. It recovers the second moment of the inputs the network was actually trained on, not of the population they were drawn from.</p>
+
+<details class="more" id="readout-estimator"><summary>Details: the estimator</summary>
+<p>Work in an orthonormal basis $Q$ of the contrasts ($Q^\top \mathbf 1 = 0$, 11 columns), with unknown $Y = Q^\top C Q$, a symmetric $11 \times 11$ matrix (66 numbers). Live synapse $e = (i, j)$ gives $c_e^\top Y c_e = 2(b - \alpha w_e)$ with $c_e = Q^\top (h_i - h_j)$. We solve $\min_Y \sum_e \big(c_e^\top Y c_e - 2(b - \alpha w_e)\big)^2 + \rho \lVert Y\rVert_F^2$ with a tiny ridge $\rho = 10^{-10}\sigma_{\max}^2$, where $\sigma_{\max}$ is the largest singular value of the equations; directions the equations do not measure are set to zero. The result is projected onto positive semidefinite matrices and mapped back, $Q Y Q^\top$. Ranks count singular values above $10^{-8}\sigma_{\max}$ (Householder QR, then a one-sided Jacobi SVD). The inequalities from pruned pairs are not used. Full rank is necessary but not sufficient: a nearly singular system identifies $Y$ in exact arithmetic, but the ridge shrinks its weakest directions.</p>
+</details>

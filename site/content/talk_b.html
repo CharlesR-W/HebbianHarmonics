@@ -1,0 +1,41 @@
+<section class="slide" id="talk-cluster">
+  <h2>What Hebb does: it groups</h2>
+  <p class="claim">Neurons that listen alike fuse into groups; neurons that listen differently disconnect.</p>
+  <div class="side">
+    <p class="eq">\[ \text{link } i\!-\!j \text{ survives} \iff D_{ij}^2 < 2b \]</p>
+    <ul class="points">
+      <li>The fusion scale <em>b</em> sets how alike is "alike".</li>
+      <li>Bigger <em>b</em>: fewer, larger groups. Small <em>b</em>: everyone alone.</li>
+      <li>In the real model the middle is messy: many loners, then long chains, then one giant group. Not a few tidy clusters.</li>
+    </ul>
+    <a class="see explore-link" href="#fusion/fusion-live">See the real simulation</a>
+  </div>
+  <div class="fig">
+    <svg class="tb-scatter" viewBox="0 0 640 470" role="img" aria-label="Neurons in embedding space drifting into groups"></svg>
+    <p class="fig-cap">Toy illustration. Each dot is a neuron, placed by which inputs it listens to (corners = input nodes A, B, C). Lines join neurons close enough to fuse.</p>
+    <div class="fig-ctl">
+      <button type="button" class="tb-replay">Replay</button>
+      <label>fusion scale b <input type="range" class="tb-b" min="0" max="100" value="45"></label>
+      <span class="tb-bval"></span>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="talk-perron">
+  <h2>Groups are Perron parts, not eigenvectors</h2>
+  <p class="claim">Under the covariance rule with a subtractive threshold θ, each group listens to a set of inputs linked by covariances above θ. Raising θ splits these sets along the tree of correlations, coarse to fine.</p>
+  <div class="side">
+    <p class="eq">\[ \begin{gathered} A = \Sigma_g - \theta\,\mathbf 1\mathbf 1^{\top} \\ A_{SS}\,h_S = c\,h_S,\ \ h_S > 0 \end{gathered} \]</p>
+    <ul class="points">
+      <li>One group on its own settles on a <b>Perron part</b>: the all-positive top eigenvector of the block of \(A\) on its inputs \(S\).</li>
+      <li>For unit-variance inputs whose correlations form an exact tree, the parts are the branches above the cut at θ.</li>
+      <li>In large simulations, groups fit their parts far better than any eigenvector of \(\Sigma_g\); which parts fill depends on the start and history.</li>
+    </ul>
+    <a class="see explore-link" href="#perron/perron-where">See it live</a>
+  </div>
+  <div class="fig">
+    <svg id="talk-b-perron-svg" viewBox="0 36 640 396" role="img" aria-label="The stable parts of a three-input covariance in the triangle of inputs, as the threshold changes"></svg>
+    <p class="fig-cap">Three correlated inputs, computed exactly: dots mark where a group can settle at this θ (its inputs highlighted), and the star is the top eigenvector of \(\Sigma_g\), the only one inside the triangle. Raise θ and the one place in the middle gives way to places on edges, then corners.</p>
+    <div class="fig-ctl"><label>threshold θ <input type="range" id="talk-b-theta" min="0" max="90" value="45"></label><span id="talk-b-thval"></span></div>
+  </div>
+</section>

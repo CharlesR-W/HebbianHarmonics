@@ -110,22 +110,19 @@ export function projSimplexRow(v, z = 1) {
 }
 
 export const VARS_B = [2, 1, 0.5, 0.25];
-export const RECT = { klo: 3, khi: 0, sigmaT: 0.7 };
 
 // Joint projected gradient flow on J over the rows of A (fixed degree 1) and, optionally, the lateral W
 // (alpha = 1): dA_ib = -alphaA a_ib - 1/2 E[(u_i - g_b)^2], dW_ij = b - w_ij - 1/2 D_ij^2.
-export function makePlastic({ alphaA = 1, lateral = false, b = 0.1, rect = false, seed = 0, N = 40, S = 256 }) {
+export function makePlastic({ alphaA = 1, lateral = false, b = 0.1, seed = 0, N = 40, S = 256 }) {
   const Sigma = sigmaBlocks(VARS_B);
   const rng = O.makeRng(7000 + seed);
   const A0 = new Float64Array(N * B);
   for (let i = 0; i < N; i++) { let s = 0; const e = []; for (let a = 0; a < B; a++) { e.push(rng.exponential(1)); s += e[a]; } for (let a = 0; a < B; a++) A0[i * B + a] = e[a] / s; }
-  const trng = O.makeRng(7100 + seed), t = new Float64Array(N);
-  for (let i = 0; i < N; i++) t[i] = rect ? RECT.sigmaT * trng.normal() : 0;
-  const net = O.makeNetFrom({ N, B, A: A0, t, klo: rect ? RECT.klo : 0, khi: rect ? RECT.khi : 0 });
+  const net = O.makeNetFrom({ N, B, A: A0, t: new Float64Array(N), klo: 0, khi: 0 });   // linear neurons
   const A = net.A;                                     // makeNetFrom copies; the flow edits the net's own array
   const G = colour(normalBank(S, 7200 + seed), S, Sigma);
   const dt = Math.min(0.2, 1 / alphaA);
-  const st = { net, G, S, N, Sigma, alphaA, lateral, b, rect, dt, steps: 0, res: Infinity, U: null, eqRes: 0 };
+  const st = { net, G, S, N, Sigma, alphaA, lateral, b, dt, steps: 0, res: Infinity, U: null, eqRes: 0 };
   const G2 = new Float64Array(B);
   for (let s = 0; s < S; s++) for (let a = 0; a < B; a++) G2[a] += G[s * B + a] ** 2 / S;
   st.step = () => {
@@ -167,24 +164,6 @@ export function plasticSummary(st) {
     mass.push(m);
   }
   return { mass, home, maj, argm, share, purity, support: support / N };
-}
-
-// The per-neuron objective at W = 0 for linear neurons with unit degree (derived in the chapter):
-//   J_i(a) = 1/2 [sum_b a_b Sigma_bb - a^T Sigma a] + alphaA/2 |a|^2.
-// Inside one block of variance v and correlation rho, J depends on a only through s = |a|^2 in [1/3, 1]:
-//   J = 1/2 v (1 - rho)(1 - s) + alphaA/2 s,
-// so the best row inside the block is pure (s = 1, cost alphaA/2) if alphaA < v (1 - rho) and even
-// (s = 1/3, cost v (1 - rho)/3 + alphaA/6) otherwise.
-export function blockRowCosts(vars, alphaA, rho = RHO) {
-  return vars.map(v => {
-    const pure = alphaA / 2, even = v * (1 - rho) / 3 + alphaA / 6;
-    return { v, pure, even, best: Math.min(pure, even), form: pure < even ? "pure" : "even" };
-  });
-}
-export function rowObjective(a, Sigma, alphaA) {
-  let lin = 0, quad = 0, sq = 0;
-  for (let p = 0; p < B; p++) { lin += a[p] * Sigma[p * B + p]; sq += a[p] * a[p]; for (let q = 0; q < B; q++) quad += a[p] * Sigma[p * B + q] * a[q]; }
-  return 0.5 * (lin - quad) + 0.5 * alphaA * sq;
 }
 
 // ---------------------------------------------------------------- (c) similarity matching
