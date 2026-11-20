@@ -5,8 +5,8 @@
 <figure class="fig wide card" id="spont-fig-traces">
   <div class="fig-title">Driven by the inputs, the members of a cluster move as one; left to themselves, they only loosely follow each other</div>
   <div data-slot="traces"><p class="mute">loading…</p></div>
-  <figcaption>Each line is one neuron's activity over time, three members from each cluster, coloured by cluster. Left: the inputs are on. Right: the inputs are held at zero and each neuron gets its own noise.</figcaption>
-  <details class="fig-details"><summary>Details</summary>Trained network from <code>data/sweeps2/spontaneous.json</code> ($\lambda = \eta = \gamma = 1$, $w_{\min} = 10^{-3}$, every neuron wired to every other; residual below $10^{-10}$). Driven: $u = Hg$ with $g(t)$ an Ornstein–Uhlenbeck process of covariance $\Sigma_g$ and unit time constant. Spontaneous: $\tau\,\dot u = -Ku + \sqrt{2T\tau}\,\xi$ with $g = 0$, simulated in the page by Euler steps of at most $0.01\tau$ (shorter where the network is stiff). Each cluster is drawn in units of its own standard deviation in that panel, since the noise strength $T$ is arbitrary. Traces are offset vertically by cluster.</details>
+  <figcaption>Each line is one neuron's activity over time, two members from each cluster, coloured by cluster. Beside each pair, the second neuron against the first at every moment, and their correlation $r$: a thin diagonal when the inputs drive them, a round cloud at rest.</figcaption>
+  <details class="fig-details"><summary>Details</summary>Trained network from <code>data/sweeps2/spontaneous.json</code> ($\lambda = \eta = \gamma = 1$, $w_{\min} = 10^{-3}$, every neuron wired to every other; residual below $10^{-10}$). Driven: $u = Hg$ with $g(t)$ an Ornstein–Uhlenbeck process of covariance $\Sigma_g$ and unit time constant. Spontaneous: $\tau\,\dot u = -Ku + \sqrt{2T\tau}\,\xi$ with $g = 0$, simulated in the page by Euler steps of at most $0.01\tau$ (shorter where the network is stiff). Each cluster is drawn in units of its own standard deviation in that panel, since the noise strength $T$ is arbitrary. Traces are offset vertically by cluster. The value of $r$ is the exact correlation of the stored covariance ($H\Sigma_g H^\top$ or $K^{-1}$), not that of the sample drawn.</details>
 </figure>
 
 <h2 id="spont-model">What "spontaneous" means here</h2>
@@ -28,7 +28,7 @@
 <figure class="fig wide card" id="spont-fig-corr">
   <div class="fig-title">Spontaneous correlations keep the clusters, faintly, and nearly lose the correlations between clusters</div>
   <div data-slot="corr"><p class="mute">loading…</p></div>
-  <figcaption>Correlation between every pair of neurons, sorted by cluster: with the inputs on (left) and at rest (right). The blocks are in the same places, but at rest they are pale, and the correlations between different clusters are close to zero.</figcaption>
+  <figcaption>Correlation between every pair of neurons, sorted by cluster, with the inputs on and at rest, on one colour scale. At rest the blocks stay in place but turn pale (their mean is written above each map), and the correlations between different clusters fall close to zero.</figcaption>
   <details class="fig-details"><summary>Details</summary>Left: correlations of $H\Sigma_g H^\top$. Right: correlations of $K^{-1}$. Clusters are the connected components of the lateral synapses above the floor. A noise-driven simulation of the same network (<span data-fill="s-lang-n">…</span> samples, Euler step <span data-fill="s-lang-dt">…</span>$\tau$) reproduces $K^{-1}$ to a relative error of <span data-fill="s-lang-err">…</span> (Frobenius). The small positive values between clusters at rest come from the floor $w_{\min}$.</details>
 </figure>
 
@@ -58,7 +58,7 @@
 <figure class="fig card" id="spont-fig-gamma">
   <div class="fig-title">Clusters fire together at rest only when lateral synapses learn much faster than input synapses</div>
   <div data-slot="gamma"><p class="mute">loading…</p></div>
-  <figcaption>Mean correlation between cluster members at rest against the ratio $\gamma$ of the lateral to the input learning rate, for three input covariances. Dots are measured; lines are $w/(a+w)$ written with the cluster's $\mu$, $m$, $\theta$ and $\gamma$.</figcaption>
+  <figcaption>Mean correlation between cluster members at rest against the ratio $\gamma$ of the lateral to the input learning rate, for three input covariances. Dots are measured, lines are $w/(a+w)$ written with the cluster's $\mu$, $m$, $\theta$ and $\gamma$; with equal rates no cluster passes one half (dashed).</figcaption>
   <details class="fig-details"><summary>Details</summary>$\theta = 0.3$, $N = 36$, $w_{\min} = 10^{-4}$, three random starts per point, averaged over clusters and starts. Line: $r = \dfrac{\gamma\mu/m + (\gamma - 1)\theta}{\gamma\mu/m + (\gamma - 1)\theta + \mu}$, evaluated for each cluster and averaged the same way. A larger $\gamma$ also lowers the lateral threshold to $\theta/\gamma$, so clusters merge as $\gamma$ grows; the formula follows each network's own clusters.</details>
 </figure>
 
@@ -67,8 +67,8 @@
 <figure class="fig card" id="spont-fig-loud">
   <div class="fig-title">The bigger a cluster and the stronger its input synapses, the quieter it is at rest</div>
   <div data-slot="loud"><p class="mute">loading…</p></div>
-  <figcaption>Each dot is one cluster: the variance of its mean activity at rest, against its size times its members' input conductance. The line is $T/(na)$.</figcaption>
-  <details class="fig-details"><summary>Details</summary>The same clusters as the figure against $m$, in units $T = 1$; both axes logarithmic. Input conductance $a = \tfrac{\eta}{\lambda}\mu = \tfrac{\eta}{\lambda}\,m\,(v - \theta)$, with $v = h^\top\Sigma_g h$ the cluster's evoked variance. Rank correlations (Spearman) are between a cluster's evoked variance and the variance of one of its members at rest, $T(a+w)/\big(a(a+nw)\big)$.</details>
+  <figcaption>Each dot is one cluster: the variance of its mean activity at rest, against its size times its members' input conductance, on logarithmic axes. Every cluster sits on the line $T/(na)$, so doubling the size or the input conductance halves the variance.</figcaption>
+  <details class="fig-details"><summary>Details</summary>The same clusters as the figure against $m$, in units $T = 1$. Input conductance $a = \tfrac{\eta}{\lambda}\mu = \tfrac{\eta}{\lambda}\,m\,(v - \theta)$, with $v = h^\top\Sigma_g h$ the cluster's evoked variance. Rank correlations (Spearman) are between a cluster's evoked variance and the variance of one of its members at rest, $T(a+w)/\big(a(a+nw)\big)$.</details>
 </figure>
 
 <p>The input synapses that carry the drive to a cluster are the same conductances that hold it down when the inputs are silent. A cluster's mean activity at rest has variance $T/(na)$, up to the floor: it falls with the cluster's size $n$, which the fixed point does not set, and with the input conductance $a$, which grows with the evoked variance above threshold <em>and</em> with the number of inputs the cluster listens to.</p>
